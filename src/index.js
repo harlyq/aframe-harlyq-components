@@ -1,9 +1,8 @@
-require('./aframe-audio-vis-component')
-require('./aframe-clone-entity-component')
-require('./aframe-clone-geo-component')
-require('./aframe-wait-add-remove-component')
-require('./aframe-wait-set-component')
-require('./aframe-keyframe-component')
-require('./aframe-timer-emit-component')
-require('./aframe-sprite-particles-component')
-
+import './aframe-audio-vis-component'
+import './aframe-clone-entity-component'
+import './aframe-clone-geo-component'
+import './aframe-wait-add-remove-component'
+import './aframe-wait-set-component'
+import './aframe-keyframe-component'
+import './aframe-timer-emit-component'
+import './aframe-sprite-particles-component'

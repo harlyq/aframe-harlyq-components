@@ -1,7 +1,7 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
 
-function BasicRandom() {
+export default function BasicRandom() {
   const MAX_UINT32 = 0xffffffff
   let seed = -1
   
@@ -34,5 +34,3 @@ function BasicRandom() {
     randomNumber,
   }
 }
-
-module.exports = BasicRandom

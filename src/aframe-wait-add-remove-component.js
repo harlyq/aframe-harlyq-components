@@ -1,8 +1,8 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
 
-const ScopedListener = require("./scoped-listener")
-const BasicTimer = require("./basic-timer")
+import ScopedListener from "./scoped-listener"
+import BasicTimer from "./basic-timer"
 
 /**
  * Breaks a selector string into {type, id, classes, attrs}

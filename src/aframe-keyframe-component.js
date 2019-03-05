@@ -1,7 +1,8 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-const AFrameUtils = require("./aframe-utils")
-const BasicRandom = require("./basic-random")
+import {buildPath, convertToString, parseValue, setProperty} from "./aframe-utils"
+// import {deepEqual} from "./aframe-utils"
+import BasicRandom from "./basic-random"
 
 const MAX_FRAME_TIME_MS = 100
 
@@ -267,27 +268,27 @@ function calcTypeOfArrayOfTypes(list) {
 // Convert a string "1..3" into {type: "numbers", range: [1,3]}
 // Convert a string "1|2|3" into {type: "numbers", options: [1,2,3]}
 function parseValueRangeOption(str) {
-  let options = str.split("|")
+  const options = str.split("|")
   if (options.length > 1) {
-    options = options.map(AFrameUtils.parseValue)
-    return { options: options.map(x => x.value), type: calcTypeOfArrayOfTypes(options) }
+    const parsedOptions = options.map(parseValue)
+    return { options: parsedOptions.map(x => x.value), type: calcTypeOfArrayOfTypes(parsedOptions) }
   }
 
-  let range = str.split("..")
+  const range = str.split("..")
   if (range.length > 1) {
-    range = range.map(AFrameUtils.parseValue)
-    return { range: range.map(x => x.value), type: calcTypeOfArrayOfTypes(range) } 
+    const parsedRange = range.map(parseValue)
+    return { range: parsedRange.map(x => x.value), type: calcTypeOfArrayOfTypes(parsedRange) } 
   }
 
-  info = AFrameUtils.parseValue(str)
+  const info = parseValue(str)
   return { value: info.value, type: info.type }
 }
 
-// console.assert(AFRAME.utils.deepEqual(parseValueRangeOption("1 2 3"), { type: "numbers", value: [1,2,3]}))
-// console.assert(AFRAME.utils.deepEqual(parseValueRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
-// console.assert(AFRAME.utils.deepEqual(parseValueRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
-// console.assert(AFRAME.utils.deepEqual(parseValueRangeOption("1 2||3"), { type: "numbers", options: [[1,2],"",[3]]}))
-// console.assert(AFRAME.utils.deepEqual(parseValueRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
+// console.assert(deepEqual(parseValueRangeOption("1 2 3"), { type: "numbers", value: [1,2,3]}))
+// console.assert(deepEqual(parseValueRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
+// console.assert(deepEqual(parseValueRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
+// console.assert(deepEqual(parseValueRangeOption("1 2||3"), { type: "numbers", options: [[1,2],"",[3]]}))
+// console.assert(deepEqual(parseValueRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
 
 
 // Convert a string "1 2 3, 4|5 6, 7..8" into a type and an array of values, ranges or options {type: "numbers", slots: [value: [1,2,3], options: [[4],[5,6]]: range: [[7],[8]]]}
@@ -317,12 +318,12 @@ function parseKeyframeData(str) {
 //     }) 
 //   }
 // }
-// console.assert(AFRAME.utils.deepEqual(parseKeyframeData("1,2,3"), { type: "numbers", slots: [{value: [1]}, {value: [2]}, {value: [3]}] }))
-// console.assert(AFRAME.utils.deepEqual(parseKeyframeData("1..2, 3, 4..5"), { type: "numbers", slots: [{range: [[1],[2]]}, {value: [3]}, {range: [[4],[5]]}] }))
-// console.assert(AFRAME.utils.deepEqual(parseKeyframeData("a|b|c, d|e, f"), { type: "string", slots: [{options: ["a","b","c"]}, {options: ["d","e"]}, {value: "f"}] }))
-// console.assert(AFRAME.utils.deepEqual(colorRulesToHexString(parseKeyframeData("yellow, black..blue, orange|green")), { type: "color", slots: [{value: "ffff00"}, {range: ["000000", "0000ff"]}, {options: ["ffa500","008000"]}] }))
-// console.assert(AFRAME.utils.deepEqual(parseKeyframeData(",1 2,3 4 5"), { type: "numbers", slots: [{value: ""}, {value: [1,2]}, {value: [3,4,5]}] }))
-// console.assert(AFRAME.utils.deepEqual(colorRulesToHexString(parseKeyframeData("..red,,blue|green|")), { type: "color", slots: [{range: ["", "ff0000"]}, {value: ""}, {options: ["0000ff", "008000", ""]}] }))
+// console.assert(deepEqual(parseKeyframeData("1,2,3"), { type: "numbers", slots: [{value: [1]}, {value: [2]}, {value: [3]}] }))
+// console.assert(deepEqual(parseKeyframeData("1..2, 3, 4..5"), { type: "numbers", slots: [{range: [[1],[2]]}, {value: [3]}, {range: [[4],[5]]}] }))
+// console.assert(deepEqual(parseKeyframeData("a|b|c, d|e, f"), { type: "string", slots: [{options: ["a","b","c"]}, {options: ["d","e"]}, {value: "f"}] }))
+// console.assert(deepEqual(colorRulesToHexString(parseKeyframeData("yellow, black..blue, orange|green")), { type: "color", slots: [{value: "ffff00"}, {range: ["000000", "0000ff"]}, {options: ["ffa500","008000"]}] }))
+// console.assert(deepEqual(parseKeyframeData(",1 2,3 4 5"), { type: "numbers", slots: [{value: ""}, {value: [1,2]}, {value: [3,4,5]}] }))
+// console.assert(deepEqual(colorRulesToHexString(parseKeyframeData("..red,,blue|green|")), { type: "color", slots: [{range: ["", "ff0000"]}, {value: ""}, {options: ["0000ff", "008000", ""]}] }))
 
 
 function randomizeRange(type, range, randFn) {
@@ -487,13 +488,13 @@ function lerpKeys(type, keys, r, easingFn) {
 function getPropertyAsString(target, prop) {
   const parts = prop.split(".")
   if (parts.length <= 2) {
-    return AFrameUtils.convertToString(AFRAME.utils.entity.getComponentProperty(target, prop))
+    return convertToString(AFRAME.utils.entity.getComponentProperty(target, prop))
   }
 
   // e.g. object3dmap.mesh.material.uniforms.color
-  const path = AFrameUtils.buildPath(target, parts)
+  const path = buildPath(target, parts)
   if (path) {
-    return AFrameUtils.convertToString(path[part])
+    return convertToString(path[part])
   } else {
     console.warn(`unknown path for getProperty() '${prop}'`)
   }
@@ -643,7 +644,7 @@ AFRAME.registerComponent("keyframe", {
       for (let prop in this.keys) {
         let r = THREE.Math.clamp(this.loopTime/data.duration, 0, 1)
         const value = lerpKeys(this.rules[prop].type, this.keys[prop], r, easingFn)
-        AFrameUtils.setProperty(this.el, prop, value)
+        setProperty(this.el, prop, value)
       }
     }
   },
@@ -656,7 +657,7 @@ AFRAME.registerComponent("keyframe", {
       const emptyOption = slot0.options && slot0.options.includes("")
 
       if (emptyValue || emptyRange || emptyOption) {
-        let info = AFrameUtils.parseValue(getPropertyAsString(this.el, prop))
+        let info = parseValue(getPropertyAsString(this.el, prop))
         if (emptyValue) slot0.value = info.value
         if (emptyRange) slot0.range = slot0.range.map(x => x === "" ? info.value : x)
         if (emptyOption) slot0.options = slot0.options.map(x => x === "" ? info.value : x)

@@ -1,4 +1,4 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
 
 AFRAME.registerComponent("clone-geo", {

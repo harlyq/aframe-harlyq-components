@@ -1,8 +1,8 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
 
 // JSON deepEqual test
-function deepEqual(a, b) {
+export function deepEqual(a, b) {
   if (typeof a === "object" && a && b && a.constructor === b.constructor) {
     if (Array.isArray(a)) {
       if (a.length !== b.length) {
@@ -27,21 +27,21 @@ function deepEqual(a, b) {
   return a === b
 }
 
-// console.assert(AFrameUtils.deepEqual(null, null))
-// console.assert(AFrameUtils.deepEqual(undefined, undefined))
-// console.assert(AFrameUtils.deepEqual([], []))
-// console.assert(AFrameUtils.deepEqual([1], [1]))
-// console.assert(AFrameUtils.deepEqual([1,2,3], [1,2,3]))
-// console.assert(!AFrameUtils.deepEqual([1,2], [1,2,3]))
-// console.assert(!AFrameUtils.deepEqual([1,2,3], [1,2]))
-// console.assert(AFrameUtils.deepEqual({a:1, b:"c"}, {a:1, b:"c"}))
-// console.assert(!AFrameUtils.deepEqual({a:1, b:"c"}, {a:1, b:"d"}))
-// console.assert(!AFrameUtils.deepEqual({a:1, b:"c"}, {a:2, b:"c"}))
-// console.assert(!AFrameUtils.deepEqual({a:1, b:"c"}, null))
-// console.assert(AFrameUtils.deepEqual({a:[1,2], b:{x: 3, y:4}}, {a:[1,2], b:{x: 3, y:4}}))
+// console.assert(deepEqual(null, null))
+// console.assert(deepEqual(undefined, undefined))
+// console.assert(deepEqual([], []))
+// console.assert(deepEqual([1], [1]))
+// console.assert(deepEqual([1,2,3], [1,2,3]))
+// console.assert(!deepEqual([1,2], [1,2,3]))
+// console.assert(!deepEqual([1,2,3], [1,2]))
+// console.assert(deepEqual({a:1, b:"c"}, {a:1, b:"c"}))
+// console.assert(!deepEqual({a:1, b:"c"}, {a:1, b:"d"}))
+// console.assert(!deepEqual({a:1, b:"c"}, {a:2, b:"c"}))
+// console.assert(!deepEqual({a:1, b:"c"}, null))
+// console.assert(deepEqual({a:[1,2], b:{x: 3, y:4}}, {a:[1,2], b:{x: 3, y:4}}))
 
 // builds a value from a 'root' and an array of 'attributes', each attribute is considered as the child of the previous attribute
-function buildPath(root, attributes) {
+export function buildPath(root, attributes) {
   let path = root
   let parts = attributes.slice().reverse()
   while (path && parts.length > 0) {
@@ -58,7 +58,7 @@ console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","w"]) === unde
 
 
 // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers
-function convertToString(thing) {
+export function convertToString(thing) {
   if (typeof thing == "object") {
     if (Array.isArray(thing)) {
       return thing.map(convertToString)
@@ -78,7 +78,7 @@ function convertToString(thing) {
 
 
 // *value* can be boolean, string, color or array of numbers
-const setProperty = (() => {
+export const setProperty = (() => {
   const trim = x => x.trim()
   const OBJECT3D_FAST_SET = {
     "rotation": x => isNaN(x) ? 0 : THREE.Math.degToRad(x),
@@ -122,7 +122,7 @@ const setProperty = (() => {
 
 
 // Convert a string "1 2 3" into a type and value {type: "numbers", value: [1,2,3]}
-const parseValue = (function() {
+export const parseValue = (function() {
   const isTHREE = typeof THREE !== "undefined"
   const COLOR_WHITE = isTHREE ? new THREE.Color() : undefined
   const COLOR_BLACK = isTHREE ? new THREE.Color(0,0,0) : undefined
@@ -137,7 +137,7 @@ const parseValue = (function() {
     if (!vec.every(isNaN)) return {type: "numbers", value: vec}
   
     if (isTHREE) {
-      oldWarn = console.warn; console.warn = () => {} // HACK disable warnings that threejs spams about invalid colors
+      let oldWarn = console.warn; console.warn = () => {} // HACK disable warnings that threejs spams about invalid colors
       let col = new THREE.Color(str.trim())
       if (col.equals(COLOR_WHITE) && tempColor.copy(COLOR_BLACK).setStyle(str).equals(COLOR_BLACK)) col = undefined // if input colour is the same as the starting color, then input was invalid
       console.warn = oldWarn
@@ -148,19 +148,10 @@ const parseValue = (function() {
   }
 })()
 
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(""), {type: "any", value: ""}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue("1"), {type: "numbers", value: [1]}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
-// console.assert(AFrameUtils.parseValue("red").type === "color" && AFrameUtils.parseValue("red").value.getHexString() === "ff0000")
-// console.assert(AFrameUtils.parseValue("#123").type === "color" && AFrameUtils.parseValue("#123").value.getHexString() === "112233")
-
-
-module.exports = {
-  deepEqual,
-  setProperty,
-  buildPath,
-  convertToString,
-  parseValue,
-}
+// console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
+// console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
+// console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
+// console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
+// console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
+// console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
+// console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")

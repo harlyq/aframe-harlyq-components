@@ -1,7 +1,7 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
-const basicTimer = require("./basic-timer")
-const scopedListener = require("./scoped-listener")
+import BasicTimer from "./basic-timer"
+import ScopedListener from "./scoped-listener"
 
 //-----------------------------------------------------------------------------
 // "wait-emit" component for emitting events on this or other elements after a delay or event
@@ -24,8 +24,8 @@ AFRAME.registerComponent("wait-emit", {
     this.onEvent = this.onEvent.bind(this)
     this.sources = []
 
-    this.waitTimer = basicTimer()
-    this.waitListener = scopedListener()
+    this.waitTimer = BasicTimer()
+    this.waitListener = ScopedListener()
   },
 
   remove() {

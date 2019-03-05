@@ -5,7 +5,7 @@
   "main": "aframe-harlyq-components.js",
   "files": ["dist"],
   "scripts": {
-    "build": "browserify src/index.js -o dist/aframe-harlyq-components.js && browserify src/index.js | uglifyjs -c -m -o dist/aframe-harlyq-components.min.js"
+    "build": "webpack src/index.js -o dist/aframe-harlyq-components.js --mode=development && webpack src/index.js -o dist/aframe-harlyq-components.min.js --mode=production"
   },
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
 
-function BasicTimer() {
+export default function BasicTimer() {
   let sendEventTimer
   let timeOfStart
   let timeoutCallback
@@ -49,5 +49,3 @@ function BasicTimer() {
     resume
   }
 }
-
-module.exports = BasicTimer

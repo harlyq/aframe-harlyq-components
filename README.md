@@ -90,7 +90,7 @@ Number of times to repeat the add operation
 
 Descendants of this component's entity, which match any selector in this list is removed. The remove occurs before the add
 
-# wait-emit
+## wait-emit
 
 Once one of the the **source** selector elements has received **inEvent** and **delay** seconds have passed, sends **outEvent** to all elements matching the **target** selector. The **wait-emit** component is useful for remapping and redirecting events.
 

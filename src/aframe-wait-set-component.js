@@ -1,30 +1,31 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
-const ScopedListener = require("./scoped-listener")
-const BasicTimer = require("./basic-timer")
-const BasicRandom = require("./basic-random")
-const AFrameUtils = require("./aframe-utils")
+import ScopedListener from "./scoped-listener"
+import BasicTimer from "./basic-timer"
+import BasicRandom from "./basic-random"
+import {parseValue, setProperty} from "./aframe-utils"
+// import {deepEqual} from "./aframe-utils"
 
 function trim(str) {
   return str.trim()
 }
 
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(""), {type: "any", value: ""}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue("1"), {type: "numbers", value: [1]}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
-// console.assert(AFrameUtils.deepEqual(AFrameUtils.parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
-// console.assert(AFrameUtils.parseValue("red").type === "color" && AFrameUtils.parseValue("red").value.getHexString() === "ff0000")
-// console.assert(AFrameUtils.parseValue("#123").type === "color" && AFrameUtils.parseValue("#123").value.getHexString() === "112233")
-// console.assert(AFrameUtils.parseValue("  burple "), {type: "string", value: "burple"})
+// console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
+// console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
+// console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
+// console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
+// console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
+// console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
+// console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
+// console.assert(parseValue("  burple "), {type: "string", value: "burple"})
 
 // Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
 // Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
 function parseRangeOption(str) {
   let range = str.split("..")
   if (range.length > 1) {
-    const start = AFrameUtils.parseValue(range[0])
-    const end = AFrameUtils.parseValue(range[1])
+    const start = parseValue(range[0])
+    const end = parseValue(range[1])
   
     if (start.type !== end.type && start.type !== "any" && end.type !== "any") {
       console.error(`incompatible types for range ${str}`)
@@ -37,12 +38,12 @@ function parseRangeOption(str) {
   return { type: "string", options: options.map(trim) }
 }
 
-// console.assert(AFrameUtils.deepEqual(parseRangeOption("1 2 3"), { type: "string", options: ["1 2 3"]}))
-// console.assert(AFrameUtils.deepEqual(parseRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
-// console.assert(AFrameUtils.deepEqual(parseRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
-// console.assert(AFrameUtils.deepEqual(parseRangeOption("1 2||3"), { type: "string", options: ["1 2","","3"]}))
-// console.assert(AFrameUtils.deepEqual(parseRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
-// console.assert(AFrameUtils.deepEqual(parseRangeOption("a..b"), { type: "string", range: ["a","b"]}))
+// console.assert(deepEqual(parseRangeOption("1 2 3"), { type: "string", options: ["1 2 3"]}))
+// console.assert(deepEqual(parseRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
+// console.assert(deepEqual(parseRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
+// console.assert(deepEqual(parseRangeOption("1 2||3"), { type: "string", options: ["1 2","","3"]}))
+// console.assert(deepEqual(parseRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
+// console.assert(deepEqual(parseRangeOption("a..b"), { type: "string", range: ["a","b"]}))
 
 function randomizeOptions(options, randFn) {
   return options[Math.floor(randFn()*options.length)]
@@ -187,7 +188,7 @@ AFRAME.registerComponent("wait-set", {
         let rule = this.rules[prop]
 
         const value = rule.options ? randomizeOptions(rule.options, this.psuedoRandom.random) : randomizeRange(rule.type, rule.range, this.psuedoRandom.random)
-        AFrameUtils.setProperty(el, prop, value)
+        setProperty(el, prop, value)
       }
     }
   },

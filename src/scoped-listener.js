@@ -1,7 +1,7 @@
-// Copyright 2018 harlyq
+// Copyright 2018-2019 harlyq
 // MIT license
 
-function ScopedListener() {
+export default function ScopedListener() {
   let elements = []
   let event
   let callback
@@ -48,5 +48,3 @@ function ScopedListener() {
     getElementsInScope,
   }
 }
-
-module.exports = ScopedListener
