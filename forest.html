@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/0.9.0/aframe.js"></script>
+    <script src="../aframe-proctree-component/dist/aframe-proctree-component.js"></script>
+    <script src="../aframe-materialx-component/aframe-materialx-component.js"></script>
+    <script src="../aframe-sprite-particles-component/aframe-sprite-particles-component.js"></script>
+    <!--script src="src/aframe-wait-add-remove-component.js"></script>
+    <script src="src/aframe-wait-set-component.js"></script>
+    <script src="src/aframe-keyframe-component.js"></script-->
+    <script src="dist/aframe-harlyq-components.js"></script>
+  </head>
+  <body>
+    <a-scene background="color: black" fog2="type: linear; color: #000; far: 10; near: 0">
+      <a-assets>
+        <img id="twig" src="../aframe-proctree-component/assets/twig-1.png">
+        <a-mixin id="tree" proctree="trunkLength: 20" materialx__1="remap: trunk; color: red; metalness:1; fog: true" materialx__2="remap: twigs; visible: false;"></a-mixin>
+        <a-mixin id="spread" ></a-mixin>
+      </a-assets>
+      <a-light type="ambient" color="white"></a-light>
+      <a-light type="directional" color="white" intensity="0.6" position="-.5 1 1"></a-light>
+      <!--a-camera position="0 1 2"></a-camera-->
+      <a-plane rotation="-90 0 0" scale="10 10 10" material="visible: false"></a-plane>
+      <a-entity id="forest" 
+        wait-add-remove="add: a-entity[mixin=tree spread]; addRepeat: 40" 
+        wait-set="seed: 220; targetScope: self; target: *; position: -8 -13 -8..8 -13 8; proctree.seed: 100..200; proctree.trunkLength: 18..22; proctree.twistRate: 1..4; proctree.growAmount: -1..1"></a-entity>
+      <a-entity id="fog" sprite-particles="texture:url(../aframe-sprite-particles-component/assets/fog.png); position: -5 0.5 -5..5 0.5 5; color: #200; spawnRate: 100; scale: 10; opacity: 0.3; blending: additive; lifeTime: 10; velocity: -1 -0.1 -1..1 0.1 1"></a-entity>
+      <a-entity id="sprite" keyframe="rotation: -10,12,-15,20,-11,14,-19,21; duration: 13; direction: alternate; easing: ease-in-out">
+        <a-entity keyframe="rotation: ,0 360 0; duration: 10" position="0 5 0">
+          <a-entity rotation="-90 0 0" position="5 0 0" sprite-particles="texture:url(../aframe-sprite-particles-component/assets/blob.png); relative: world; position2: 0 0 0..0 0 1; radialPosition2: 0.5; color: #080; spawnRate: 1000; radialVelocity: 1..1.1; lifeTime: .2 .. .5; particleSize: 20"></a-entity>
+          <a-light type="point" position="5 0 0" color="green" intensity="1"></a-light>
+        </a-entity>
+      </a-entity>
+      <a-entity id="bugs" sprite-particles="texture:url(../aframe-sprite-particles-component/assets/blob.png); position: -5 3 -5..5 3 5; scale: .1; color: red; spawnRate: 10; opacity: 0,1,0; lifeTime: 1; velocity: -.1 -0.1 -.1 .. .1 0.1 .1"></a-entity>
+    </a-scene>
+  </body>
+</html>

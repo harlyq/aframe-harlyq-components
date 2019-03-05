@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/0.9.0/aframe.js"></script>
+    <script src="dist/aframe-harlyq-components.js"></script>
+    <script>
+      AFRAME.registerComponent("foo-bar", {
+        schema: { 
+          test: { type: "string" } 
+        },
+        update(oldData) {
+          console.log("'test' set to: " + this.data.test)
+        }
+      })
+    </script>
+  </head>
+  <body>
+    <div style="position: absolute; z-index: 9999" onclick="document.getElementById('music').play()">click to start audio</div>
+    <a-scene>
+      <audio id="music" src="../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay2></audio>
+      <a-entity timer-emit="src: #music; target: #listener; start: 0; one: 2; two: 4; three: 6; four: 10; periodic: 1,2,3"></a-entity>
+      <a-entity id="listener" wait-add-remove__1="event: one; add: a-box.one.a#one[color=red][position=0 0 -10]"
+        wait-add-remove__2="event: two; add: a-box.two.b#two[color=blue][position=5 2 -5]"
+        wait-add-remove__3="event: two; delay: 1; add: a-sphere.three.c#three[color=green][position=-5 2 -5][foo-bar=test:blah]; remove: .two,[color=red]"
+        wait-set__4="event: four; target: #three; position: -4 3 -5; foo-bar.test: down"
+        wait-set__5="event: four; delay: 2.5; target: #three; color: red..pink">
+      </a-entity>
+      <a-box color="red" position="0 0 -10" rotation="0 0 -20" keyframe__blah="duration: 5; direction: alternate; loops: -1; color: |black,,orange; position: ,0 0 -5; rotation: , 0 0 20"></a-box>
+    </a-scene>
+    <script>
+      const mediaTimerEl = document.querySelector("[timer-emit]")
+      const mediaEl = document.querySelector("#music")
+      const events = ["one", "two", "three", "periodic"]
+
+      if (mediaTimerEl) {
+        events.forEach(event => {
+          mediaTimerEl.addEventListener(event, (e) => console.log(e, mediaEl.currentTime))
+        })
+      }
+    </script>
+  </body>
+</html>
