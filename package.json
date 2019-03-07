@@ -1,11 +1,11 @@
 {
   "name": "aframe-harlyq-components",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "various useful aframe components",
   "main": "aframe-harlyq-components.js",
   "files": ["dist"],
   "scripts": {
-    "build": "webpack src/index.js -o dist/aframe-harlyq-components.js --mode=development && webpack src/index.js -o dist/aframe-harlyq-components.min.js --mode=production"
+    "build": "webpack src/index.mjs -o dist/aframe-harlyq-components.js --mode=development && webpack src/index.mjs -o dist/aframe-harlyq-components.min.js --mode=production"
   },
   "repository": {
     "type": "git",
