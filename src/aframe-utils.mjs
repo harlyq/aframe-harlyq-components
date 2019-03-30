@@ -104,7 +104,11 @@ export const setProperty = (() => {
     if (parts.length <= 2) {
       // component or component.property
       parts[0] = parts[0].replace(/[A-Z]/g, x => "-" + x.toLowerCase()) // convert component names from camelCase to kebab-case
-      AFRAME.utils.entity.setComponentProperty(target, parts.join("."), convertToString(value)) // does this work for vectors??
+      if (value) {
+        AFRAME.utils.entity.setComponentProperty(target, parts.join("."), convertToString(value)) // does this work for vectors??
+      } else {
+        target.removeAttribute(parts.join("."))
+      }
       return
     }
   

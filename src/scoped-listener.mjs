@@ -16,6 +16,7 @@ export default function ScopedListener() {
   function add() {
     if (event && callback) {
       for (let el of elements) {
+        console.log("scopedListener:add", el.id, event)
         el.addEventListener(event, callback)
       }
     }
@@ -24,20 +25,23 @@ export default function ScopedListener() {
   function remove() {
     if (event && callback) {
       for (let el of elements) {
+        console.log("scopedListener:remove", el.id, event)
         el.removeEventListener(event, callback)
       }
     }
   }
 
-  function getElementsInScope(el, selector, scope) {
-    if (selector == "") return [el]
-
+  function getElementsInScope(el, selector, scope, eventEl) {
     switch (scope) {
-      case "self": return el.querySelectorAll(selector) || [el]
-      case "parent": return el.parentNode.querySelectorAll(selector) || [el]
+      case "self": return selector === "" ? [el] : el.querySelectorAll(selector) || [el]
+      case "parent": return selector === "" ? [el] : el.parentNode.querySelectorAll(selector) || [el]
+      case "event": {
+        const bestEl = eventEl ? eventEl : el
+        return selector === "" ? [bestEl] : bestEl.querySelectorAll(selector) || [bestEl]
+      }
       case "document": 
       default:
-        return document.querySelectorAll(selector) || [el]
+        return selector === "" ? [el] : document.querySelectorAll(selector) || [el]
     }
   }
 

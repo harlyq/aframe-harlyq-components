@@ -1,9 +1,9 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import ScopedListener from "./scoped-listener"
-import BasicTimer from "./basic-timer"
-import BasicRandom from "./basic-random"
-import {parseValue, setProperty} from "./aframe-utils"
+import ScopedListener from "./scoped-listener.mjs"
+import BasicTimer from "./basic-timer.mjs"
+import BasicRandom from "./basic-random.mjs"
+import {parseValue, setProperty} from "./aframe-utils.mjs"
 // import {deepEqual} from "./aframe-utils"
 
 function trim(str) {
@@ -99,7 +99,7 @@ AFRAME.registerComponent("wait-set", {
     source: { default: "" },
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
     target: { default: "" },
-    targetScope: { default: "document", oneOf: ["parent", "self", "document"] },
+    targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
     seed: { type: "int", default: -1 },
   },
   multiple: true,
@@ -108,6 +108,7 @@ AFRAME.registerComponent("wait-set", {
     this.setProperties = this.setProperties.bind(this)
     this.startDelay = this.startDelay.bind(this)
 
+    this.eventTargetEl = undefined
     this.rules = {}
     this.sources = []
 
@@ -176,18 +177,21 @@ AFRAME.registerComponent("wait-set", {
     this.waitListener.add()
   },
 
-  startDelay() {
+  startDelay(e) {
+    // console.log("wait-set:startDelay", e.target.id, this.data.event)
+    this.eventTargetEl = e ? e.target : undefined
     this.waitTimer.start(this.data.delay, this.setProperties)
   },
 
   setProperties() {
-    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope)
+    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, this.eventTargetEl)
 
     for (let el of elements) {
       for (let prop in this.rules) {
         let rule = this.rules[prop]
 
         const value = rule.options ? randomizeOptions(rule.options, this.psuedoRandom.random) : randomizeRange(rule.type, rule.range, this.psuedoRandom.random)
+        // console.log("wait-set:setProperties", el.id, prop, value)
         setProperty(el, prop, value)
       }
     }

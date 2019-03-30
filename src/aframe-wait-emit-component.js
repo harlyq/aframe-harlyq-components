@@ -61,7 +61,7 @@ AFRAME.registerComponent("wait-emit", {
 
   sendEvent(evt) {
     const data = this.data
-    const targets = this.waitListener.getElementsInScope(this.el, data.target, data.targetScope)
+    const targets = this.waitListener.getElementsInScope(this.el, data.target, data.targetScope, evt.target)
     const eventData = Object.assign({ source: this.el }, evt)
     const event = data.out ? data.out : data.event
 

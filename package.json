@@ -5,7 +5,8 @@
   "main": "aframe-harlyq-components.js",
   "files": ["dist"],
   "scripts": {
-    "build": "webpack src/index.mjs -o dist/aframe-harlyq-components.js --mode=development && webpack src/index.mjs -o dist/aframe-harlyq-components.min.js --mode=production"
+    "build": "rollup src/index.mjs --format umd --file dist/aframe-harlyq-components.js && uglifyjs dist/aframe-harlyq-components.js --compress --mangle -o dist/aframe-harlyq-components.min.js",
+    "watch": "rollup src/index.mjs --format umd --file dist/aframe-harlyq-components.js --watch"
   },
   "repository": {
     "type": "git",
