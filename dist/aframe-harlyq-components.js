@@ -227,6 +227,76 @@
     }
   });
 
+  // remix of https://github.com/supermedium/superframe/tree/master/components/gltf-part
+  var LOADING_MODELS = {};
+  var MODELS = {};
+
+  AFRAME.registerComponent("gltf-part", {
+    schema: {
+      buffer: {default: true},
+      part: {type: "string"},
+      src: {type: "asset"}
+    },
+
+    update: function () {
+      var el = this.el;
+      if (!this.data.part && this.data.src) { return; }
+      this.getModel(function (modelPart) {
+        if (!modelPart) { return; }
+        el.setObject3D("mesh", modelPart);
+      });
+    },
+
+    /**
+     * Fetch, cache, and select from GLTF.
+     *
+     * @param {modelLoadedCallback} cb - Called when the model is loaded
+     * @returns {object} - Selected subset of model.
+     */
+    getModel: function (cb) {
+      var self = this;
+
+      // Already parsed, grab it.
+      if (MODELS[this.data.src]) {
+        cb(this.selectFromModel(MODELS[this.data.src]));
+        return;
+      }
+
+      // Currently loading, wait for it.
+      if (LOADING_MODELS[this.data.src]) {
+        return LOADING_MODELS[this.data.src].then(function (model) {
+          cb(self.selectFromModel(model));
+        });
+      }
+
+      // Not yet fetching, fetch it.
+      LOADING_MODELS[this.data.src] = new Promise(function (resolve) {
+        new THREE.GLTFLoader().load(self.data.src, function (gltfModel) {
+          var model = gltfModel.scene || gltfModel.scenes[0];
+          MODELS[self.data.src] = model;
+          delete LOADING_MODELS[self.data.src];
+          cb(self.selectFromModel(model));
+          resolve(model);
+        }, function () { }, console.error);
+      });
+    },
+
+    /**
+     * Search for the part name and look for a mesh.
+     */
+    selectFromModel: function (model) {
+      var part;
+
+      part = model.getObjectByName(this.data.part);
+      if (!part) {
+        console.error("[gltf-part] `" + this.data.part + "` not found in model.");
+        return;
+      }
+
+      return part.clone()
+    }
+  });
+
   // Copyright 2018-2019 harlyq
 
   // console.assert(deepEqual(null, null))
@@ -1060,6 +1130,775 @@
         }
       }
     },
+  });
+
+  // modification of the 'material' component from https://aframe.io/releases/0.9.0/aframe.min.js
+
+  (function() {
+
+  var utils = AFRAME.utils;
+
+  var error = utils.debug('components:materialx:error');
+  var shaders = AFRAME.shaders;
+
+  /**
+   * Material component.
+   *
+   * @member {object} shader - Determines how material is shaded. Defaults to `standard`,
+   *         three.js's implementation of PBR. Another standard shading model is `flat` which
+   *         uses MeshBasicMaterial.
+   */
+  AFRAME.registerComponent('materialx', {
+    schema: {
+      alphaTest: {default: 0.0, min: 0.0, max: 1.0},
+      depthTest: {default: true},
+      depthWrite: {default: true},
+      flatShading: {default: false},
+      name: {default: ''},
+      npot: {default: false},
+      offset: {type: 'vec2', default: {x: 0, y: 0}},
+      opacity: {default: 1.0, min: 0.0, max: 1.0},
+      remap: {default: ''},
+      repeat: {type: 'vec2', default: {x: 1, y: 1}},
+      shader: {default: 'standard', oneOf: Object.keys(AFRAME.shaders), schemaChange: true},
+      side: {default: 'front', oneOf: ['front', 'back', 'double']},
+      transparent: {default: false},
+      vertexColors: {type: 'string', default: 'none', oneOf: ['face', 'vertex']},
+      visible: {default: true},
+      blending: {default: 'normal', oneOf: ['none', 'normal', 'additive', 'subtractive', 'multiply']}
+    },
+
+    multiple: true,
+
+    init: function () {
+      this.system = this.el.sceneEl.systems['material'];
+      this.material = null;
+      this.oldMaterials = [];
+    },
+
+    /**
+     * Update or create material.
+     *
+     * @param {object|null} oldData
+     */
+    update: function (oldData) {
+      var data = this.data;
+      if (!this.shader || data.shader !== oldData.shader) {
+        // restore old materials, so if we remap again we will remember the originals
+        replaceMaterial(this.el, oldData.remap, this.oldMaterials, []);
+        this.updateShader(data.shader);
+      }
+      this.shader.update(this.data);
+      this.updateMaterial(oldData);
+    },
+
+    updateSchema: function (data) {
+      var currentShader;
+      var newShader;
+      var schema;
+      var shader;
+
+      newShader = data && data.shader;
+      currentShader = this.oldData && this.oldData.shader;
+      shader = newShader || currentShader;
+      schema = shaders[shader] && shaders[shader].schema;
+
+      if (!schema) { error('Unknown shader schema ' + shader); }
+      if (currentShader && newShader === currentShader) { return; }
+      this.extendSchema(schema);
+      this.updateBehavior();
+    },
+
+    updateBehavior: function () {
+      var key;
+      var sceneEl = this.el.sceneEl;
+      var schema = this.schema;
+      var self = this;
+      var tickProperties;
+
+      function tickTime (time, delta) {
+        var key;
+        for (key in tickProperties) {
+          tickProperties[key] = time;
+        }
+        self.shader.update(tickProperties);
+      }
+
+      this.tick = undefined;
+
+      tickProperties = {};
+      for (key in schema) {
+        if (schema[key].type === 'time') {
+          this.tick = tickTime;
+          tickProperties[key] = true;
+        }
+      }
+
+      if (!sceneEl) { return; }
+      if (this.tick) {
+        sceneEl.addBehavior(this);
+      } else {
+        sceneEl.removeBehavior(this);
+      }
+    },
+
+    updateShader: function (shaderName) {
+      var data = this.data;
+      var Shader = shaders[shaderName] && shaders[shaderName].Shader;
+      var shaderInstance;
+
+      if (!Shader) { throw new Error('Unknown shader ' + shaderName); }
+
+      // Get material from A-Frame shader.
+      shaderInstance = this.shader = new Shader();
+      shaderInstance.el = this.el;
+      shaderInstance.init(data);
+      this.setMaterial(shaderInstance.material);
+      this.updateSchema(data);
+    },
+
+    /**
+     * Set and update base material properties.
+     * Set `needsUpdate` when needed.
+     */
+    updateMaterial: function (oldData) {
+      var data = this.data;
+      var material = this.material;
+      var oldDataHasKeys;
+
+      // Base material properties.
+      material.alphaTest = data.alphaTest;
+      material.depthTest = data.depthTest !== false;
+      material.depthWrite = data.depthWrite !== false;
+      material.name = data.name;
+      material.opacity = data.opacity;
+      material.flatShading = data.flatShading;
+      material.side = parseSide(data.side);
+      material.transparent = data.transparent !== false || data.opacity < 1.0;
+      material.vertexColors = parseVertexColors(data.vertexColors);
+      material.visible = data.visible;
+      material.blending = parseBlending(data.blending);
+
+      // Check if material needs update.
+      for (oldDataHasKeys in oldData) { break; }
+      if (oldDataHasKeys &&
+          (oldData.alphaTest !== data.alphaTest ||
+           oldData.side !== data.side ||
+           oldData.vertexColors !== data.vertexColors)) {
+        material.needsUpdate = true;
+      }
+    },
+
+    /**
+     * Remove material on remove (callback).
+     * Dispose of it from memory and unsubscribe from scene updates.
+     */
+    remove: function () {
+      // var defaultMaterial = new THREE.MeshBasicMaterial();
+      var material = this.material;
+      // var object3D = this.el.getObject3D('mesh');
+      // if (object3D) { object3D.material = defaultMaterial; }
+      replaceMaterial(this.el, this.data.remap, this.oldMaterials, []);
+      this.oldMaterials.length = 0;
+      disposeMaterial(material, this.system);
+    },
+
+    /**
+     * (Re)create new material. Has side-effects of setting `this.material` and updating
+     * material registration in scene.
+     *
+     * @param {object} data - Material component data.
+     * @param {object} type - Material type to create.
+     * @returns {object} Material.
+     */
+    setMaterial: function (material) {
+      var el = this.el;
+      var system = this.system;
+      var remapName = this.data.remap;
+      var hasMaterials = false;
+      var oldMaterials = this.oldMaterials;
+
+      if (this.material) { disposeMaterial(this.material, system); }
+
+      this.material = material;
+      system.registerMaterial(material);
+
+      // Set on mesh. If mesh does not exist, wait for it.
+      // mesh = el.getObject3D('mesh');
+      // if (mesh) {
+      //   mesh.material = material;
+      // } else {
+      hasMaterials = replaceMaterial(el, remapName, [material], oldMaterials);
+      if (!hasMaterials) {
+        el.addEventListener('object3dset', function waitForMesh (evt) {
+          if (evt.detail.type !== 'mesh' || evt.target !== el) { return; }
+          // el.getObject3D('mesh').material = material;
+          replaceMaterial(el, remapName, [material], oldMaterials);
+          el.removeEventListener('object3dset', waitForMesh);
+        });
+      }
+    }
+  });
+
+  /**
+   * Return a three.js constant determining which material face sides to render
+   * based on the side parameter (passed as a component property).
+   *
+   * @param {string} [side=front] - `front`, `back`, or `double`.
+   * @returns {number} THREE.FrontSide, THREE.BackSide, or THREE.DoubleSide.
+   */
+  function parseSide (side) {
+    switch (side) {
+      case 'back': {
+        return THREE.BackSide;
+      }
+      case 'double': {
+        return THREE.DoubleSide;
+      }
+      default: {
+        // Including case `front`.
+        return THREE.FrontSide;
+      }
+    }
+  }
+
+  /**
+   * Return a three.js constant determining vertex coloring.
+   */
+  function parseVertexColors (coloring) {
+    switch (coloring) {
+      case 'face': {
+        return THREE.FaceColors;
+      }
+      case 'vertex': {
+        return THREE.VertexColors;
+      }
+      default: {
+        return THREE.NoColors;
+      }
+    }
+  }
+
+  /**
+   * Return a three.js constant determining blending
+   *
+   * @param {string} [blending=normal]
+   * - `none`, additive`, `subtractive`,`multiply` or `normal`.
+   * @returns {number}
+   */
+  function parseBlending (blending) {
+    switch (blending) {
+      case 'none': {
+        return THREE.NoBlending;
+      }
+      case 'additive': {
+        return THREE.AdditiveBlending;
+      }
+      case 'subtractive': {
+        return THREE.SubtractiveBlending;
+      }
+      case 'multiply': {
+        return THREE.MultiplyBlending;
+      }
+      default: {
+        return THREE.NormalBlending;
+      }
+    }
+  }
+
+  /**
+   * Dispose of material from memory and unsubscribe material from scene updates like fog.
+   */
+  function disposeMaterial (material, system) {
+    material.dispose();
+    system.unregisterMaterial(material);
+  }
+
+  /**
+   * Replace all materials of a given name with a new material.
+   * 
+   * @param {object} el - element to replace material on
+   * @param {string} nameGlob - regex of name of the material to replace. use '' for the material from getObject3D('mesh')
+   * @param {object} newMaterials - list of materials to use
+   * @param {object} replacedList - materials that have been replaced
+   * @returns {object[]} - list of replaced materials
+   */
+  function replaceMaterial (el, nameGlob, newMaterials, outReplacedList) {
+    var hasMaterials = false;
+    outReplacedList.length = 0;
+
+    if (newMaterials.length === 0) {
+      return true
+    }
+
+    if (nameGlob === '') {
+      var object3D = el.getObject3D('mesh');
+
+      if (object3D && object3D.material) {
+        outReplacedList.push(object3D.material);
+        object3D.material = newMaterials[0];
+        hasMaterials = true;
+      }
+    } else {
+      var object3D = el.object3D;
+      var nameRegex = globToRegex(nameGlob);
+      var regex = new RegExp('^' + nameRegex + '$');
+      var newIndex = 0;
+
+      if (object3D) {
+        object3D.traverse(function (obj) {
+          if (obj && obj.material) {
+            hasMaterials = true;
+
+            if (Array.isArray(obj.material)) {
+              for (var i = 0, n = obj.material.length; i < n; i++) {
+                if (regex.test(obj.material[i].name)) {
+                  outReplacedList.push(obj.material[i]);
+                  obj.material[i] = newMaterials[newIndex];
+                  newIndex = (newIndex + 1) % newMaterials.length;
+                }
+              }
+            } else if (regex.test(obj.material.name)) {
+              outReplacedList.push(obj.material);
+              obj.material = newMaterials[newIndex];
+              newIndex = (newIndex + 1) % newMaterials.length;
+            }
+          }
+        });
+      }
+    }
+
+    return hasMaterials;
+  }
+
+  function globToRegex(glob) {
+    return glob.replace(/[\.\{\}\(\)\^\[\]\$]/g, '\\$&').replace(/[\*\?]/g, '.$&');
+  }
+
+  })();
+
+  const ZERO = Object.freeze({x: 0, y: 0, z: 0});
+  const UNIT_X = Object.freeze({x: 1, y: 0, z: 0});
+  const UNIT_Y = Object.freeze({x: 0, y: 1, z: 0});
+  const UNIT_Z = Object.freeze({x: 0, y: 0, z: 1});
+
+  const SQRT_1_2 = Math.sqrt(0.5);
+  const IDENTITY = Object.freeze({x:0, y:0, z:0, w:1});
+  const ROTATE_X_180 = Object.freeze({x:1, y:0, z:0, w:0});
+  const ROTATE_Y_180 = Object.freeze({x:0, y:1, z:0, w:0});
+  const ROTATE_Z_180 = Object.freeze({x:0, y:0, z:1, w:0});
+  const ROTATE_X_90 = Object.freeze({x:SQRT_1_2, y:0, z:0, w:SQRT_1_2});
+  const ROTATE_Y_90 = Object.freeze({x:0, y:SQRT_1_2, z:0, w:SQRT_1_2});
+  const ROTATE_Z_90 = Object.freeze({x:0, y:0, z:SQRT_1_2, w:SQRT_1_2});
+
+  function setFromUnscaledAffine4(out, aff) {
+    const m11 = aff[0], m12 = aff[4], m13 = aff[8];
+    const m21 = aff[1], m22 = aff[5], m23 = aff[9];
+    const m31 = aff[2], m32 = aff[6], m33 = aff[10];
+    const trace = m11 + m22 + m33;
+    let s;
+
+    if ( trace > 0 ) {
+
+      s = 0.5 / Math.sqrt( trace + 1.0 );
+
+      out.w = 0.25 / s;
+      out.x = ( m32 - m23 ) * s;
+      out.y = ( m13 - m31 ) * s;
+      out.z = ( m21 - m12 ) * s;
+
+    } else if ( m11 > m22 && m11 > m33 ) {
+
+      s = 2.0 * Math.sqrt( 1.0 + m11 - m22 - m33 );
+
+      out.w = ( m32 - m23 ) / s;
+      out.x = 0.25 * s;
+      out.y = ( m12 + m21 ) / s;
+      out.z = ( m13 + m31 ) / s;
+
+    } else if ( m22 > m33 ) {
+
+      s = 2.0 * Math.sqrt( 1.0 + m22 - m11 - m33 );
+
+      out.w = ( m13 - m31 ) / s;
+      out.x = ( m12 + m21 ) / s;
+      out.y = 0.25 * s;
+      out.z = ( m23 + m32 ) / s;
+
+    } else {
+
+      s = 2.0 * Math.sqrt( 1.0 + m33 - m11 - m22 );
+
+      out.w = ( m21 - m12 ) / s;
+      out.x = ( m13 + m31 ) / s;
+      out.y = ( m23 + m32 ) / s;
+      out.z = 0.25 * s;
+
+    }
+    return out
+  }
+
+  function invertAndMultiplyVecXYZ(out, aff, v) {
+    const n11 = aff[0], n21 = aff[1], n31 = aff[2];
+    const n12 = aff[4], n22 = aff[5], n32 = aff[6];
+    const n13 = aff[8], n23 = aff[9], n33 = aff[10];
+    const tx = aff[12], ty = aff[13], tz = aff[14];
+
+    const t11 = n33 * n22 - n32 * n23;
+    const t12 = n32 * n13 - n33 * n12;
+    const t13 = n23 * n12 - n22 * n13;
+
+    const det = n11 * t11 + n21 * t12 + n31 * t13;
+    const invDet = 1/det;
+
+    // invert the rotation matrix
+    const m11 = t11 * invDet;
+    const m21 = ( n31 * n23 - n33 * n21 ) * invDet;
+    const m31 = ( n32 * n21 - n31 * n22 ) * invDet;
+
+    const m12 = t12 * invDet;
+    const m22 = ( n33 * n11 - n31 * n13 ) * invDet;
+    const m32 = ( n31 * n12 - n32 * n11 ) * invDet;
+
+    const m13 = t13 * invDet;
+    const m23 = ( n21 * n13 - n23 * n11 ) * invDet;
+    const m33 = ( n22 * n11 - n21 * n12 ) * invDet;
+
+    // apply inv(aff)*(v - t)
+    const ax = v.x - tx, ay = v.y - ty, az = v.z - tz;
+    out.x = m11*ax + m12*ay + m13*az;
+    out.y = m21*ax + m22*ay + m23*az;
+    out.z = m31*ax + m32*ay + m33*az;
+
+    return out
+  }
+
+  function determinant(aff) {
+    const n11 = aff[0], n21 = aff[1], n31 = aff[2];
+    const n12 = aff[4], n22 = aff[5], n32 = aff[6];
+    const n13 = aff[8], n23 = aff[9], n33 = aff[10];
+
+    const t11 = n33 * n22 - n32 * n23;
+    const t12 = n32 * n13 - n33 * n12;
+    const t13 = n23 * n12 - n22 * n13;
+
+    return n11 * t11 + n21 * t12 + n31 * t13
+  }
+
+  const decompose = (function() {
+    let affCopy = new Float32Array(16);
+
+    return function decompose(aff, outPosition = undefined, outQuaternion = undefined, outScale = undefined) {
+      if (outPosition) {
+        outPosition.x = aff[12];
+        outPosition.y = aff[13];
+        outPosition.z = aff[14];
+      }
+    
+      if (outScale || outQuaternion) {
+        const sx = Math.hypot(aff[0], aff[1], aff[2]);
+        const sy = Math.hypot(aff[4], aff[5], aff[6]);
+        const sz = Math.hypot(aff[8], aff[9], aff[10]);
+      
+        if (outScale) {
+          outScale.x = sx;
+          outScale.y = sy;
+          outScale.z = sz;
+        }
+      
+        if (outQuaternion) {
+          const det = determinant(aff);
+          const invSX = det < 0 ? -1/sx : 1/sx; // invert scale on one axis for negative determinant
+          const invSY = 1/sy;
+          const invSZ = 1/sz;
+    
+          affCopy.set(aff);
+          affCopy[0] *= invSX;
+          affCopy[1] *= invSX;
+          affCopy[2] *= invSX;
+          affCopy[4] *= invSY;
+          affCopy[5] *= invSY;
+          affCopy[6] *= invSY;
+          affCopy[8] *= invSZ;
+          affCopy[9] *= invSZ;
+          affCopy[10] *= invSZ;
+    
+          setFromUnscaledAffine4(outQuaternion, affCopy);
+        }
+      }
+    
+      return aff
+    }  
+  })();
+
+  const setFromObject3D = (function() {
+    let tempPosition = new THREE.Vector3();
+    let tempQuaternion = new THREE.Quaternion();
+    let tempScale = new THREE.Vector3();
+    let tempBox3 = new THREE.Box3();
+
+    return function setFromObject3D(ext, object3D) {
+      if (object3D.children.length === 0) {
+        return ext
+      }
+
+      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
+      // based around the origin
+      tempPosition.copy(object3D.position);
+      tempQuaternion.copy(object3D.quaternion);
+      tempScale.copy(object3D.scale);
+
+      object3D.position.set(0,0,0);
+      object3D.quaternion.set(0,0,0,1);
+      object3D.scale.set(1,1,1);
+
+      tempBox3.setFromObject(object3D); // expensive for models
+      // ext.setFromObject(object3D) // expensive for models
+
+      object3D.position.copy(tempPosition);
+      object3D.quaternion.copy(tempQuaternion);
+      object3D.scale.copy(tempScale);
+      object3D.updateMatrixWorld(true);
+
+      ext.min.x = tempBox3.min.x;
+      ext.min.y = tempBox3.min.y; 
+      ext.min.z = tempBox3.min.z; 
+      ext.max.x = tempBox3.max.x; 
+      ext.max.y = tempBox3.max.y; 
+      ext.max.z = tempBox3.max.z; 
+
+      return ext
+    }
+  })();
+
+  function volume(ext) {
+    return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
+  }
+
+  /**
+   * Returns the distance between pointA and the surface of boxB. Negative values indicate
+   * that pointA is inside of boxB
+   * 
+   * @param {{x,y,z}} pointA - point
+   * @param {{x,y,z}} boxBMin - min extents of boxB
+   * @param {{x,y,z}} boxBMax - max extents of boxB
+   * @param {float32[16]} affineB - colum-wise matrix for B
+   * @param {{x,y,z}} extraScale - additional scale to apply to the output distance
+   */
+  const pointToBox = (function() {
+    let vertA = {};
+    let scaleA = {};
+
+    return function pointToBox(pointA, boxBMin, boxBMax, affineB) {
+      decompose( affineB, undefined, undefined, scaleA );
+      invertAndMultiplyVecXYZ( vertA, affineB, pointA );
+      const vx = vertA.x, vy = vertA.y, vz = vertA.z;
+      const minx = boxBMin.x - vx, miny = boxBMin.y - vy, minz = boxBMin.z - vz;
+      const maxx = vx - boxBMax.x, maxy = vy - boxBMax.y, maxz = vz - boxBMax.z;
+      const dx = Math.max(maxx, minx)*scaleA.x;
+      const dy = Math.max(maxy, miny)*scaleA.y;
+      const dz = Math.max(maxz, minz)*scaleA.z;
+
+      // for points inside (dx and dy and dz < 0) take the smallest distent to an edge, otherwise
+      // determine the hypotenuese to the outside edges
+      return dx <= 0 && dy <= 0 && dz <= 0 ? Math.max(dx, dy, dz) : Math.hypot(Math.max(0, dx), Math.max(0, dy), Math.max(0, dz))
+    }
+  })();
+
+  /**
+   * Based on donmccurdy/aframe-extras/sphere-collider.js
+   *
+   * Implement bounding sphere collision detection for entities with a mesh.
+   *
+   * @property {string} objects - Selector of the entities to test for collision.
+   * @property {string} watch - If true, also check against new entities added to the scene.
+   *
+   */
+  AFRAME.registerComponent("simple-hands", {
+    schema: {
+      objects: {default: ""},
+      offset: {type: "vec3"},
+      radius: {default: 0.05},
+      watch: {default: true},
+      bubble: {default: true},
+      debug: {default: false},
+    },
+
+    init() {
+      this.observer = null;
+      this.els = [];
+      this.hoverEl = undefined;
+      this.grabEl = undefined;
+      this.sphereDebug = undefined;
+      
+      this.onTriggerUp = this.onTriggerUp.bind(this);
+      this.onTriggerDown = this.onTriggerDown.bind(this);
+    },
+
+    remove() {
+      this.pause();
+    },
+
+    play() {
+      const sceneEl = this.el.sceneEl;
+
+      if (this.data.watch) {
+        this.observer = new MutationObserver(this.update.bind(this, null));
+        this.observer.observe(sceneEl, {childList: true, subtree: true});
+      }
+
+      this.el.addEventListener("triggerdown", this.onTriggerDown);
+      this.el.addEventListener("triggerup", this.onTriggerUp);
+    },
+
+    pause() {
+      this.el.removeEventListener("triggerdown", this.onTriggerDown);
+      this.el.removeEventListener("triggerup", this.onTriggerUp);
+
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
+    },
+
+    /**
+     * Update list of entities to test for collision.
+     */
+    update(oldData) {
+      const data = this.data;
+      let objectEls;
+
+      // Push entities into list of els to intersect.
+      if (data.objects) {
+        objectEls = this.el.sceneEl.querySelectorAll(data.objects);
+      } else {
+        // If objects not defined, intersect with everything.
+        objectEls = this.el.sceneEl.children;
+      }
+
+      if (!AFRAME.utils.deepEqual(data.offset, oldData.offset) || data.radius !== oldData.radius) {
+
+        if (data.debug) {
+          if (this.sphereDebug) {
+            this.el.object3D.remove( this.sphereDebug );
+          }
+          let sphereGeo = new THREE.SphereBufferGeometry(data.radius, 6, 6);
+          sphereGeo.translate(data.offset.x, data.offset.y, data.offset.z);
+          let wireGeo = new THREE.WireframeGeometry(sphereGeo);
+          this.sphereDebug = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({color: 0xffff00}) );
+          this.el.object3D.add(this.sphereDebug);
+        }
+    
+      }
+
+      // Convert from NodeList to Array
+      this.els = Array.prototype.slice.call(objectEls);
+    },
+
+    tick: (function () {
+      let obj3DPosition = new THREE.Vector3();
+      let handOffset = new THREE.Vector3();
+
+      return function () {
+        const data = this.data;
+        const handObject3D = this.el.object3D;
+        const handRadius = data.radius;
+
+        let newHoverEl = undefined;
+
+        if (!this.grabEl) {
+
+          let minScore = Number.MAX_VALUE;
+    
+          handOffset.copy(data.offset).applyMatrix4(handObject3D.matrixWorld);
+
+          for (let el of this.els) {
+            if (!el.isEntity || !el.object3D) { 
+              continue 
+            }
+    
+            let obj3D = el.object3D;  
+            if (!obj3D.boundingSphere || !obj3D.boundingBox || obj3D.boundingBox.isEmpty()) {
+              this.generateBoundingBox(obj3D);
+            }
+    
+            if (obj3D.boundingBox.isEmpty()) { 
+              continue 
+            }
+    
+            // Bounding sphere collision detection
+            obj3DPosition.copy(obj3D.boundingSphere.center).applyMatrix4(obj3D.matrixWorld);
+            const radius = obj3D.boundingSphere.radius*Math.max(obj3D.scale.x, obj3D.scale.y, obj3D.scale.z);
+            const distance = handOffset.distanceTo(obj3DPosition);
+            if (distance < radius + handRadius) {
+
+              // Bounding box collision check
+              const distanceToBox = pointToBox(handOffset, obj3D.boundingBox.min, obj3D.boundingBox.max, obj3D.matrixWorld.elements);
+              // console.log("box", el.id, distanceToBox)
+
+              if (distanceToBox < handRadius) {
+                const score = volume( obj3D.boundingBox );
+                // console.log("score", el.id, score)
+                if (score < minScore) {
+                  minScore = score;
+                  newHoverEl = el;
+                }
+              }
+            }
+          }
+
+          // if (newHoverEl) console.log("closest", newHoverEl.id)
+        }
+
+        if (this.hoverEl && this.hoverEl !== newHoverEl) {
+          this.sendEvent(this.hoverEl, "hoverend");
+        }
+        if (newHoverEl && newHoverEl !== this.hoverEl) {
+          this.sendEvent(newHoverEl, "hoverstart");
+        } 
+        this.hoverEl = newHoverEl;
+      }
+    })(),
+
+    generateBoundingBox(obj3D) {
+      // cache boundingBox and boundingSphere
+      obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3();
+      obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere();
+      setFromObject3D(obj3D.boundingBox, obj3D);
+
+      if (!obj3D.boundingBox.isEmpty()) {
+        obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere);
+
+        if (this.data.debug) {
+          let tempBox = new THREE.Box3();
+          tempBox.copy(obj3D.boundingBox);
+          obj3D.boundingBoxDebug = new THREE.Box3Helper(tempBox);
+          obj3D.boundingBoxDebug.name = "simpleHandsDebug";
+          obj3D.add(obj3D.boundingBoxDebug);
+        }
+      }
+    },
+
+    sendEvent(targetEl, eventName) {
+      const bubble = this.data.bubble;
+      // console.log(eventName, targetEl.id)
+      targetEl.emit(eventName, {hand: this.el}, bubble);
+      this.el.emit(eventName, {target: targetEl}, bubble);
+    },
+
+    onTriggerDown(e) {
+      if (this.hoverEl) {
+        this.grabEl = this.hoverEl;
+        this.sendEvent(this.grabEl, "grabstart");
+      }
+    },
+
+    onTriggerUp(e) {
+      if (this.grabEl) {
+        this.sendEvent(this.grabEl, "grabend");
+        this.grabEl = undefined;
+      }
+    }
   });
 
   // Copyright 2018-2019 harlyq
