@@ -228,326 +228,6 @@
   });
 
   // Copyright 2018-2019 harlyq
-  // MIT license
-
-  function ScopedListener() {
-    let elements = [];
-    let event;
-    let callback;
-
-    function set(el, selector, scope, eventName, callbackFn) {
-      remove();
-      elements = getElementsInScope(el, selector, scope);
-      event = eventName;
-      callback = callbackFn;
-    }
-
-    function add() {
-      if (event && callback) {
-        for (let el of elements) {
-          console.log("scopedListener:add", el.id, event);
-          el.addEventListener(event, callback);
-        }
-      }
-    }
-
-    function remove() {
-      if (event && callback) {
-        for (let el of elements) {
-          console.log("scopedListener:remove", el.id, event);
-          el.removeEventListener(event, callback);
-        }
-      }
-    }
-
-    function getElementsInScope(el, selector, scope, eventEl) {
-      switch (scope) {
-        case "self": return selector === "" ? [el] : el.querySelectorAll(selector) || [el]
-        case "parent": return selector === "" ? [el] : el.parentNode.querySelectorAll(selector) || [el]
-        case "event": {
-          const bestEl = eventEl ? eventEl : el;
-          return selector === "" ? [bestEl] : bestEl.querySelectorAll(selector) || [bestEl]
-        }
-        case "document": 
-        default:
-          return selector === "" ? [el] : document.querySelectorAll(selector) || [el]
-      }
-    }
-
-    return {
-      set,
-      add,
-      remove,
-      getElementsInScope,
-    }
-  }
-
-  // Copyright 2018-2019 harlyq
-  // MIT license
-
-  function BasicTimer() {
-    let sendEventTimer;
-    let timeOfStart;
-    let timeoutCallback;
-    let timeRemaining;
-
-    function start(delay, callback) {
-      stop();
-      
-      if (delay > 0) {
-        sendEventTimer = setTimeout(callback, delay*1000);
-        timeOfStart = Date.now();
-        timeoutCallback = callback;
-      } else {
-        callback();
-      }
-    }
-
-    function stop() {
-      clearTimeout(self.sendEventTimer);
-      sendEventTimer = undefined;
-      timeOfStart = undefined;
-      timeRemaining = undefined;
-      timeoutCallback = undefined;
-    }
-
-    function pause() {
-      if (sendEventTimer) {
-        let remaining = Date.now() - timeOfStart;
-        stop();
-        timeRemaining = remaining;
-      }
-    }
-
-    function resume() {
-      if (timeRemaining) {
-        start(timeRemaining, timeoutCallback);
-        timeRemaining = undefined;
-      }
-    }
-
-    return {
-      start,
-      stop,
-      pause,
-      resume
-    }
-  }
-
-  // Copyright 2018-2019 harlyq
-
-  /**
-   * Breaks a selector string into {type, id, classes, attrs}
-   * 
-   * @param {string} str - selector in the form type#id.class1.class2[attr1=value1][attr2=value2]
-   * @return {object} { type, id, classes[], attrs{} }
-   */
-  function parseSelector(str) {
-    let results = {type: "", id: "", classes: [], attrs: {}};
-    let token = "type";
-    let tokenStart = 0;
-    let lastAttr = "";
-
-    const setToken = (newToken, i) => {
-      let tokenValue = str.slice(tokenStart, i);
-
-      if (i > tokenStart) {
-        switch (token) {
-          case "type":
-          case "id":
-            results[token] = tokenValue;
-            break
-          case "class":
-            results.classes.push(tokenValue);
-            break
-          case "attr":
-            lastAttr = tokenValue;
-            break
-          case "value":
-            if (lastAttr) {
-              results.attrs[lastAttr] = tokenValue;
-            }
-            break
-          case "none":
-          case "end":
-            break
-        }
-      }
-
-      token = newToken;
-      tokenStart = i + 1; // ignore the token character
-    };
-
-    for (let i = 0, n = str.length; i < n; i++) {
-      const c = str[i];
-      switch (c) {
-        case "\\": i++; break // escape the next character
-        case "#": if (token !== "attr" && token !== "value") setToken("id", i); break
-        case ".": if (token !== "attr" && token !== "value") setToken("class", i); break
-        case "[": if (token !== "attr" && token !== "value") setToken("attr", i); break
-        case "]": if (token === "attr" || token === "value") setToken("none", i); break
-        case "=": if (token === "attr") setToken("value", i); break
-      }
-    }
-    setToken("end", str.length);
-
-    return results
-  }
-
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(""), {type: "", id: "", classes: [], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("xyz"), {type: "xyz", id: "", classes: [], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("#xyz"), {type: "", id: "xyz", classes: [], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(".xyz"), {type: "", id: "", classes: ["xyz"], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("[xyz=1]"), {type: "", id: "", classes: [], attrs: {"xyz": "1"}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("type.class#id[attr=value]"), {type: "type", id: "id", classes: ["class"], attrs: {attr: "value"}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(".class#id[]"), {type: "", id: "id", classes: ["class"], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(".class1#id.class2"), {type: "", id: "id", classes: ["class1", "class2"], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("[foo=bar][one.two=three.four]"), {type: "", id: "", classes: [], attrs: {"foo": "bar", "one.two": "three.four"}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("xyz[foo=bar]#abc"), {type: "xyz", id: "abc", classes: [], attrs: {"foo": "bar"}}))
-
-  /**
-   * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
-   * creates a "div" with className "door", id "door1" and attribute "state=open".  If no type is
-   * provided then defaults to a-entity.
-   * 
-   * @param {string} str - selector string to create
-   * @return {object} returns an HTMLElement matching the selector string
-   */
-  function createElementFromSelector(str) {
-    let info = parseSelector(str);
-    let type = info.type || 'a-entity';
-    let newEl = document.createElement(type);
-    if (newEl) {
-      if (info.classes.length > 0) newEl.classList.add(...info.classes);
-
-      for (let attr in info.attrs) {
-        AFRAME.utils.entity.setComponentProperty(newEl, attr, trimQuotes(info.attrs[attr]));
-      }
-    }
-
-    return newEl
-  }
-
-  /**
-   * Removes the outer-most quotes from around a string
-   * 
-   * @param {string} str - string to remove quotes from
-   * @return {string} returns a new string, without the leading and trailing quotes
-   */
-  function trimQuotes(str) {
-    str = str.trim();
-    const start = (str[0] === "'" || str[0] === '"') ? 1 : 0;
-    const n = str.length;
-    let end = (str[n - 1] === "'" || str[n - 1] === '"') ? n - 1 : n;
-    return start === 0 && end === n ? str : str.slice(start, end)
-  }
-
-  // console.assert(trimQuotes(``) === "")
-  // console.assert(trimQuotes(`  "bla h"`) === "bla h")
-  // console.assert(trimQuotes(` 'foo''bar'  `) === "foo''bar")
-  // console.assert(trimQuotes(`keep'"inside`) === "keep'\"inside")
-
-  AFRAME.registerComponent("wait-add-remove", {
-    schema: {
-      delay: { default: 0 },
-      event: { default: "" },
-      source: { default: "" },
-      sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
-      add: { type: "array" },
-      addRepeat: { type: "int", default: 1 },
-      remove: { type: "array" },
-    },
-    multiple: true,
-
-    init() {
-      this.addRemoveEntities = this.addRemoveEntities.bind(this);
-      this.startDelay = this.startDelay.bind(this);
-
-      this.waitTimer = BasicTimer();
-      this.waitListener = ScopedListener();
-    },
-
-    update(oldData) {
-      const data = this.data;
-      if (oldData.event !== data.event || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
-        this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.startDelay);
-      }
-      
-      if (oldData.delay !== data.delay && (this.timer || data.event === "")) {
-        this.startDelay();
-      }
-    },
-
-    pause() {
-      this.waitTimer.pause();
-      this.waitListener.remove();
-    },
-
-    play() {
-      this.waitListener.add();
-      this.waitTimer.resume();
-    },
-
-    startDelay() {
-      this.waitTimer.start(this.data.delay, this.addRemoveEntities);
-    },
-
-    addRemoveEntities() {
-      const data = this.data;
-      for (let removeSelector of data.remove) {
-        let descendants = this.el.querySelectorAll(removeSelector);
-        descendants.forEach(el => this.el.removeChild(el));
-      }
-
-      for (let i = 0; i < data.addRepeat; ++i) {
-        for (let addSelector of data.add) {
-          let newEl = createElementFromSelector(addSelector); // TODO should we createElement in the update, and only do the append here?
-          if (newEl) {
-            this.el.appendChild(newEl);
-          }
-        }
-      }
-    }
-  });
-
-  // Copyright 2018-2019 harlyq
-  // MIT license
-
-  function BasicRandom() {
-    const MAX_UINT32 = 0xffffffff;
-    let seed = -1;
-    
-    function setSeed(s) {
-      seed = s;
-    }
-    
-    function random() {
-      if (seed < 0) {
-        return Math.random()
-      }
-    
-      seed = (1664525*seed + 1013904223) % MAX_UINT32;
-      return seed/MAX_UINT32
-    }
-    
-    function randomInt(n) {
-      return ~~(random()*n)
-    }
-    
-    function randomNumber(min, max) {
-      if (min === max) { return min }
-      return random()*(max - min) + min
-    }
-    
-    return {
-      setSeed,
-      random,
-      randomInt,
-      randomNumber,
-    }
-  }
-
-  // Copyright 2018-2019 harlyq
 
   // console.assert(deepEqual(null, null))
   // console.assert(deepEqual(undefined, undefined))
@@ -682,199 +362,41 @@
   // console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
 
   // Copyright 2018-2019 harlyq
-  // import {deepEqual} from "./aframe-utils"
+  // MIT license
 
-  function trim(str) {
-    return str.trim()
-  }
-
-  // console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
-  // console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
-  // console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
-  // console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
-  // console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
-  // console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
-  // console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
-  // console.assert(parseValue("  burple "), {type: "string", value: "burple"})
-
-  // Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
-  // Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
-  function parseRangeOption(str) {
-    let range = str.split("..");
-    if (range.length > 1) {
-      const start = parseValue(range[0]);
-      const end = parseValue(range[1]);
+  function BasicRandom() {
+    const MAX_UINT32 = 0xffffffff;
+    let seed = -1;
     
-      if (start.type !== end.type && start.type !== "any" && end.type !== "any") {
-        console.error(`incompatible types for range ${str}`);
-      } else {
-        return { type: start.type !== "any" ? start.type : end.type, range: [start.value, end.value]}
-      }
-    }
-
-    let options = str.split("|");
-    return { type: "string", options: options.map(trim) }
-  }
-
-  // console.assert(deepEqual(parseRangeOption("1 2 3"), { type: "string", options: ["1 2 3"]}))
-  // console.assert(deepEqual(parseRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
-  // console.assert(deepEqual(parseRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
-  // console.assert(deepEqual(parseRangeOption("1 2||3"), { type: "string", options: ["1 2","","3"]}))
-  // console.assert(deepEqual(parseRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
-  // console.assert(deepEqual(parseRangeOption("a..b"), { type: "string", range: ["a","b"]}))
-
-  function randomizeOptions(options, randFn) {
-    return options[Math.floor(randFn()*options.length)]
-  }
-
-  function randomizeRange(type, range, randFn) {
-    const min = range[0];
-    const max = range[1];
-    const randomNumber = (min, max) => {
-      if (min === max) return min
-      return randFn()*(max - min) + min
-    };
-
-    if (type === "numbers") {
-      const m = Math.min(min.length, max.length); // count the least elements
-      let result = max.length > m ? max.slice() : min.slice(); // copy the larger array
-      for (let i = 0; i < m; i++) {
-        result[i] = randomNumber(min[i], max[i]); // randomize the parts where values exist for both min and max
-      }
-      return result
+    function setSeed(s) {
+      seed = s;
     }
     
-    if (type === "color") {
-      return new THREE.Color(randomNumber(min.r, max.r), randomNumber(min.g, max.g), randomNumber(min.b, max.b))
-    }
-
-    return randFn() > 0.5 ? min : max
-  }
-
-
-  // const stringParts = ["a","ab","bc"];
-  // const vecParts = [[1,2,3],[10,20]]
-  // for (let i = 0; i < 50; i++) {
-  //   console.assert(randomizeOptions(["x"], Math.random) === "x")
-  //   console.assert(stringParts.includes(randomizeOptions(stringParts, Math.random)))
-  //   console.assert(["a", "b"].includes(randomizeRange("string", ["a", "b", "c"], Math.random)))
+    function random() {
+      if (seed < 0) {
+        return Math.random()
+      }
     
-  //   const x = randomizeRange("numbers", [[1],[2]], Math.random)
-  //   console.assert(x >= 1 && x < 2)
-
-  //   const y = randomizeRange("numbers", vecParts, Math.random)
-  //   console.assert(y.length === 3 && y[0] >= vecParts[0][0] && y[0] < vecParts[1][0] && y[1] >= vecParts[0][1] && y[1] < vecParts[1][1] && y[2] === vecParts[0][2])
-  // }
-
-
-  //-----------------------------------------------------------------------------
-  // "wait-set" component for setting attributes on this or other elements after a delay or event
-  // 
-  AFRAME.registerComponent("wait-set", {
-    schema: {
-      delay: { default: 0 },
-      event: { default: "" },
-      source: { default: "" },
-      sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
-      target: { default: "" },
-      targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
-      seed: { type: "int", default: -1 },
-    },
-    multiple: true,
-
-    init() {
-      this.setProperties = this.setProperties.bind(this);
-      this.startDelay = this.startDelay.bind(this);
-
-      this.eventTargetEl = undefined;
-      this.rules = {};
-      this.sources = [];
-
-      this.waitListener = ScopedListener();
-      this.waitTimer = BasicTimer();
-      this.psuedoRandom = BasicRandom();
-    },
-
-    remove() {
-      this.waitListener.remove();
-      this.waitTimer.stop();
-    },
-
-    updateSchema(newData) {
-      const originalSchema = AFRAME.components[this.name].schema;
-      let newSchema = {};
-
-      for (let prop in newData) {
-        if (!(prop in originalSchema)) {
-          newSchema[prop] = { default: "" };
-        }
-      }
-
-      // extend the schema so the new rules appear in the inspector
-      if (Object.keys(newSchema).length > 0) {
-        this.extendSchema(newSchema);
-      }
-    },
-
-    update(oldData) {
-      const originalSchema = AFRAME.components[this.name].schema;
-      const data = this.data;
-
-      if (data.seed !== oldData.seed) {
-        this.psuedoRandom.setSeed(data.seed);
-      }
-
-      for (let prop in this.rules) {
-        if (!(prop in data)) {
-          delete this.rules[prop]; // property is no longer present
-        }
-      }
-
-      for (let prop in data) {
-        if (!(prop in originalSchema) && data[prop] !== oldData[prop]) {
-          this.rules[prop] = parseRangeOption(data[prop]);
-        }
-      }
-
-      if (data.event !== oldData.event || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-        this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.startDelay);
-      }
-
-      if (data.delay !== oldData.delay && (this.delayTimer || data.event === "")) {
-        this.startDelay();
-      }
-    },
-
-    pause() {
-      this.waitListener.remove();
-      this.waitTimer.pause();
-    },
-
-    play() {
-      this.waitTimer.resume();
-      this.waitListener.add();
-    },
-
-    startDelay(e) {
-      // console.log("wait-set:startDelay", e.target.id, this.data.event)
-      this.eventTargetEl = e ? e.target : undefined;
-      this.waitTimer.start(this.data.delay, this.setProperties);
-    },
-
-    setProperties() {
-      const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, this.eventTargetEl);
-
-      for (let el of elements) {
-        for (let prop in this.rules) {
-          let rule = this.rules[prop];
-
-          const value = rule.options ? randomizeOptions(rule.options, this.psuedoRandom.random) : randomizeRange(rule.type, rule.range, this.psuedoRandom.random);
-          // console.log("wait-set:setProperties", el.id, prop, value)
-          setProperty(el, prop, value);
-        }
-      }
-    },
-  });
+      seed = (1664525*seed + 1013904223) % MAX_UINT32;
+      return seed/MAX_UINT32
+    }
+    
+    function randomInt(n) {
+      return ~~(random()*n)
+    }
+    
+    function randomNumber(min, max) {
+      if (min === max) { return min }
+      return random()*(max - min) + min
+    }
+    
+    return {
+      setSeed,
+      random,
+      randomInt,
+      randomNumber,
+    }
+  }
 
   // Copyright 2018-2019 harlyq
 
@@ -1200,7 +722,7 @@
   // console.assert(deepEqual(colorRulesToHexString(parseKeyframeData("..red,,blue|green|")), { type: "color", slots: [{range: ["", "ff0000"]}, {value: ""}, {options: ["0000ff", "008000", ""]}] }))
 
 
-  function randomizeRange$1(type, range, randFn) {
+  function randomizeRange(type, range, randFn) {
     const min = range[0];
     const max = range[1];
 
@@ -1229,7 +751,7 @@
   const RULE_RANDOMIZER = {
     "value": (type, value, randFn) => value,
     "options": (type, parts, randFn) => parts[~~(randFn()*parts.length)],
-    "range": randomizeRange$1
+    "range": randomizeRange
   };
 
 
@@ -1538,175 +1060,6 @@
         }
       }
     },
-  });
-
-  // Copyright 2018-2019 harlyq
-  // MIT license
-
-  AFRAME.registerComponent("timer-emit", {
-    schema: {
-      src: { type: "selector" },
-      target: { default: "" },
-      targetScope: { default: "document", oneOf: ["document", "self", "parent"] },
-      stopOnPause: { default: true },
-    },
-    multiple: true,
-
-    init() {
-      this.sendEvents = this.sendEvents.bind(this);
-      this.mediaEl = undefined;
-      this.restartMedia = false;
-      this.clockStartTime = Date.now();
-      this.targets = [];
-    },
-
-    remove() {
-      this.removeListeners();
-    },
-
-    updateSchema(newData) {
-      const originalSchema = AFRAME.components["timer-emit"].schema;
-      let newSchema = {};
-
-      for (let key in newData) {
-        if (!(key in originalSchema)) {
-          newSchema[key] = { type: "string" }; // key is the name of the event to send, and the value is a list of time stamps
-        }
-      }
-
-      if (Object.keys(newSchema).length > 0) {
-        this.extendSchema(newSchema);
-      }
-    },
-
-    pause() {
-      const data = this.data;
-
-      this.removeListeners();
-
-      if (data.stopOnPause) {
-        this.pauseTime = Date.now(); // used to pause the clock while in the Inspector
-        clearTimeout(this.sendEventsTimer);
-        this.sendEventsTimer = undefined;
-
-        if (this.mediaEl && !this.mediaEl.paused) {
-          this.mediaEl.pause();
-          this.restartMedia = true;
-        }
-      }
-    },
-
-    play() {
-      if (this.pauseTime) {
-        this.clockStartTime += Date.now() - this.pauseTime;
-        delete this.pauseTime;
-      }
-
-      if (this.mediaEl) {
-        this.addListeners();
-
-        if (this.restartMedia) {
-          this.mediaEl.play();
-          this.restartMedia = false;
-        }
-      }
-
-      this.sendEvents();
-    },
-
-    update(oldData) {
-      const data = this.data;
-      const originalSchema = AFRAME.components["timer-emit"].schema;
-
-      if (oldData.src !== data.src) {
-        this.removeListeners();
-        this.mediaEl = data.src instanceof HTMLMediaElement ? data.src : undefined;
-      }
-
-      if (oldData.target !== data.target) {
-        this.targets = this.querySelectorAll(data.targetScope, data.target);
-      }
-
-      this.events = [];
-
-      for (let attr in data) {
-        if (!(attr in originalSchema)) {
-          let times = data[attr].split(",").map(a => Number(a));
-          for (let time of times) {
-            if (!isNaN(time)) {
-              this.events.push([time, attr]);
-            }
-          }
-        }
-      }
-
-      this.events.sort((a,b) => a[0] - b[0]); // ascending by time
-      this.lastSendEventsTime = -1;
-    },
-
-    querySelectorAll(scope, selector) {
-      if (selector == "") return [this.el]
-
-      switch (scope) {
-        case "self": return this.el.querySelectorAll(selector) || [this.el]
-        case "parent": return this.el.parentNode.querySelectorAll(selector) || [this.el]
-        case "document": 
-        default:
-          return document.querySelectorAll(selector) || [this.el]
-      }
-    },
-
-    addListeners() {
-      if (this.mediaEl) {
-        this.mediaEl.addEventListener("play", this.sendEvents);
-      }
-    },
-
-    removeListeners() {
-      if (this.mediaEl) {
-        this.mediaEl.removeEventListener("play", this.sendEvents);
-      }
-    },
-
-    sendEvents() {
-      if (this.mediaEl && this.mediaEl.paused) {
-        return
-      }
-
-      let time = this.mediaEl ? this.mediaEl.currentTime : (Date.now() - this.clockStartTime)/1000;
-      let nextTime;
-      let eventsToSend = [];
-
-      for (let event of this.events) {
-        if (event[0] <= this.lastSendEventsTime) continue
-
-        if (event[0] <= time) {
-          eventsToSend.push(event[1]);
-        } else {
-          nextTime = event[0];
-          break
-        }
-      }
-
-      if (eventsToSend.length > 0) {
-        const data = this.data;
-        const source = this.el;
-
-        for (let target of this.targets) {
-          const eventData = {source, target};
-          
-          for (let tag of eventsToSend) {
-            target.emit(tag, eventData);
-          }
-        }
-      }
-
-      this.lastSendEventsTime = time;
-
-      if (nextTime) {
-        this.sendEventsTimer = setTimeout(this.sendEvents, (nextTime - time)*1000);
-      }
-    }
   });
 
   // Copyright 2018-2019 harlyq
@@ -3571,5 +2924,723 @@ void main() {
   // #include <encodings_fragment>
   #include <fog_fragment>
 }`;
+
+  // Copyright 2018-2019 harlyq
+  // MIT license
+
+  AFRAME.registerComponent("timer-emit", {
+    schema: {
+      src: { type: "selector" },
+      target: { default: "" },
+      targetScope: { default: "document", oneOf: ["document", "self", "parent"] },
+      stopOnPause: { default: true },
+    },
+    multiple: true,
+
+    init() {
+      this.sendEvents = this.sendEvents.bind(this);
+      this.mediaEl = undefined;
+      this.restartMedia = false;
+      this.clockStartTime = Date.now();
+      this.targets = [];
+    },
+
+    remove() {
+      this.removeListeners();
+    },
+
+    updateSchema(newData) {
+      const originalSchema = AFRAME.components["timer-emit"].schema;
+      let newSchema = {};
+
+      for (let key in newData) {
+        if (!(key in originalSchema)) {
+          newSchema[key] = { type: "string" }; // key is the name of the event to send, and the value is a list of time stamps
+        }
+      }
+
+      if (Object.keys(newSchema).length > 0) {
+        this.extendSchema(newSchema);
+      }
+    },
+
+    pause() {
+      const data = this.data;
+
+      this.removeListeners();
+
+      if (data.stopOnPause) {
+        this.pauseTime = Date.now(); // used to pause the clock while in the Inspector
+        clearTimeout(this.sendEventsTimer);
+        this.sendEventsTimer = undefined;
+
+        if (this.mediaEl && !this.mediaEl.paused) {
+          this.mediaEl.pause();
+          this.restartMedia = true;
+        }
+      }
+    },
+
+    play() {
+      if (this.pauseTime) {
+        this.clockStartTime += Date.now() - this.pauseTime;
+        delete this.pauseTime;
+      }
+
+      if (this.mediaEl) {
+        this.addListeners();
+
+        if (this.restartMedia) {
+          this.mediaEl.play();
+          this.restartMedia = false;
+        }
+      }
+
+      this.sendEvents();
+    },
+
+    update(oldData) {
+      const data = this.data;
+      const originalSchema = AFRAME.components["timer-emit"].schema;
+
+      if (oldData.src !== data.src) {
+        this.removeListeners();
+        this.mediaEl = data.src instanceof HTMLMediaElement ? data.src : undefined;
+      }
+
+      if (oldData.target !== data.target) {
+        this.targets = this.querySelectorAll(data.targetScope, data.target);
+      }
+
+      this.events = [];
+
+      for (let attr in data) {
+        if (!(attr in originalSchema)) {
+          let times = data[attr].split(",").map(a => Number(a));
+          for (let time of times) {
+            if (!isNaN(time)) {
+              this.events.push([time, attr]);
+            }
+          }
+        }
+      }
+
+      this.events.sort((a,b) => a[0] - b[0]); // ascending by time
+      this.lastSendEventsTime = -1;
+    },
+
+    querySelectorAll(scope, selector) {
+      if (selector == "") return [this.el]
+
+      switch (scope) {
+        case "self": return this.el.querySelectorAll(selector) || [this.el]
+        case "parent": return this.el.parentNode.querySelectorAll(selector) || [this.el]
+        case "document": 
+        default:
+          return document.querySelectorAll(selector) || [this.el]
+      }
+    },
+
+    addListeners() {
+      if (this.mediaEl) {
+        this.mediaEl.addEventListener("play", this.sendEvents);
+      }
+    },
+
+    removeListeners() {
+      if (this.mediaEl) {
+        this.mediaEl.removeEventListener("play", this.sendEvents);
+      }
+    },
+
+    sendEvents() {
+      if (this.mediaEl && this.mediaEl.paused) {
+        return
+      }
+
+      let time = this.mediaEl ? this.mediaEl.currentTime : (Date.now() - this.clockStartTime)/1000;
+      let nextTime;
+      let eventsToSend = [];
+
+      for (let event of this.events) {
+        if (event[0] <= this.lastSendEventsTime) continue
+
+        if (event[0] <= time) {
+          eventsToSend.push(event[1]);
+        } else {
+          nextTime = event[0];
+          break
+        }
+      }
+
+      if (eventsToSend.length > 0) {
+        const data = this.data;
+        const source = this.el;
+
+        for (let target of this.targets) {
+          const eventData = {source, target};
+          
+          for (let tag of eventsToSend) {
+            target.emit(tag, eventData);
+          }
+        }
+      }
+
+      this.lastSendEventsTime = time;
+
+      if (nextTime) {
+        this.sendEventsTimer = setTimeout(this.sendEvents, (nextTime - time)*1000);
+      }
+    }
+  });
+
+  // Copyright 2018-2019 harlyq
+  // MIT license
+
+  function ScopedListener() {
+    let elements = [];
+    let event;
+    let callback;
+
+    function set(el, selector, scope, eventName, callbackFn) {
+      remove();
+      elements = getElementsInScope(el, selector, scope);
+      event = eventName;
+      callback = callbackFn;
+    }
+
+    function add() {
+      if (event && callback) {
+        for (let el of elements) {
+          console.log("scopedListener:add", el.id, event);
+          el.addEventListener(event, callback);
+        }
+      }
+    }
+
+    function remove() {
+      if (event && callback) {
+        for (let el of elements) {
+          console.log("scopedListener:remove", el.id, event);
+          el.removeEventListener(event, callback);
+        }
+      }
+    }
+
+    function getElementsInScope(el, selector, scope, eventEl) {
+      switch (scope) {
+        case "self": return selector === "" ? [el] : el.querySelectorAll(selector) || [el]
+        case "parent": return selector === "" ? [el] : el.parentNode.querySelectorAll(selector) || [el]
+        case "event": {
+          const bestEl = eventEl ? eventEl : el;
+          return selector === "" ? [bestEl] : bestEl.querySelectorAll(selector) || [bestEl]
+        }
+        case "document": 
+        default:
+          return selector === "" ? [el] : document.querySelectorAll(selector) || [el]
+      }
+    }
+
+    return {
+      set,
+      add,
+      remove,
+      getElementsInScope,
+    }
+  }
+
+  // Copyright 2018-2019 harlyq
+  // MIT license
+
+  function BasicTimer() {
+    let sendEventTimer;
+    let timeOfStart;
+    let timeoutCallback;
+    let timeRemaining;
+
+    function start(delay, callback) {
+      stop();
+      
+      if (delay > 0) {
+        sendEventTimer = setTimeout(callback, delay*1000);
+        timeOfStart = Date.now();
+        timeoutCallback = callback;
+      } else {
+        callback();
+      }
+    }
+
+    function stop() {
+      clearTimeout(self.sendEventTimer);
+      sendEventTimer = undefined;
+      timeOfStart = undefined;
+      timeRemaining = undefined;
+      timeoutCallback = undefined;
+    }
+
+    function pause() {
+      if (sendEventTimer) {
+        let remaining = Date.now() - timeOfStart;
+        stop();
+        timeRemaining = remaining;
+      }
+    }
+
+    function resume() {
+      if (timeRemaining) {
+        start(timeRemaining, timeoutCallback);
+        timeRemaining = undefined;
+      }
+    }
+
+    return {
+      start,
+      stop,
+      pause,
+      resume
+    }
+  }
+
+  // Copyright 2018-2019 harlyq
+
+  /**
+   * Breaks a selector string into {type, id, classes, attrs}
+   * 
+   * @param {string} str - selector in the form type#id.class1.class2[attr1=value1][attr2=value2]
+   * @return {object} { type, id, classes[], attrs{} }
+   */
+  function parseSelector(str) {
+    let results = {type: "", id: "", classes: [], attrs: {}};
+    let token = "type";
+    let tokenStart = 0;
+    let lastAttr = "";
+
+    const setToken = (newToken, i) => {
+      let tokenValue = str.slice(tokenStart, i);
+
+      if (i > tokenStart) {
+        switch (token) {
+          case "type":
+          case "id":
+            results[token] = tokenValue;
+            break
+          case "class":
+            results.classes.push(tokenValue);
+            break
+          case "attr":
+            lastAttr = tokenValue;
+            break
+          case "value":
+            if (lastAttr) {
+              results.attrs[lastAttr] = tokenValue;
+            }
+            break
+          case "none":
+          case "end":
+            break
+        }
+      }
+
+      token = newToken;
+      tokenStart = i + 1; // ignore the token character
+    };
+
+    for (let i = 0, n = str.length; i < n; i++) {
+      const c = str[i];
+      switch (c) {
+        case "\\": i++; break // escape the next character
+        case "#": if (token !== "attr" && token !== "value") setToken("id", i); break
+        case ".": if (token !== "attr" && token !== "value") setToken("class", i); break
+        case "[": if (token !== "attr" && token !== "value") setToken("attr", i); break
+        case "]": if (token === "attr" || token === "value") setToken("none", i); break
+        case "=": if (token === "attr") setToken("value", i); break
+      }
+    }
+    setToken("end", str.length);
+
+    return results
+  }
+
+  // console.assert(AFRAME.utils.deepEqual(parseSelector(""), {type: "", id: "", classes: [], attrs: {}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector("xyz"), {type: "xyz", id: "", classes: [], attrs: {}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector("#xyz"), {type: "", id: "xyz", classes: [], attrs: {}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector(".xyz"), {type: "", id: "", classes: ["xyz"], attrs: {}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector("[xyz=1]"), {type: "", id: "", classes: [], attrs: {"xyz": "1"}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector("type.class#id[attr=value]"), {type: "type", id: "id", classes: ["class"], attrs: {attr: "value"}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector(".class#id[]"), {type: "", id: "id", classes: ["class"], attrs: {}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector(".class1#id.class2"), {type: "", id: "id", classes: ["class1", "class2"], attrs: {}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector("[foo=bar][one.two=three.four]"), {type: "", id: "", classes: [], attrs: {"foo": "bar", "one.two": "three.four"}}))
+  // console.assert(AFRAME.utils.deepEqual(parseSelector("xyz[foo=bar]#abc"), {type: "xyz", id: "abc", classes: [], attrs: {"foo": "bar"}}))
+
+  /**
+   * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
+   * creates a "div" with className "door", id "door1" and attribute "state=open".  If no type is
+   * provided then defaults to a-entity.
+   * 
+   * @param {string} str - selector string to create
+   * @return {object} returns an HTMLElement matching the selector string
+   */
+  function createElementFromSelector(str) {
+    let info = parseSelector(str);
+    let type = info.type || 'a-entity';
+    let newEl = document.createElement(type);
+    if (newEl) {
+      if (info.classes.length > 0) newEl.classList.add(...info.classes);
+
+      for (let attr in info.attrs) {
+        AFRAME.utils.entity.setComponentProperty(newEl, attr, trimQuotes(info.attrs[attr]));
+      }
+    }
+
+    return newEl
+  }
+
+  /**
+   * Removes the outer-most quotes from around a string
+   * 
+   * @param {string} str - string to remove quotes from
+   * @return {string} returns a new string, without the leading and trailing quotes
+   */
+  function trimQuotes(str) {
+    str = str.trim();
+    const start = (str[0] === "'" || str[0] === '"') ? 1 : 0;
+    const n = str.length;
+    let end = (str[n - 1] === "'" || str[n - 1] === '"') ? n - 1 : n;
+    return start === 0 && end === n ? str : str.slice(start, end)
+  }
+
+  // console.assert(trimQuotes(``) === "")
+  // console.assert(trimQuotes(`  "bla h"`) === "bla h")
+  // console.assert(trimQuotes(` 'foo''bar'  `) === "foo''bar")
+  // console.assert(trimQuotes(`keep'"inside`) === "keep'\"inside")
+
+  AFRAME.registerComponent("wait-add-remove", {
+    schema: {
+      delay: { default: 0 },
+      event: { default: "" },
+      source: { default: "" },
+      sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
+      add: { type: "array" },
+      addRepeat: { type: "int", default: 1 },
+      remove: { type: "array" },
+    },
+    multiple: true,
+
+    init() {
+      this.addRemoveEntities = this.addRemoveEntities.bind(this);
+      this.startDelay = this.startDelay.bind(this);
+
+      this.waitTimer = BasicTimer();
+      this.waitListener = ScopedListener();
+    },
+
+    update(oldData) {
+      const data = this.data;
+      if (oldData.event !== data.event || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
+        this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.startDelay);
+      }
+      
+      if (oldData.delay !== data.delay && (this.timer || data.event === "")) {
+        this.startDelay();
+      }
+    },
+
+    pause() {
+      this.waitTimer.pause();
+      this.waitListener.remove();
+    },
+
+    play() {
+      this.waitListener.add();
+      this.waitTimer.resume();
+    },
+
+    startDelay() {
+      this.waitTimer.start(this.data.delay, this.addRemoveEntities);
+    },
+
+    addRemoveEntities() {
+      const data = this.data;
+      for (let removeSelector of data.remove) {
+        let descendants = this.el.querySelectorAll(removeSelector);
+        descendants.forEach(el => this.el.removeChild(el));
+      }
+
+      for (let i = 0; i < data.addRepeat; ++i) {
+        for (let addSelector of data.add) {
+          let newEl = createElementFromSelector(addSelector); // TODO should we createElement in the update, and only do the append here?
+          if (newEl) {
+            this.el.appendChild(newEl);
+          }
+        }
+      }
+    }
+  });
+
+  // Copyright 2018-2019 harlyq
+
+  //-----------------------------------------------------------------------------
+  // "wait-emit" component for emitting events on this or other elements after a delay or event
+  // 
+  AFRAME.registerComponent("wait-emit", {
+    schema: {
+      "event": { default: "" },
+      "delay": { default: 0 },
+      "source": { default: "" },
+      "sourceScope": { default: "document", oneOf: ["parent", "self", "document"] },
+      "out": { default: "" },
+      "target": { default: "" },
+      "targetScope": { default: "document", oneOf: ["parent", "self", "document"] },
+    },
+    multiple: true,
+
+    init() {
+      this.sendEvent = this.sendEvent.bind(this);
+      this.startTimer = this.startTimer.bind(this);
+      this.onEvent = this.onEvent.bind(this);
+      this.sources = [];
+
+      this.waitTimer = BasicTimer();
+      this.waitListener = ScopedListener();
+    },
+
+    remove() {
+      this.waitListener.remove();
+      this.waitTimer.stop();
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      if (data.event !== oldData.event || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
+        this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent);
+      }
+
+      if (data.delay !== oldData.delay && (this.sendwaitTimer || data.event === "")) {
+        this.waitTimer.start(data.delay, this.sendEvent);
+      }
+    },
+
+    pause() {
+      this.waitListener.remove();
+      this.waitTimer.pause();
+    },
+
+    play() {
+      this.waitListener.add();
+      this.waitTimer.resume();
+    },
+
+    onEvent() {
+      this.waitTimer.start(this.data.delay, this.sendEvent);
+    },
+
+    sendEvent(evt) {
+      const data = this.data;
+      const targets = this.waitListener.getElementsInScope(this.el, data.target, data.targetScope, evt.target);
+      const eventData = Object.assign({ source: this.el }, evt);
+      const event = data.out ? data.out : data.event;
+
+      for (let target of targets) {
+        target.emit(event, eventData);
+      }
+    },
+
+  });
+
+  // Copyright 2018-2019 harlyq
+  // import {deepEqual} from "./aframe-utils"
+
+  function trim(str) {
+    return str.trim()
+  }
+
+  // console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
+  // console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
+  // console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
+  // console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
+  // console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
+  // console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
+  // console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
+  // console.assert(parseValue("  burple "), {type: "string", value: "burple"})
+
+  // Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
+  // Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
+  function parseRangeOption(str) {
+    let range = str.split("..");
+    if (range.length > 1) {
+      const start = parseValue(range[0]);
+      const end = parseValue(range[1]);
+    
+      if (start.type !== end.type && start.type !== "any" && end.type !== "any") {
+        console.error(`incompatible types for range ${str}`);
+      } else {
+        return { type: start.type !== "any" ? start.type : end.type, range: [start.value, end.value]}
+      }
+    }
+
+    let options = str.split("|");
+    return { type: "string", options: options.map(trim) }
+  }
+
+  // console.assert(deepEqual(parseRangeOption("1 2 3"), { type: "string", options: ["1 2 3"]}))
+  // console.assert(deepEqual(parseRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
+  // console.assert(deepEqual(parseRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
+  // console.assert(deepEqual(parseRangeOption("1 2||3"), { type: "string", options: ["1 2","","3"]}))
+  // console.assert(deepEqual(parseRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
+  // console.assert(deepEqual(parseRangeOption("a..b"), { type: "string", range: ["a","b"]}))
+
+  function randomizeOptions(options, randFn) {
+    return options[Math.floor(randFn()*options.length)]
+  }
+
+  function randomizeRange$1(type, range, randFn) {
+    const min = range[0];
+    const max = range[1];
+    const randomNumber = (min, max) => {
+      if (min === max) return min
+      return randFn()*(max - min) + min
+    };
+
+    if (type === "numbers") {
+      const m = Math.min(min.length, max.length); // count the least elements
+      let result = max.length > m ? max.slice() : min.slice(); // copy the larger array
+      for (let i = 0; i < m; i++) {
+        result[i] = randomNumber(min[i], max[i]); // randomize the parts where values exist for both min and max
+      }
+      return result
+    }
+    
+    if (type === "color") {
+      return new THREE.Color(randomNumber(min.r, max.r), randomNumber(min.g, max.g), randomNumber(min.b, max.b))
+    }
+
+    return randFn() > 0.5 ? min : max
+  }
+
+
+  // const stringParts = ["a","ab","bc"];
+  // const vecParts = [[1,2,3],[10,20]]
+  // for (let i = 0; i < 50; i++) {
+  //   console.assert(randomizeOptions(["x"], Math.random) === "x")
+  //   console.assert(stringParts.includes(randomizeOptions(stringParts, Math.random)))
+  //   console.assert(["a", "b"].includes(randomizeRange("string", ["a", "b", "c"], Math.random)))
+    
+  //   const x = randomizeRange("numbers", [[1],[2]], Math.random)
+  //   console.assert(x >= 1 && x < 2)
+
+  //   const y = randomizeRange("numbers", vecParts, Math.random)
+  //   console.assert(y.length === 3 && y[0] >= vecParts[0][0] && y[0] < vecParts[1][0] && y[1] >= vecParts[0][1] && y[1] < vecParts[1][1] && y[2] === vecParts[0][2])
+  // }
+
+
+  //-----------------------------------------------------------------------------
+  // "wait-set" component for setting attributes on this or other elements after a delay or event
+  // 
+  AFRAME.registerComponent("wait-set", {
+    schema: {
+      delay: { default: 0 },
+      event: { default: "" },
+      source: { default: "" },
+      sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
+      target: { default: "" },
+      targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
+      seed: { type: "int", default: -1 },
+    },
+    multiple: true,
+
+    init() {
+      this.setProperties = this.setProperties.bind(this);
+      this.startDelay = this.startDelay.bind(this);
+
+      this.eventTargetEl = undefined;
+      this.rules = {};
+      this.sources = [];
+
+      this.waitListener = ScopedListener();
+      this.waitTimer = BasicTimer();
+      this.psuedoRandom = BasicRandom();
+    },
+
+    remove() {
+      this.waitListener.remove();
+      this.waitTimer.stop();
+    },
+
+    updateSchema(newData) {
+      const originalSchema = AFRAME.components[this.name].schema;
+      let newSchema = {};
+
+      for (let prop in newData) {
+        if (!(prop in originalSchema)) {
+          newSchema[prop] = { default: "" };
+        }
+      }
+
+      // extend the schema so the new rules appear in the inspector
+      if (Object.keys(newSchema).length > 0) {
+        this.extendSchema(newSchema);
+      }
+    },
+
+    update(oldData) {
+      const originalSchema = AFRAME.components[this.name].schema;
+      const data = this.data;
+
+      if (data.seed !== oldData.seed) {
+        this.psuedoRandom.setSeed(data.seed);
+      }
+
+      for (let prop in this.rules) {
+        if (!(prop in data)) {
+          delete this.rules[prop]; // property is no longer present
+        }
+      }
+
+      for (let prop in data) {
+        if (!(prop in originalSchema) && data[prop] !== oldData[prop]) {
+          this.rules[prop] = parseRangeOption(data[prop]);
+        }
+      }
+
+      if (data.event !== oldData.event || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
+        this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.startDelay);
+      }
+
+      if (data.delay !== oldData.delay && (this.delayTimer || data.event === "")) {
+        this.startDelay();
+      }
+    },
+
+    pause() {
+      this.waitListener.remove();
+      this.waitTimer.pause();
+    },
+
+    play() {
+      this.waitTimer.resume();
+      this.waitListener.add();
+    },
+
+    startDelay(e) {
+      // console.log("wait-set:startDelay", e.target.id, this.data.event)
+      this.eventTargetEl = e ? e.target : undefined;
+      this.waitTimer.start(this.data.delay, this.setProperties);
+    },
+
+    setProperties() {
+      const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, this.eventTargetEl);
+
+      for (let el of elements) {
+        for (let prop in this.rules) {
+          let rule = this.rules[prop];
+
+          const value = rule.options ? randomizeOptions(rule.options, this.psuedoRandom.random) : randomizeRange$1(rule.type, rule.range, this.psuedoRandom.random);
+          // console.log("wait-set:setProperties", el.id, prop, value)
+          setProperty(el, prop, value);
+        }
+      }
+    },
+  });
 
 }));

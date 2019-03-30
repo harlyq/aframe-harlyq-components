@@ -1,8 +1,0 @@
-import './aframe-audio-vis-component'
-import './aframe-clone-entity-component'
-import './aframe-clone-geo-component'
-import './aframe-wait-add-remove-component'
-import './aframe-wait-set-component'
-import './aframe-keyframe-component'
-import './aframe-timer-emit-component'
-import './aframe-sprite-particles-component'

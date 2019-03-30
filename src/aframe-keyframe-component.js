@@ -1,6 +1,6 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import {buildPath, convertToString, parseValue, setProperty} from "./aframe-utils"
+import {buildPath, convertToString, parseValue, setProperty} from "./aframe-utils.js"
 // import {deepEqual} from "./aframe-utils"
 import BasicRandom from "./basic-random"
 

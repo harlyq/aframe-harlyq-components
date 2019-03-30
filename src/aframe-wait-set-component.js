@@ -1,9 +1,9 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import ScopedListener from "./scoped-listener.mjs"
-import BasicTimer from "./basic-timer.mjs"
-import BasicRandom from "./basic-random.mjs"
-import {parseValue, setProperty} from "./aframe-utils.mjs"
+import ScopedListener from "./scoped-listener.js"
+import BasicTimer from "./basic-timer.js"
+import BasicRandom from "./basic-random.js"
+import {parseValue, setProperty} from "./aframe-utils.js"
 // import {deepEqual} from "./aframe-utils"
 
 function trim(str) {

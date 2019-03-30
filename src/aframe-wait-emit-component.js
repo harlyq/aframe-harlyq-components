@@ -1,7 +1,7 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import BasicTimer from "./basic-timer"
-import ScopedListener from "./scoped-listener"
+import BasicTimer from "./basic-timer.js"
+import ScopedListener from "./scoped-listener.js"
 
 //-----------------------------------------------------------------------------
 // "wait-emit" component for emitting events on this or other elements after a delay or event

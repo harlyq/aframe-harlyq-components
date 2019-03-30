@@ -1,8 +1,8 @@
 // Copyright 2018-2019 harlyq
 // MIT license
 
-import ScopedListener from "./scoped-listener"
-import BasicTimer from "./basic-timer"
+import ScopedListener from "./scoped-listener.js"
+import BasicTimer from "./basic-timer.js"
 
 /**
  * Breaks a selector string into {type, id, classes, attrs}
