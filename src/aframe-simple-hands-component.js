@@ -1,14 +1,13 @@
+// Copyright 2019 harlyq
+// MIT license
+
 import { proximity } from "helpers"
 import { extent } from "helpers"
 
 /**
  * Based on donmccurdy/aframe-extras/sphere-collider.js
  *
- * Implement bounding sphere collision detection for entities with a mesh.
- *
- * @property {string} objects - Selector of the entities to test for collision.
- * @property {string} watch - If true, also check against new entities added to the scene.
- *
+ * Implement bounding sphere collision detection for entities
  */
 AFRAME.registerComponent("simple-hands", {
   schema: {

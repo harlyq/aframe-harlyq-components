@@ -1,3 +1,6 @@
+// Copyright 2018-2019 harlyq
+// MIT license
+
 // modification of the 'material' component from https://aframe.io/releases/0.9.0/aframe.min.js
 
 (function() {

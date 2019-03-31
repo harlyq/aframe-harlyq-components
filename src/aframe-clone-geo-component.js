@@ -10,7 +10,6 @@ AFRAME.registerComponent("clone-geo", {
     this.onObject3DSet = this.onObject3DSet.bind(this) // used for models which may have a delay before loading
   },
 
-  // TODO does this handle models that need to load?
   update(oldData) {
     if (this.data !== oldData) {
       if (oldData instanceof HTMLElement) { oldData.removeEventListener("object3dset", this.onObject3DSet) }
@@ -24,6 +23,7 @@ AFRAME.registerComponent("clone-geo", {
     }
   },
 
+  // TODO this wont work, we need to clone, not set a reference
   onObject3DSet(evt) {
     const template = this.data
     if (evt.target === template && evt.detail.type) {

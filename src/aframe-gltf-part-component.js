@@ -1,10 +1,12 @@
+// Copyright 2019 harlyq
+// MIT license
+
 // remix of https://github.com/supermedium/superframe/tree/master/components/gltf-part
 var LOADING_MODELS = {};
 var MODELS = {};
 
 AFRAME.registerComponent("gltf-part", {
   schema: {
-    buffer: {default: true},
     part: {type: "string"},
     src: {type: "asset"}
   },
