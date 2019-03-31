@@ -135,11 +135,6 @@ set the time on the emitter, this can be used to pre-charge the emitter with par
 enable or disable the emitter. existing particles will continue their lives, but there will be no new particles
 
 ---
-**enableInEditor** : boolean = `false`
-
-if true, the particle system will run while the AFrame Inspector is active
-
----
 **fog** : boolean = `true`
 
 if true, apply fog to all particles

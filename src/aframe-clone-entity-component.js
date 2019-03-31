@@ -11,8 +11,7 @@ AFRAME.registerComponent("clone-entity", {
 
   update() {
     const idPostFix = "_clone"
-    const data = this.data
-    const template = data.template
+    const template = this.data
     let cloneEl = document.importNode(template instanceof HTMLTemplateElement ? template.content : template, true)
 
     const makeUniqueIDs = el => {

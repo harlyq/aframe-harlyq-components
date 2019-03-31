@@ -51,10 +51,10 @@ export function buildPath(root, attributes) {
   return path
 }
 
-console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","x"]) === "hello")
-console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","y"]) === undefined)
-console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["a"]) === 1)
-console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","w"]) === undefined)
+// console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","x"]) === "hello")
+// console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","y"]) === undefined)
+// console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["a"]) === 1)
+// console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","w"]) === undefined)
 
 
 // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers

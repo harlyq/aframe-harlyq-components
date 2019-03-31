@@ -122,7 +122,6 @@ const SIDE_MAP = {
 
 AFRAME.registerComponent("sprite-particles", {
   schema: {
-    enableInEditor: { default: false },
     texture: { type: "map" },
     delay: { default: 0 },
     duration: { default: -1 },
@@ -190,7 +189,6 @@ AFRAME.registerComponent("sprite-particles", {
   help: "https://github.com/harlyq/aframe-sprite-particles-component",
 
   init() {
-    this.pauseTick = this.pauseTick.bind(this)
     this.handleObject3DSet = this.handleObject3DSet.bind(this)
 
     this.count = 0
@@ -390,10 +388,6 @@ AFRAME.registerComponent("sprite-particles", {
       this.updateAttributes()
     }
 
-    if (data.enableInEditor !== oldData.enableInEditor) {
-      this.enablePauseTick(data.enableInEditor)
-    }
-
     if (data.enable && this.startDisabled) {
       this.startDisabled = false
     }
@@ -465,27 +459,12 @@ AFRAME.registerComponent("sprite-particles", {
 
   pause() {
     this.paused = true
-    this.enablePauseTick(this.data.enableInEditor)
     this.enableEditorObject(this.data.editorObject)
   },
 
   play() {
     this.paused = false
     this.enableEditorObject(false)
-    this.enablePauseTick(false)
-  },
-
-  enablePauseTick(enable) {
-    if (enable) {
-      this.pauseRAF = requestAnimationFrame(this.pauseTick)
-    } else {
-      cancelAnimationFrame(this.pauseRAF)
-    }
-  },
-
-  pauseTick() {
-    this.tick(0, 16) // time is not used
-    this.enablePauseTick(true)
   },
 
   handleObject3DSet(event) {

@@ -2,7 +2,7 @@
 // MIT license
 import {buildPath, convertToString, parseValue, setProperty} from "./aframe-utils.js"
 // import {deepEqual} from "./aframe-utils"
-import BasicRandom from "./basic-random"
+import BasicRandom from "./basic-random.js"
 
 const MAX_FRAME_TIME_MS = 100
 
@@ -506,7 +506,6 @@ function getPropertyAsString(target, prop) {
 // 
 AFRAME.registerComponent("keyframe", {
   schema: {
-    enableInEditor: { default: false },
     duration: { default: 1 },
     direction: { default: "forward", oneOf: ["forward", "backward", "alternate"] },
     loops: { default: -1 },
@@ -517,7 +516,6 @@ AFRAME.registerComponent("keyframe", {
   multiple: true,
 
   init() {
-    this.pauseTick = this.pauseTick.bind(this)
     this.pseudoRandom = BasicRandom()
 
     this.loopTime = 0 // seconds
@@ -578,36 +576,12 @@ AFRAME.registerComponent("keyframe", {
       this.forward = (data.direction !== "backward")
       this.loopTime = this.forward ? 0 : data.duration
     }
-
-    if (data.enableInEditor !== oldData.enableInEditor) {
-      this.enablePauseTick(data.enableInEditor)
-    }
   },
 
   tick(time, timeDelta) {
+    // clamp frame time to make thing simpler when debugging
     const dt = Math.min(timeDelta, MAX_FRAME_TIME_MS)/1000
     this.step(dt)
-  },
-
-  pause() {
-    this.enablePauseTick(this.data.enableInEditor)
-  },
-
-  play() {
-    this.enablePauseTick(false)
-  },
-
-  enablePauseTick(enable) {
-    if (enable) {
-      this.pauseRAF = requestAnimationFrame(this.pauseTick)
-    } else {
-      cancelAnimationFrame(this.pauseRAF)
-    }
-  },
-
-  pauseTick() {
-    this.step(0.016)
-    this.enablePauseTick(true)
   },
 
   step(dt) {

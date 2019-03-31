@@ -178,8 +178,7 @@
 
     update() {
       const idPostFix = "_clone";
-      const data = this.data;
-      const template = data.template;
+      const template = this.data;
       let cloneEl = document.importNode(template instanceof HTMLTemplateElement ? template.content : template, true);
 
       const makeUniqueIDs = el => {
@@ -205,7 +204,6 @@
       this.onObject3DSet = this.onObject3DSet.bind(this); // used for models which may have a delay before loading
     },
 
-    // TODO does this handle models that need to load?
     update(oldData) {
       if (this.data !== oldData) {
         if (oldData instanceof HTMLElement) { oldData.removeEventListener("object3dset", this.onObject3DSet); }
@@ -219,6 +217,7 @@
       }
     },
 
+    // TODO this wont work, we need to clone, not set a reference
     onObject3DSet(evt) {
       const template = this.data;
       if (evt.target === template && evt.detail.type) {
@@ -227,13 +226,15 @@
     }
   });
 
+  // Copyright 2019 harlyq
+  // MIT license
+
   // remix of https://github.com/supermedium/superframe/tree/master/components/gltf-part
   var LOADING_MODELS = {};
   var MODELS = {};
 
   AFRAME.registerComponent("gltf-part", {
     schema: {
-      buffer: {default: true},
       part: {type: "string"},
       src: {type: "asset"}
     },
@@ -323,10 +324,10 @@
     return path
   }
 
-  console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","x"]) === "hello");
-  console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","y"]) === undefined);
-  console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["a"]) === 1);
-  console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","w"]) === undefined);
+  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","x"]) === "hello")
+  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","y"]) === undefined)
+  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["a"]) === 1)
+  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","w"]) === undefined)
 
 
   // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers
@@ -972,7 +973,6 @@
   // 
   AFRAME.registerComponent("keyframe", {
     schema: {
-      enableInEditor: { default: false },
       duration: { default: 1 },
       direction: { default: "forward", oneOf: ["forward", "backward", "alternate"] },
       loops: { default: -1 },
@@ -983,7 +983,6 @@
     multiple: true,
 
     init() {
-      this.pauseTick = this.pauseTick.bind(this);
       this.pseudoRandom = BasicRandom();
 
       this.loopTime = 0; // seconds
@@ -1044,36 +1043,12 @@
         this.forward = (data.direction !== "backward");
         this.loopTime = this.forward ? 0 : data.duration;
       }
-
-      if (data.enableInEditor !== oldData.enableInEditor) {
-        this.enablePauseTick(data.enableInEditor);
-      }
     },
 
     tick(time, timeDelta) {
+      // clamp frame time to make thing simpler when debugging
       const dt = Math.min(timeDelta, MAX_FRAME_TIME_MS)/1000;
       this.step(dt);
-    },
-
-    pause() {
-      this.enablePauseTick(this.data.enableInEditor);
-    },
-
-    play() {
-      this.enablePauseTick(false);
-    },
-
-    enablePauseTick(enable) {
-      if (enable) {
-        this.pauseRAF = requestAnimationFrame(this.pauseTick);
-      } else {
-        cancelAnimationFrame(this.pauseRAF);
-      }
-    },
-
-    pauseTick() {
-      this.step(0.016);
-      this.enablePauseTick(true);
     },
 
     step(dt) {
@@ -1131,6 +1106,9 @@
       }
     },
   });
+
+  // Copyright 2018-2019 harlyq
+  // MIT license
 
   // modification of the 'material' component from https://aframe.io/releases/0.9.0/aframe.min.js
 
@@ -1705,14 +1683,12 @@
     }
   })();
 
+  // Copyright 2019 harlyq
+
   /**
    * Based on donmccurdy/aframe-extras/sphere-collider.js
    *
-   * Implement bounding sphere collision detection for entities with a mesh.
-   *
-   * @property {string} objects - Selector of the entities to test for collision.
-   * @property {string} watch - If true, also check against new entities added to the scene.
-   *
+   * Implement bounding sphere collision detection for entities
    */
   AFRAME.registerComponent("simple-hands", {
     schema: {
@@ -2025,7 +2001,6 @@
 
   AFRAME.registerComponent("sprite-particles", {
     schema: {
-      enableInEditor: { default: false },
       texture: { type: "map" },
       delay: { default: 0 },
       duration: { default: -1 },
@@ -2093,7 +2068,6 @@
     help: "https://github.com/harlyq/aframe-sprite-particles-component",
 
     init() {
-      this.pauseTick = this.pauseTick.bind(this);
       this.handleObject3DSet = this.handleObject3DSet.bind(this);
 
       this.count = 0;
@@ -2293,10 +2267,6 @@
         this.updateAttributes();
       }
 
-      if (data.enableInEditor !== oldData.enableInEditor) {
-        this.enablePauseTick(data.enableInEditor);
-      }
-
       if (data.enable && this.startDisabled) {
         this.startDisabled = false;
       }
@@ -2368,27 +2338,12 @@
 
     pause() {
       this.paused = true;
-      this.enablePauseTick(this.data.enableInEditor);
       this.enableEditorObject(this.data.editorObject);
     },
 
     play() {
       this.paused = false;
       this.enableEditorObject(false);
-      this.enablePauseTick(false);
-    },
-
-    enablePauseTick(enable) {
-      if (enable) {
-        this.pauseRAF = requestAnimationFrame(this.pauseTick);
-      } else {
-        cancelAnimationFrame(this.pauseRAF);
-      }
-    },
-
-    pauseTick() {
-      this.tick(0, 16); // time is not used
-      this.enablePauseTick(true);
     },
 
     handleObject3DSet(event) {

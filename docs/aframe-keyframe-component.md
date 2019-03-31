@@ -33,11 +33,6 @@ The time in seconds for a keyframe sequence to perform a single iteration
 An easing function to use for the interpolation.  Each type (except linear) also has in, out and in-out forms e.g `ease-in-quint`, `ease-out-quint`, `ease-in-out-quint`. See https://sole.github.io/tween.js/examples/03_graphs.html for example curves
 
 ---
-**enableInEditor** : boolean = `false`
-
-If true, the animation will continue while the editor is active, which makes it easier to fine-tune values in the editor
-
----
 **loops** : number = `-1`
 
 The number of loops to perform. If -1 then the animation never stops
