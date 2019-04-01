@@ -3,29 +3,21 @@
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
 import BasicRandom from "./basic-random.js"
-import {parseValue, setProperty} from "./aframe-utils.js"
+import { setProperty } from "./aframe-utils.js"
+import { parser } from "helpers"
 // import {deepEqual} from "./aframe-utils"
 
 function trim(str) {
   return str.trim()
 }
 
-// console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
-// console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
-// console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
-// console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
-// console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
-// console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
-// console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
-// console.assert(parseValue("  burple "), {type: "string", value: "burple"})
-
 // Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
 // Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
 function parseRangeOption(str) {
   let range = str.split("..")
   if (range.length > 1) {
-    const start = parseValue(range[0])
-    const end = parseValue(range[1])
+    const start = parser.parseValue(range[0])
+    const end = parser.parseValue(range[1])
   
     if (start.type !== end.type && start.type !== "any" && end.type !== "any") {
       console.error(`incompatible types for range ${str}`)

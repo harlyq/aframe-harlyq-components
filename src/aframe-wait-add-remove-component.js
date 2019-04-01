@@ -3,75 +3,7 @@
 
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
-
-/**
- * Breaks a selector string into {type, id, classes, attrs}
- * 
- * @param {string} str - selector in the form type#id.class1.class2[attr1=value1][attr2=value2]
- * @return {object} { type, id, classes[], attrs{} }
- */
-function parseSelector(str) {
-  let results = {type: "", id: "", classes: [], attrs: {}}
-  let token = "type"
-  let tokenStart = 0
-  let lastAttr = ""
-
-  const setToken = (newToken, i) => {
-    let tokenValue = str.slice(tokenStart, i)
-
-    if (i > tokenStart) {
-      switch (token) {
-        case "type":
-        case "id":
-          results[token] = tokenValue
-          break
-        case "class":
-          results.classes.push(tokenValue)
-          break
-        case "attr":
-          lastAttr = tokenValue
-          break
-        case "value":
-          if (lastAttr) {
-            results.attrs[lastAttr] = tokenValue
-          }
-          break
-        case "none":
-        case "end":
-          break
-      }
-    }
-
-    token = newToken
-    tokenStart = i + 1 // ignore the token character
-  }
-
-  for (let i = 0, n = str.length; i < n; i++) {
-    const c = str[i]
-    switch (c) {
-      case "\\": i++; break // escape the next character
-      case "#": if (token !== "attr" && token !== "value") setToken("id", i); break
-      case ".": if (token !== "attr" && token !== "value") setToken("class", i); break
-      case "[": if (token !== "attr" && token !== "value") setToken("attr", i); break
-      case "]": if (token === "attr" || token === "value") setToken("none", i); break
-      case "=": if (token === "attr") setToken("value", i); break
-    }
-  }
-  setToken("end", str.length)
-
-  return results
-}
-
-// console.assert(AFRAME.utils.deepEqual(parseSelector(""), {type: "", id: "", classes: [], attrs: {}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector("xyz"), {type: "xyz", id: "", classes: [], attrs: {}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector("#xyz"), {type: "", id: "xyz", classes: [], attrs: {}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector(".xyz"), {type: "", id: "", classes: ["xyz"], attrs: {}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector("[xyz=1]"), {type: "", id: "", classes: [], attrs: {"xyz": "1"}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector("type.class#id[attr=value]"), {type: "type", id: "id", classes: ["class"], attrs: {attr: "value"}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector(".class#id[]"), {type: "", id: "id", classes: ["class"], attrs: {}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector(".class1#id.class2"), {type: "", id: "id", classes: ["class1", "class2"], attrs: {}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector("[foo=bar][one.two=three.four]"), {type: "", id: "", classes: [], attrs: {"foo": "bar", "one.two": "three.four"}}))
-// console.assert(AFRAME.utils.deepEqual(parseSelector("xyz[foo=bar]#abc"), {type: "xyz", id: "abc", classes: [], attrs: {"foo": "bar"}}))
+import { parser } from "helpers"
 
 /**
  * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
@@ -82,7 +14,7 @@ function parseSelector(str) {
  * @return {object} returns an HTMLElement matching the selector string
  */
 function createElementFromSelector(str) {
-  let info = parseSelector(str)
+  let info = parser.parseSelector(str)
   let type = info.type || 'a-entity'
   let newEl = document.createElement(type)
   if (newEl) {

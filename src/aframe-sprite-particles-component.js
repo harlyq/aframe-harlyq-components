@@ -820,7 +820,7 @@ AFRAME.registerComponent("sprite-particles", {
       RANDOM_REPEAT_COUNT,
       USE_MAP: true,
     }
-    for (key of domDefines) {
+    for (let key of domDefines) {
       defines[key] = true
     }
 

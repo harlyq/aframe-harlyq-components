@@ -16,7 +16,7 @@ export default function ScopedListener() {
   function add() {
     if (event && callback) {
       for (let el of elements) {
-        console.log("scopedListener:add", el.id, event)
+        // console.log("scopedListener:add", el.id, event)
         el.addEventListener(event, callback)
       }
     }
@@ -25,7 +25,7 @@ export default function ScopedListener() {
   function remove() {
     if (event && callback) {
       for (let el of elements) {
-        console.log("scopedListener:remove", el.id, event)
+        // console.log("scopedListener:remove", el.id, event)
         el.removeEventListener(event, callback)
       }
     }

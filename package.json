@@ -1,6 +1,6 @@
 {
   "name": "aframe-harlyq-components",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "various useful aframe components",
   "main": "dist/aframe-harlyq-components.js",
   "module": "src/index.js",

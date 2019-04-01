@@ -298,7 +298,747 @@
     }
   });
 
-  // Copyright 2018-2019 harlyq
+  const ZERO = Object.freeze({x: 0, y: 0, z: 0});
+  const UNIT_X = Object.freeze({x: 1, y: 0, z: 0});
+  const UNIT_Y = Object.freeze({x: 0, y: 1, z: 0});
+  const UNIT_Z = Object.freeze({x: 0, y: 0, z: 1});
+
+  const SQRT_1_2 = Math.sqrt(0.5);
+  const IDENTITY = Object.freeze({x:0, y:0, z:0, w:1});
+  const ROTATE_X_180 = Object.freeze({x:1, y:0, z:0, w:0});
+  const ROTATE_Y_180 = Object.freeze({x:0, y:1, z:0, w:0});
+  const ROTATE_Z_180 = Object.freeze({x:0, y:0, z:1, w:0});
+  const ROTATE_X_90 = Object.freeze({x:SQRT_1_2, y:0, z:0, w:SQRT_1_2});
+  const ROTATE_Y_90 = Object.freeze({x:0, y:SQRT_1_2, z:0, w:SQRT_1_2});
+  const ROTATE_Z_90 = Object.freeze({x:0, y:0, z:SQRT_1_2, w:SQRT_1_2});
+
+  function setFromUnscaledAffine4(out, aff) {
+    const m11 = aff[0], m12 = aff[4], m13 = aff[8];
+    const m21 = aff[1], m22 = aff[5], m23 = aff[9];
+    const m31 = aff[2], m32 = aff[6], m33 = aff[10];
+    const trace = m11 + m22 + m33;
+    let s;
+
+    if ( trace > 0 ) {
+
+      s = 0.5 / Math.sqrt( trace + 1.0 );
+
+      out.w = 0.25 / s;
+      out.x = ( m32 - m23 ) * s;
+      out.y = ( m13 - m31 ) * s;
+      out.z = ( m21 - m12 ) * s;
+
+    } else if ( m11 > m22 && m11 > m33 ) {
+
+      s = 2.0 * Math.sqrt( 1.0 + m11 - m22 - m33 );
+
+      out.w = ( m32 - m23 ) / s;
+      out.x = 0.25 * s;
+      out.y = ( m12 + m21 ) / s;
+      out.z = ( m13 + m31 ) / s;
+
+    } else if ( m22 > m33 ) {
+
+      s = 2.0 * Math.sqrt( 1.0 + m22 - m11 - m33 );
+
+      out.w = ( m13 - m31 ) / s;
+      out.x = ( m12 + m21 ) / s;
+      out.y = 0.25 * s;
+      out.z = ( m23 + m32 ) / s;
+
+    } else {
+
+      s = 2.0 * Math.sqrt( 1.0 + m33 - m11 - m22 );
+
+      out.w = ( m21 - m12 ) / s;
+      out.x = ( m13 + m31 ) / s;
+      out.y = ( m23 + m32 ) / s;
+      out.z = 0.25 * s;
+
+    }
+    return out
+  }
+
+  function invertAndMultiplyVecXYZ(out, aff, v) {
+    const n11 = aff[0], n21 = aff[1], n31 = aff[2];
+    const n12 = aff[4], n22 = aff[5], n32 = aff[6];
+    const n13 = aff[8], n23 = aff[9], n33 = aff[10];
+    const tx = aff[12], ty = aff[13], tz = aff[14];
+
+    const t11 = n33 * n22 - n32 * n23;
+    const t12 = n32 * n13 - n33 * n12;
+    const t13 = n23 * n12 - n22 * n13;
+
+    const det = n11 * t11 + n21 * t12 + n31 * t13;
+    const invDet = 1/det;
+
+    // invert the rotation matrix
+    const m11 = t11 * invDet;
+    const m21 = ( n31 * n23 - n33 * n21 ) * invDet;
+    const m31 = ( n32 * n21 - n31 * n22 ) * invDet;
+
+    const m12 = t12 * invDet;
+    const m22 = ( n33 * n11 - n31 * n13 ) * invDet;
+    const m32 = ( n31 * n12 - n32 * n11 ) * invDet;
+
+    const m13 = t13 * invDet;
+    const m23 = ( n21 * n13 - n23 * n11 ) * invDet;
+    const m33 = ( n22 * n11 - n21 * n12 ) * invDet;
+
+    // apply inv(aff)*(v - t)
+    const ax = v.x - tx, ay = v.y - ty, az = v.z - tz;
+    out.x = m11*ax + m12*ay + m13*az;
+    out.y = m21*ax + m22*ay + m23*az;
+    out.z = m31*ax + m32*ay + m33*az;
+
+    return out
+  }
+
+  function determinant(aff) {
+    const n11 = aff[0], n21 = aff[1], n31 = aff[2];
+    const n12 = aff[4], n22 = aff[5], n32 = aff[6];
+    const n13 = aff[8], n23 = aff[9], n33 = aff[10];
+
+    const t11 = n33 * n22 - n32 * n23;
+    const t12 = n32 * n13 - n33 * n12;
+    const t13 = n23 * n12 - n22 * n13;
+
+    return n11 * t11 + n21 * t12 + n31 * t13
+  }
+
+  const decompose = (function() {
+    let affCopy = new Float32Array(16);
+
+    return function decompose(aff, outPosition = undefined, outQuaternion = undefined, outScale = undefined) {
+      if (outPosition) {
+        outPosition.x = aff[12];
+        outPosition.y = aff[13];
+        outPosition.z = aff[14];
+      }
+    
+      if (outScale || outQuaternion) {
+        const sx = Math.hypot(aff[0], aff[1], aff[2]);
+        const sy = Math.hypot(aff[4], aff[5], aff[6]);
+        const sz = Math.hypot(aff[8], aff[9], aff[10]);
+      
+        if (outScale) {
+          outScale.x = sx;
+          outScale.y = sy;
+          outScale.z = sz;
+        }
+      
+        if (outQuaternion) {
+          const det = determinant(aff);
+          const invSX = det < 0 ? -1/sx : 1/sx; // invert scale on one axis for negative determinant
+          const invSY = 1/sy;
+          const invSZ = 1/sz;
+    
+          affCopy.set(aff);
+          affCopy[0] *= invSX;
+          affCopy[1] *= invSX;
+          affCopy[2] *= invSX;
+          affCopy[4] *= invSY;
+          affCopy[5] *= invSY;
+          affCopy[6] *= invSY;
+          affCopy[8] *= invSZ;
+          affCopy[9] *= invSZ;
+          affCopy[10] *= invSZ;
+    
+          setFromUnscaledAffine4(outQuaternion, affCopy);
+        }
+      }
+    
+      return aff
+    }  
+  })();
+
+  function clamp(v, min, max) {
+    return v < min ? min : v > max ? max : v
+  }
+
+  function euclideanModulo(v, m) {
+    return ( ( v % m ) + m ) % m  
+  }
+
+  // returns a value from a 'root' and an array of 'properties', each property is considered the child of the previous property
+  function getWithPath(root, properties) {
+    let path = root;
+    let parts = properties.slice().reverse();
+    while (path && parts.length > 0) {
+      path = path[parts.pop()];
+    }
+
+    return path
+  }
+
+  // remix of https://github.com/tweenjs/tween.js/blob/master/src/Tween.js
+
+  function Linear(k) {
+    return k
+  }
+
+  const Quadratic = {
+    In: function (k) {
+      return k * k
+    },
+    Out: function (k) {
+      return k * (2 - k)
+    },
+    InOut: function (k) {
+      if ((k *= 2) < 1) {
+        return 0.5 * k * k
+      }
+      return - 0.5 * (--k * (k - 2) - 1)
+    }
+  };
+    
+  const Cubic = {
+    In: function (k) {
+      return k * k * k
+    },
+    Out: function (k) {
+      return --k * k * k + 1
+    },
+    InOut: function (k) {
+      if ((k *= 2) < 1) {
+        return 0.5 * k * k * k
+      }
+      return 0.5 * ((k -= 2) * k * k + 2)
+    }
+  };
+    
+  const Quartic = {
+    In: function (k) {
+      return k * k * k * k
+    },
+    Out: function (k) {
+      return 1 - (--k * k * k * k)
+    },
+    InOut: function (k) {
+      if ((k *= 2) < 1) {
+        return 0.5 * k * k * k * k
+      }
+      return - 0.5 * ((k -= 2) * k * k * k - 2)
+    }
+  };
+    
+  const Quintic = {
+    In: function (k) {
+      return k * k * k * k * k
+    },
+    Out: function (k) {
+      return --k * k * k * k * k + 1
+    },
+    InOut: function (k) {
+      if ((k *= 2) < 1) {
+        return 0.5 * k * k * k * k * k
+      }
+      return 0.5 * ((k -= 2) * k * k * k * k + 2)
+    }
+  };
+
+  const Sinusoidal = {
+    In: function (k) {
+      return 1 - Math.cos(k * Math.PI / 2)
+    },
+    Out: function (k) {
+      return Math.sin(k * Math.PI / 2)
+    },
+    InOut: function (k) {
+      return 0.5 * (1 - Math.cos(Math.PI * k))
+    }
+  };
+
+  const Exponential = {
+    In: function (k) {
+      return k === 0 ? 0 : Math.pow(1024, k - 1)
+    },
+    Out: function (k) {
+      return k === 1 ? 1 : 1 - Math.pow(2, - 10 * k)
+    },
+    InOut: function (k) {
+      if (k === 0) {
+        return 0
+      }
+      if (k === 1) {
+        return 1
+      }
+      if ((k *= 2) < 1) {
+        return 0.5 * Math.pow(1024, k - 1)
+      }
+      return 0.5 * (- Math.pow(2, - 10 * (k - 1)) + 2)
+    }
+  };
+
+  const Circular = {
+    In: function (k) {
+      return 1 - Math.sqrt(1 - k * k)
+    },
+    Out: function (k) {
+      return Math.sqrt(1 - (--k * k))
+    },
+    InOut: function (k) {
+      if ((k *= 2) < 1) {
+        return - 0.5 * (Math.sqrt(1 - k * k) - 1)
+      }
+      return 0.5 * (Math.sqrt(1 - (k -= 2) * k) + 1)
+    }
+  };
+
+  const Elastic = {
+    In: function (k) {
+      if (k === 0) {
+        return 0
+      }
+      if (k === 1) {
+        return 1
+      }
+      return -Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI)
+    },
+    Out: function (k) {
+      if (k === 0) {
+        return 0
+      }
+      if (k === 1) {
+        return 1
+      }
+      return Math.pow(2, -10 * k) * Math.sin((k - 0.1) * 5 * Math.PI) + 1
+    },
+    InOut: function (k) {
+      if (k === 0) {
+        return 0
+      }
+      if (k === 1) {
+        return 1
+      }
+      k *= 2;
+      if (k < 1) {
+        return -0.5 * Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI)
+      }
+      return 0.5 * Math.pow(2, -10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI) + 1
+    }
+  };
+
+  const Back = {
+    In: function (k) {
+      var s = 1.70158;
+      return k * k * ((s + 1) * k - s)
+    },
+    Out: function (k) {
+      var s = 1.70158;
+      return --k * k * ((s + 1) * k + s) + 1
+    },
+    InOut: function (k) {
+      var s = 1.70158 * 1.525;
+      if ((k *= 2) < 1) {
+        return 0.5 * (k * k * ((s + 1) * k - s))
+      }
+      return 0.5 * ((k -= 2) * k * ((s + 1) * k + s) + 2)
+    }
+  };
+
+  const Bounce = {
+    In: function (k) {
+      return 1 - Bounce.Out(1 - k)
+    },
+    Out: function (k) {
+      if (k < (1 / 2.75)) {
+        return 7.5625 * k * k
+      } else if (k < (2 / 2.75)) {
+        return 7.5625 * (k -= (1.5 / 2.75)) * k + 0.75
+      } else if (k < (2.5 / 2.75)) {
+        return 7.5625 * (k -= (2.25 / 2.75)) * k + 0.9375
+      } else {
+        return 7.5625 * (k -= (2.625 / 2.75)) * k + 0.984375
+      }
+    },
+    InOut: function (k) {
+      if (k < 0.5) {
+        return Bounce.In(k * 2) * 0.5
+      }
+      return Bounce.Out(k * 2 - 1) * 0.5 + 0.5
+    }
+  };
+
+  const EASING_FUNCTIONS = {
+    'linear': Linear,
+
+    'ease': Cubic.InOut,
+    'ease-in': Cubic.In,
+    'ease-out': Cubic.Out,
+    'ease-in-out': Cubic.InOut,
+
+    'ease-cubic': Cubic.In,
+    'ease-in-cubic': Cubic.In,
+    'ease-out-cubic': Cubic.Out,
+    'ease-in-out-cubic': Cubic.InOut,
+
+    'ease-quad': Quadratic.InOut,
+    'ease-in-quad': Quadratic.In,
+    'ease-out-quad': Quadratic.Out,
+    'ease-in-out-quad': Quadratic.InOut,
+
+    'ease-quart': Quartic.InOut,
+    'ease-in-quart': Quartic.In,
+    'ease-out-quart': Quartic.Out,
+    'ease-in-out-quart': Quartic.InOut,
+
+    'ease-quint': Quintic.InOut,
+    'ease-in-quint': Quintic.In,
+    'ease-out-quint': Quintic.Out,
+    'ease-in-out-quint': Quintic.InOut,
+
+    'ease-sine': Sinusoidal.InOut,
+    'ease-in-sine': Sinusoidal.In,
+    'ease-out-sine': Sinusoidal.Out,
+    'ease-in-out-sine': Sinusoidal.InOut,
+
+    'ease-expo': Exponential.InOut,
+    'ease-in-expo': Exponential.In,
+    'ease-out-expo': Exponential.Out,
+    'ease-in-out-expo': Exponential.InOut,
+
+    'ease-circ': Circular.InOut,
+    'ease-in-circ': Circular.In,
+    'ease-out-circ': Circular.Out,
+    'ease-in-out-circ': Circular.InOut,
+
+    'ease-elastic': Elastic.InOut,
+    'ease-in-elastic': Elastic.In,
+    'ease-out-elastic': Elastic.Out,
+    'ease-in-out-elastic': Elastic.InOut,
+
+    'ease-back': Back.InOut,
+    'ease-in-back': Back.In,
+    'ease-out-back': Back.Out,
+    'ease-in-out-back': Back.InOut,
+
+    'ease-bounce': Bounce.InOut,
+    'ease-in-bounce': Bounce.In,
+    'ease-out-bounce': Bounce.Out,
+    'ease-in-out-bounce': Bounce.InOut,
+  };
+
+  const setFromObject3D = (function() {
+    let tempPosition = new THREE.Vector3();
+    let tempQuaternion = new THREE.Quaternion();
+    let tempScale = new THREE.Vector3();
+    let tempBox3 = new THREE.Box3();
+
+    return function setFromObject3D(ext, object3D) {
+      if (object3D.children.length === 0) {
+        return ext
+      }
+
+      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
+      // based around the origin
+      tempPosition.copy(object3D.position);
+      tempQuaternion.copy(object3D.quaternion);
+      tempScale.copy(object3D.scale);
+
+      object3D.position.set(0,0,0);
+      object3D.quaternion.set(0,0,0,1);
+      object3D.scale.set(1,1,1);
+
+      tempBox3.setFromObject(object3D); // expensive for models
+      // ext.setFromObject(object3D) // expensive for models
+
+      object3D.position.copy(tempPosition);
+      object3D.quaternion.copy(tempQuaternion);
+      object3D.scale.copy(tempScale);
+      object3D.updateMatrixWorld(true);
+
+      ext.min.x = tempBox3.min.x;
+      ext.min.y = tempBox3.min.y; 
+      ext.min.z = tempBox3.min.z; 
+      ext.max.x = tempBox3.max.x; 
+      ext.max.y = tempBox3.max.y; 
+      ext.max.z = tempBox3.max.z; 
+
+      return ext
+    }
+  })();
+
+  function volume(ext) {
+    return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
+  }
+
+  /**
+   * Returns the distance between pointA and the surface of boxB. Negative values indicate
+   * that pointA is inside of boxB
+   * 
+   * @param {{x,y,z}} pointA - point
+   * @param {{x,y,z}} boxBMin - min extents of boxB
+   * @param {{x,y,z}} boxBMax - max extents of boxB
+   * @param {float32[16]} affineB - colum-wise matrix for B
+   * @param {{x,y,z}} extraScale - additional scale to apply to the output distance
+   */
+  const pointToBox = (function() {
+    let vertA = {};
+    let scaleA = {};
+
+    return function pointToBox(pointA, boxBMin, boxBMax, affineB) {
+      decompose( affineB, undefined, undefined, scaleA );
+      invertAndMultiplyVecXYZ( vertA, affineB, pointA );
+      const vx = vertA.x, vy = vertA.y, vz = vertA.z;
+      const minx = boxBMin.x - vx, miny = boxBMin.y - vy, minz = boxBMin.z - vz;
+      const maxx = vx - boxBMax.x, maxy = vy - boxBMax.y, maxz = vz - boxBMax.z;
+      const dx = Math.max(maxx, minx)*scaleA.x;
+      const dy = Math.max(maxy, miny)*scaleA.y;
+      const dz = Math.max(maxz, minz)*scaleA.z;
+
+      // for points inside (dx and dy and dz < 0) take the smallest distent to an edge, otherwise
+      // determine the hypotenuese to the outside edges
+      return dx <= 0 && dy <= 0 && dz <= 0 ? Math.max(dx, dy, dz) : Math.hypot(Math.max(0, dx), Math.max(0, dy), Math.max(0, dz))
+    }
+  })();
+
+  // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
+
+  function setHex(out, hex) {
+    out.r = ( hex >> 16 & 255 )/255;
+    out.g = ( hex >> 8 & 255 )/255;
+    out.b = ( hex & 255 )/255;
+    return out
+  }
+
+  const setHSL = (function () {
+    function hue2rgb( p, q, t ) {
+      if ( t < 0 ) t += 1;
+      if ( t > 1 ) t -= 1;
+      if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
+      if ( t < 1 / 2 ) return q;
+      if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
+      return p;
+    }
+
+    return function setHSL(out, h, s, l) {
+      // h,s,l ranges are in 0.0 - 1.0
+      h = euclideanModulo( h, 1 );
+      s = clamp( s, 0, 1 );
+      l = clamp( l, 0, 1 );
+
+      if ( s === 0 ) {
+        out.r = out.g = out.b = l;
+      } else {
+        let p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
+        let q = ( 2 * l ) - p;
+
+        out.r = hue2rgb( q, p, h + 1 / 3 );
+        out.g = hue2rgb( q, p, h );
+        out.b = hue2rgb( q, p, h - 1 / 3 );
+      }
+
+      return out;
+    }
+  })();
+
+  function toHex(a) {
+    return (a.r*255) << 16 ^ (a.g*255) << 8 ^ (a.b*255) << 0
+  }
+
+  function toString(a) {
+    return "#" + toHex(a).toString(16).padStart(6, '0')
+  }
+
+  // Convert a string "1 2 3" into a type and value {type: "numbers", value: [1,2,3]}
+  const parseValue = (function() {
+    const toNumber = str => Number(str.trim());
+
+    return function parseValue(str) {
+      if (str === "") {
+        return {type: "any", value: ""}
+      }
+
+      let vec = str.split(" ").filter(x => x !== "").map(toNumber);
+      if (!vec.every(isNaN)) {
+        return {type: "numbers", value: vec}
+      }
+    
+      let col = parseColor(str.trim());
+      if (col) {
+        return {type: "color", value: col}
+      }
+    
+      return {type: "string", value: str.trim()}
+    }
+  })();
+
+  // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
+  const COLOR_KEYWORDS = { 'aliceblue': 0xF0F8FF, 'antiquewhite': 0xFAEBD7, 'aqua': 0x00FFFF, 'aquamarine': 0x7FFFD4, 'azure': 0xF0FFFF,
+  	'beige': 0xF5F5DC, 'bisque': 0xFFE4C4, 'black': 0x000000, 'blanchedalmond': 0xFFEBCD, 'blue': 0x0000FF, 'blueviolet': 0x8A2BE2,
+  	'brown': 0xA52A2A, 'burlywood': 0xDEB887, 'cadetblue': 0x5F9EA0, 'chartreuse': 0x7FFF00, 'chocolate': 0xD2691E, 'coral': 0xFF7F50,
+  	'cornflowerblue': 0x6495ED, 'cornsilk': 0xFFF8DC, 'crimson': 0xDC143C, 'cyan': 0x00FFFF, 'darkblue': 0x00008B, 'darkcyan': 0x008B8B,
+  	'darkgoldenrod': 0xB8860B, 'darkgray': 0xA9A9A9, 'darkgreen': 0x006400, 'darkgrey': 0xA9A9A9, 'darkkhaki': 0xBDB76B, 'darkmagenta': 0x8B008B,
+  	'darkolivegreen': 0x556B2F, 'darkorange': 0xFF8C00, 'darkorchid': 0x9932CC, 'darkred': 0x8B0000, 'darksalmon': 0xE9967A, 'darkseagreen': 0x8FBC8F,
+  	'darkslateblue': 0x483D8B, 'darkslategray': 0x2F4F4F, 'darkslategrey': 0x2F4F4F, 'darkturquoise': 0x00CED1, 'darkviolet': 0x9400D3,
+  	'deeppink': 0xFF1493, 'deepskyblue': 0x00BFFF, 'dimgray': 0x696969, 'dimgrey': 0x696969, 'dodgerblue': 0x1E90FF, 'firebrick': 0xB22222,
+  	'floralwhite': 0xFFFAF0, 'forestgreen': 0x228B22, 'fuchsia': 0xFF00FF, 'gainsboro': 0xDCDCDC, 'ghostwhite': 0xF8F8FF, 'gold': 0xFFD700,
+  	'goldenrod': 0xDAA520, 'gray': 0x808080, 'green': 0x008000, 'greenyellow': 0xADFF2F, 'grey': 0x808080, 'honeydew': 0xF0FFF0, 'hotpink': 0xFF69B4,
+  	'indianred': 0xCD5C5C, 'indigo': 0x4B0082, 'ivory': 0xFFFFF0, 'khaki': 0xF0E68C, 'lavender': 0xE6E6FA, 'lavenderblush': 0xFFF0F5, 'lawngreen': 0x7CFC00,
+  	'lemonchiffon': 0xFFFACD, 'lightblue': 0xADD8E6, 'lightcoral': 0xF08080, 'lightcyan': 0xE0FFFF, 'lightgoldenrodyellow': 0xFAFAD2, 'lightgray': 0xD3D3D3,
+  	'lightgreen': 0x90EE90, 'lightgrey': 0xD3D3D3, 'lightpink': 0xFFB6C1, 'lightsalmon': 0xFFA07A, 'lightseagreen': 0x20B2AA, 'lightskyblue': 0x87CEFA,
+  	'lightslategray': 0x778899, 'lightslategrey': 0x778899, 'lightsteelblue': 0xB0C4DE, 'lightyellow': 0xFFFFE0, 'lime': 0x00FF00, 'limegreen': 0x32CD32,
+  	'linen': 0xFAF0E6, 'magenta': 0xFF00FF, 'maroon': 0x800000, 'mediumaquamarine': 0x66CDAA, 'mediumblue': 0x0000CD, 'mediumorchid': 0xBA55D3,
+  	'mediumpurple': 0x9370DB, 'mediumseagreen': 0x3CB371, 'mediumslateblue': 0x7B68EE, 'mediumspringgreen': 0x00FA9A, 'mediumturquoise': 0x48D1CC,
+  	'mediumvioletred': 0xC71585, 'midnightblue': 0x191970, 'mintcream': 0xF5FFFA, 'mistyrose': 0xFFE4E1, 'moccasin': 0xFFE4B5, 'navajowhite': 0xFFDEAD,
+  	'navy': 0x000080, 'oldlace': 0xFDF5E6, 'olive': 0x808000, 'olivedrab': 0x6B8E23, 'orange': 0xFFA500, 'orangered': 0xFF4500, 'orchid': 0xDA70D6,
+  	'palegoldenrod': 0xEEE8AA, 'palegreen': 0x98FB98, 'paleturquoise': 0xAFEEEE, 'palevioletred': 0xDB7093, 'papayawhip': 0xFFEFD5, 'peachpuff': 0xFFDAB9,
+  	'peru': 0xCD853F, 'pink': 0xFFC0CB, 'plum': 0xDDA0DD, 'powderblue': 0xB0E0E6, 'purple': 0x800080, 'rebeccapurple': 0x663399, 'red': 0xFF0000, 'rosybrown': 0xBC8F8F,
+  	'royalblue': 0x4169E1, 'saddlebrown': 0x8B4513, 'salmon': 0xFA8072, 'sandybrown': 0xF4A460, 'seagreen': 0x2E8B57, 'seashell': 0xFFF5EE,
+  	'sienna': 0xA0522D, 'silver': 0xC0C0C0, 'skyblue': 0x87CEEB, 'slateblue': 0x6A5ACD, 'slategray': 0x708090, 'slategrey': 0x708090, 'snow': 0xFFFAFA,
+  	'springgreen': 0x00FF7F, 'steelblue': 0x4682B4, 'tan': 0xD2B48C, 'teal': 0x008080, 'thistle': 0xD8BFD8, 'tomato': 0xFF6347, 'turquoise': 0x40E0D0,
+    'violet': 0xEE82EE, 'wheat': 0xF5DEB3, 'white': 0xFFFFFF, 'whitesmoke': 0xF5F5F5, 'yellow': 0xFFFF00, 'yellowgreen': 0x9ACD32 };
+
+  const COLOR_REGEX = /^((?:rgb|hsl)a?)\(\s*([^\)]*)\)/;
+
+  function parseColor(str) {
+    let m;
+
+    if ( m = COLOR_REGEX.exec( str ) ) {
+
+      // rgb / hsl
+      let color;
+      const name = m[ 1 ];
+      const components = m[ 2 ];
+
+      switch ( name ) {
+
+        case 'rgb':
+        case 'rgba':
+
+          if ( color = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
+
+            // rgb(255,0,0) rgba(255,0,0,0.5)
+            return {
+              r: Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255,
+              g: Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255,
+              b: Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255,
+              a: color[5] ? parseFloat( color[5] ) : undefined,
+            }
+          }
+
+          if ( color = /^(\d+)\%\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
+
+            // rgb(100%,0%,0%) rgba(100%,0%,0%,0.5)
+            return {
+              r: Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100,
+              g: Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100,
+              b: Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100,
+              a: color[5] ? parseFloat( color[5] ) : undefined,
+            }
+          }
+          break;
+
+        case 'hsl':
+        case 'hsla':
+
+          if ( color = /^([0-9]*\.?[0-9]+)\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
+
+            // hsl(120,50%,50%) hsla(120,50%,50%,0.5)
+            const rgba = setHSL({}, parseFloat( color[ 1 ] )/360, parseInt( color[ 2 ], 10 )/100, parseInt( color[ 3 ], 10 )/100);
+            rgba.a = color[5] ? parseFloat( color[5] ) : undefined;
+            return rgba
+          }
+          break;
+
+      }
+
+    } else if ( m = /^\#([A-Fa-f0-9]+)$/.exec( str ) ) {
+
+      // hex color
+      const hex = m[ 1 ];
+      const size = hex.length;
+
+      if ( size === 3 ) {
+
+        // #ff0
+        return {
+          r: parseInt( hex.charAt( 0 ) + hex.charAt( 0 ), 16 ) / 255,
+          g: parseInt( hex.charAt( 1 ) + hex.charAt( 1 ), 16 ) / 255,
+          b: parseInt( hex.charAt( 2 ) + hex.charAt( 2 ), 16 ) / 255,
+        }
+
+      } else if ( size === 6 ) {
+
+        // #ff0000
+        return {
+          r: parseInt( hex.charAt( 0 ) + hex.charAt( 1 ), 16 ) / 255,
+          g: parseInt( hex.charAt( 2 ) + hex.charAt( 3 ), 16 ) / 255,
+          b: parseInt( hex.charAt( 4 ) + hex.charAt( 5 ), 16 ) / 255,
+        }
+      }
+    }
+
+    if ( str && str.length > 0 ) {
+      // color keywords
+      const hex = COLOR_KEYWORDS[ str ];
+
+      if ( hex !== undefined ) {
+        return setHex({}, hex)
+      }
+    }
+  }
+
+  /**
+   * Breaks a selector string into {type, id, classes, attrs}
+   * 
+   * @param {string} str - selector in the form type#id.class1.class2[attr1=value1][attr2=value2]
+   * @return {object} { type, id, classes[], attrs{} }
+   */
+  function parseSelector(str) {
+    let results = {type: "", id: "", classes: [], attrs: {}};
+    let token = "type";
+    let tokenStart = 0;
+    let lastAttr = "";
+
+    const setToken = (newToken, i) => {
+      let tokenValue = str.slice(tokenStart, i);
+
+      if (i > tokenStart) {
+        switch (token) {
+          case "type":
+            results.type = tokenValue;
+            break
+          case "id":
+            results.id = tokenValue;
+            break
+          case "class":
+            results.classes.push(tokenValue);
+            break
+          case "attr":
+            lastAttr = tokenValue;
+            break
+          case "value":
+            if (lastAttr) {
+              results.attrs[lastAttr] = tokenValue;
+            }
+            break
+          case "none":
+          case "end":
+            break
+        }
+      }
+
+      token = newToken;
+      tokenStart = i + 1; // ignore the token character
+    };
+
+    for (let i = 0, n = str.length; i < n; i++) {
+      const c = str[i];
+      switch (c) {
+        case "\\": i++; break // escape the next character
+        case "#": if (token !== "attr" && token !== "value") setToken("id", i); break
+        case ".": if (token !== "attr" && token !== "value") setToken("class", i); break
+        case "[": if (token !== "attr" && token !== "value") setToken("attr", i); break
+        case "]": if (token === "attr" || token === "value") setToken("none", i); break
+        case "=": if (token === "attr") setToken("value", i); break
+      }
+    }
+    setToken("end", str.length);
+
+    return results
+  }
 
   // console.assert(deepEqual(null, null))
   // console.assert(deepEqual(undefined, undefined))
@@ -313,23 +1053,6 @@
   // console.assert(!deepEqual({a:1, b:"c"}, null))
   // console.assert(deepEqual({a:[1,2], b:{x: 3, y:4}}, {a:[1,2], b:{x: 3, y:4}}))
 
-  // builds a value from a 'root' and an array of 'attributes', each attribute is considered as the child of the previous attribute
-  function buildPath(root, attributes) {
-    let path = root;
-    let parts = attributes.slice().reverse();
-    while (path && parts.length > 0) {
-      path = path[parts.pop()];
-    }
-
-    return path
-  }
-
-  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","x"]) === "hello")
-  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","c","y"]) === undefined)
-  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["a"]) === 1)
-  // console.assert(buildPath({a: 1, b: {c: {x: "hello"}, d: 3}}, ["b","w"]) === undefined)
-
-
   // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers
   function convertToString(thing) {
     if (typeof thing == "object") {
@@ -341,7 +1064,11 @@
         return "#" + thing.getHexString()
       }
 
-      if ("x" in thing || "y" in thing || "z" in thing || "w" in thing) {
+      if ("r" in thing && "g" in thing && "b" in thing) {
+        return toString(thing)
+      }
+
+      if ("x" in thing && "y" in thing || "z" in thing || "w" in thing) {
         return AFRAME.utils.coordinates.stringify(thing)
       }
     }
@@ -396,42 +1123,6 @@
     
   })();
 
-
-  // Convert a string "1 2 3" into a type and value {type: "numbers", value: [1,2,3]}
-  const parseValue = (function() {
-    const isTHREE = typeof THREE !== "undefined";
-    const COLOR_WHITE = isTHREE ? new THREE.Color() : undefined;
-    const COLOR_BLACK = isTHREE ? new THREE.Color(0,0,0) : undefined;
-    const toNumber = str => Number(str.trim());
-
-    let tempColor = isTHREE ? new THREE.Color() : undefined;
-    
-    return function parseValue(str) {
-      if (str === "") return {type: "any", value: ""}
-
-      let vec = str.split(" ").filter(x => x !== "").map(toNumber);
-      if (!vec.every(isNaN)) return {type: "numbers", value: vec}
-    
-      if (isTHREE) {
-        let oldWarn = console.warn; console.warn = () => {}; // HACK disable warnings that threejs spams about invalid colors
-        let col = new THREE.Color(str.trim());
-        if (col.equals(COLOR_WHITE) && tempColor.copy(COLOR_BLACK).setStyle(str).equals(COLOR_BLACK)) col = undefined; // if input colour is the same as the starting color, then input was invalid
-        console.warn = oldWarn;
-        if (col) return {type: "color", value: col}
-      }
-    
-      return {type: "string", value: str.trim()}
-    }
-  })();
-
-  // console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
-  // console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
-  // console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
-  // console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
-  // console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
-  // console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
-  // console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
-
   // Copyright 2018-2019 harlyq
   // MIT license
 
@@ -472,248 +1163,6 @@
   // Copyright 2018-2019 harlyq
 
   const MAX_FRAME_TIME_MS = 100;
-
-  // easing functions copied from TWEEN.js
-  const Easing = {
-  	Linear: {
-  		None: function (k) {
-  			return k;
-  		}
-  	},
-  	Quadratic: {
-  		In: function (k) {
-  			return k * k;
-  		},
-  		Out: function (k) {
-  			return k * (2 - k);
-  		},
-  		InOut: function (k) {
-  			if ((k *= 2) < 1) {
-  				return 0.5 * k * k;
-  			}
-  			return - 0.5 * (--k * (k - 2) - 1);
-  		}
-  	},
-  	Cubic: {
-  		In: function (k) {
-  			return k * k * k;
-  		},
-  		Out: function (k) {
-  			return --k * k * k + 1;
-  		},
-  		InOut: function (k) {
-  			if ((k *= 2) < 1) {
-  				return 0.5 * k * k * k;
-  			}
-  			return 0.5 * ((k -= 2) * k * k + 2);
-  		}
-  	},
-  	Quartic: {
-  		In: function (k) {
-  			return k * k * k * k;
-  		},
-  		Out: function (k) {
-  			return 1 - (--k * k * k * k);
-  		},
-  		InOut: function (k) {
-  			if ((k *= 2) < 1) {
-  				return 0.5 * k * k * k * k;
-  			}
-  			return - 0.5 * ((k -= 2) * k * k * k - 2);
-  		}
-  	},
-  	Quintic: {
-  		In: function (k) {
-  			return k * k * k * k * k;
-  		},
-  		Out: function (k) {
-  			return --k * k * k * k * k + 1;
-  		},
-  		InOut: function (k) {
-  			if ((k *= 2) < 1) {
-  				return 0.5 * k * k * k * k * k;
-  			}
-  			return 0.5 * ((k -= 2) * k * k * k * k + 2);
-  		}
-  	},
-  	Sinusoidal: {
-  		In: function (k) {
-  			return 1 - Math.cos(k * Math.PI / 2);
-  		},
-  		Out: function (k) {
-  			return Math.sin(k * Math.PI / 2);
-  		},
-  		InOut: function (k) {
-  			return 0.5 * (1 - Math.cos(Math.PI * k));
-  		}
-  	},
-  	Exponential: {
-  		In: function (k) {
-  			return k === 0 ? 0 : Math.pow(1024, k - 1);
-  		},
-  		Out: function (k) {
-  			return k === 1 ? 1 : 1 - Math.pow(2, - 10 * k);
-  		},
-  		InOut: function (k) {
-  			if (k === 0) {
-  				return 0;
-  			}
-  			if (k === 1) {
-  				return 1;
-  			}
-  			if ((k *= 2) < 1) {
-  				return 0.5 * Math.pow(1024, k - 1);
-  			}
-  			return 0.5 * (- Math.pow(2, - 10 * (k - 1)) + 2);
-  		}
-  	},
-  	Circular: {
-  		In: function (k) {
-  			return 1 - Math.sqrt(1 - k * k);
-  		},
-  		Out: function (k) {
-  			return Math.sqrt(1 - (--k * k));
-  		},
-  		InOut: function (k) {
-  			if ((k *= 2) < 1) {
-  				return - 0.5 * (Math.sqrt(1 - k * k) - 1);
-  			}
-  			return 0.5 * (Math.sqrt(1 - (k -= 2) * k) + 1);
-  		}
-  	},
-  	Elastic: {
-  		In: function (k) {
-  			if (k === 0) {
-  				return 0;
-  			}
-  			if (k === 1) {
-  				return 1;
-  			}
-  			return -Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
-  		},
-  		Out: function (k) {
-  			if (k === 0) {
-  				return 0;
-  			}
-  			if (k === 1) {
-  				return 1;
-  			}
-  			return Math.pow(2, -10 * k) * Math.sin((k - 0.1) * 5 * Math.PI) + 1;
-  		},
-  		InOut: function (k) {
-  			if (k === 0) {
-  				return 0;
-  			}
-  			if (k === 1) {
-  				return 1;
-  			}
-  			k *= 2;
-  			if (k < 1) {
-  				return -0.5 * Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
-  			}
-  			return 0.5 * Math.pow(2, -10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI) + 1;
-  		}
-  	},
-  	Back: {
-  		In: function (k) {
-  			var s = 1.70158;
-  			return k * k * ((s + 1) * k - s);
-  		},
-  		Out: function (k) {
-  			var s = 1.70158;
-  			return --k * k * ((s + 1) * k + s) + 1;
-  		},
-  		InOut: function (k) {
-  			var s = 1.70158 * 1.525;
-  			if ((k *= 2) < 1) {
-  				return 0.5 * (k * k * ((s + 1) * k - s));
-  			}
-  			return 0.5 * ((k -= 2) * k * ((s + 1) * k + s) + 2);
-  		}
-  	},
-  	Bounce: {
-  		In: function (k) {
-  			return 1 - Easing.Bounce.Out(1 - k);
-  		},
-  		Out: function (k) {
-  			if (k < (1 / 2.75)) {
-  				return 7.5625 * k * k;
-  			} else if (k < (2 / 2.75)) {
-  				return 7.5625 * (k -= (1.5 / 2.75)) * k + 0.75;
-  			} else if (k < (2.5 / 2.75)) {
-  				return 7.5625 * (k -= (2.25 / 2.75)) * k + 0.9375;
-  			} else {
-  				return 7.5625 * (k -= (2.625 / 2.75)) * k + 0.984375;
-  			}
-  		},
-  		InOut: function (k) {
-  			if (k < 0.5) {
-  				return Easing.Bounce.In(k * 2) * 0.5;
-  			}
-  			return Easing.Bounce.Out(k * 2 - 1) * 0.5 + 0.5;
-  		}
-  	}
-  };
-
-  const EASING_FUNCTIONS = {
-    'linear': Easing.Linear.None,
-
-    'ease': Easing.Cubic.InOut,
-    'ease-in': Easing.Cubic.In,
-    'ease-out': Easing.Cubic.Out,
-    'ease-in-out': Easing.Cubic.InOut,
-
-    'ease-cubic': Easing.Cubic.In,
-    'ease-in-cubic': Easing.Cubic.In,
-    'ease-out-cubic': Easing.Cubic.Out,
-    'ease-in-out-cubic': Easing.Cubic.InOut,
-
-    'ease-quad': Easing.Quadratic.InOut,
-    'ease-in-quad': Easing.Quadratic.In,
-    'ease-out-quad': Easing.Quadratic.Out,
-    'ease-in-out-quad': Easing.Quadratic.InOut,
-
-    'ease-quart': Easing.Quartic.InOut,
-    'ease-in-quart': Easing.Quartic.In,
-    'ease-out-quart': Easing.Quartic.Out,
-    'ease-in-out-quart': Easing.Quartic.InOut,
-
-    'ease-quint': Easing.Quintic.InOut,
-    'ease-in-quint': Easing.Quintic.In,
-    'ease-out-quint': Easing.Quintic.Out,
-    'ease-in-out-quint': Easing.Quintic.InOut,
-
-    'ease-sine': Easing.Sinusoidal.InOut,
-    'ease-in-sine': Easing.Sinusoidal.In,
-    'ease-out-sine': Easing.Sinusoidal.Out,
-    'ease-in-out-sine': Easing.Sinusoidal.InOut,
-
-    'ease-expo': Easing.Exponential.InOut,
-    'ease-in-expo': Easing.Exponential.In,
-    'ease-out-expo': Easing.Exponential.Out,
-    'ease-in-out-expo': Easing.Exponential.InOut,
-
-    'ease-circ': Easing.Circular.InOut,
-    'ease-in-circ': Easing.Circular.In,
-    'ease-out-circ': Easing.Circular.Out,
-    'ease-in-out-circ': Easing.Circular.InOut,
-
-    'ease-elastic': Easing.Elastic.InOut,
-    'ease-in-elastic': Easing.Elastic.In,
-    'ease-out-elastic': Easing.Elastic.Out,
-    'ease-in-out-elastic': Easing.Elastic.InOut,
-
-    'ease-back': Easing.Back.InOut,
-    'ease-in-back': Easing.Back.In,
-    'ease-out-back': Easing.Back.Out,
-    'ease-in-out-back': Easing.Back.InOut,
-
-    'ease-bounce': Easing.Bounce.InOut,
-    'ease-in-bounce': Easing.Bounce.In,
-    'ease-out-bounce': Easing.Bounce.Out,
-    'ease-in-out-bounce': Easing.Bounce.InOut,
-  };
-
 
   // given [{type: "numbers", value: [1,2]}, {type: "any", value: ""}, {type: "numbers", value: [5]}] return type "numbers"
   // if there are inconsistencies in the the types then generate an warning
@@ -959,7 +1408,7 @@
     }
 
     // e.g. object3dmap.mesh.material.uniforms.color
-    const path = buildPath(target, parts);
+    const path = getWithPath(target, parts);
     if (path) {
       return convertToString(path[part])
     } else {
@@ -1453,234 +1902,6 @@
     return glob.replace(/[\.\{\}\(\)\^\[\]\$]/g, '\\$&').replace(/[\*\?]/g, '.$&');
   }
 
-  })();
-
-  const ZERO = Object.freeze({x: 0, y: 0, z: 0});
-  const UNIT_X = Object.freeze({x: 1, y: 0, z: 0});
-  const UNIT_Y = Object.freeze({x: 0, y: 1, z: 0});
-  const UNIT_Z = Object.freeze({x: 0, y: 0, z: 1});
-
-  const SQRT_1_2 = Math.sqrt(0.5);
-  const IDENTITY = Object.freeze({x:0, y:0, z:0, w:1});
-  const ROTATE_X_180 = Object.freeze({x:1, y:0, z:0, w:0});
-  const ROTATE_Y_180 = Object.freeze({x:0, y:1, z:0, w:0});
-  const ROTATE_Z_180 = Object.freeze({x:0, y:0, z:1, w:0});
-  const ROTATE_X_90 = Object.freeze({x:SQRT_1_2, y:0, z:0, w:SQRT_1_2});
-  const ROTATE_Y_90 = Object.freeze({x:0, y:SQRT_1_2, z:0, w:SQRT_1_2});
-  const ROTATE_Z_90 = Object.freeze({x:0, y:0, z:SQRT_1_2, w:SQRT_1_2});
-
-  function setFromUnscaledAffine4(out, aff) {
-    const m11 = aff[0], m12 = aff[4], m13 = aff[8];
-    const m21 = aff[1], m22 = aff[5], m23 = aff[9];
-    const m31 = aff[2], m32 = aff[6], m33 = aff[10];
-    const trace = m11 + m22 + m33;
-    let s;
-
-    if ( trace > 0 ) {
-
-      s = 0.5 / Math.sqrt( trace + 1.0 );
-
-      out.w = 0.25 / s;
-      out.x = ( m32 - m23 ) * s;
-      out.y = ( m13 - m31 ) * s;
-      out.z = ( m21 - m12 ) * s;
-
-    } else if ( m11 > m22 && m11 > m33 ) {
-
-      s = 2.0 * Math.sqrt( 1.0 + m11 - m22 - m33 );
-
-      out.w = ( m32 - m23 ) / s;
-      out.x = 0.25 * s;
-      out.y = ( m12 + m21 ) / s;
-      out.z = ( m13 + m31 ) / s;
-
-    } else if ( m22 > m33 ) {
-
-      s = 2.0 * Math.sqrt( 1.0 + m22 - m11 - m33 );
-
-      out.w = ( m13 - m31 ) / s;
-      out.x = ( m12 + m21 ) / s;
-      out.y = 0.25 * s;
-      out.z = ( m23 + m32 ) / s;
-
-    } else {
-
-      s = 2.0 * Math.sqrt( 1.0 + m33 - m11 - m22 );
-
-      out.w = ( m21 - m12 ) / s;
-      out.x = ( m13 + m31 ) / s;
-      out.y = ( m23 + m32 ) / s;
-      out.z = 0.25 * s;
-
-    }
-    return out
-  }
-
-  function invertAndMultiplyVecXYZ(out, aff, v) {
-    const n11 = aff[0], n21 = aff[1], n31 = aff[2];
-    const n12 = aff[4], n22 = aff[5], n32 = aff[6];
-    const n13 = aff[8], n23 = aff[9], n33 = aff[10];
-    const tx = aff[12], ty = aff[13], tz = aff[14];
-
-    const t11 = n33 * n22 - n32 * n23;
-    const t12 = n32 * n13 - n33 * n12;
-    const t13 = n23 * n12 - n22 * n13;
-
-    const det = n11 * t11 + n21 * t12 + n31 * t13;
-    const invDet = 1/det;
-
-    // invert the rotation matrix
-    const m11 = t11 * invDet;
-    const m21 = ( n31 * n23 - n33 * n21 ) * invDet;
-    const m31 = ( n32 * n21 - n31 * n22 ) * invDet;
-
-    const m12 = t12 * invDet;
-    const m22 = ( n33 * n11 - n31 * n13 ) * invDet;
-    const m32 = ( n31 * n12 - n32 * n11 ) * invDet;
-
-    const m13 = t13 * invDet;
-    const m23 = ( n21 * n13 - n23 * n11 ) * invDet;
-    const m33 = ( n22 * n11 - n21 * n12 ) * invDet;
-
-    // apply inv(aff)*(v - t)
-    const ax = v.x - tx, ay = v.y - ty, az = v.z - tz;
-    out.x = m11*ax + m12*ay + m13*az;
-    out.y = m21*ax + m22*ay + m23*az;
-    out.z = m31*ax + m32*ay + m33*az;
-
-    return out
-  }
-
-  function determinant(aff) {
-    const n11 = aff[0], n21 = aff[1], n31 = aff[2];
-    const n12 = aff[4], n22 = aff[5], n32 = aff[6];
-    const n13 = aff[8], n23 = aff[9], n33 = aff[10];
-
-    const t11 = n33 * n22 - n32 * n23;
-    const t12 = n32 * n13 - n33 * n12;
-    const t13 = n23 * n12 - n22 * n13;
-
-    return n11 * t11 + n21 * t12 + n31 * t13
-  }
-
-  const decompose = (function() {
-    let affCopy = new Float32Array(16);
-
-    return function decompose(aff, outPosition = undefined, outQuaternion = undefined, outScale = undefined) {
-      if (outPosition) {
-        outPosition.x = aff[12];
-        outPosition.y = aff[13];
-        outPosition.z = aff[14];
-      }
-    
-      if (outScale || outQuaternion) {
-        const sx = Math.hypot(aff[0], aff[1], aff[2]);
-        const sy = Math.hypot(aff[4], aff[5], aff[6]);
-        const sz = Math.hypot(aff[8], aff[9], aff[10]);
-      
-        if (outScale) {
-          outScale.x = sx;
-          outScale.y = sy;
-          outScale.z = sz;
-        }
-      
-        if (outQuaternion) {
-          const det = determinant(aff);
-          const invSX = det < 0 ? -1/sx : 1/sx; // invert scale on one axis for negative determinant
-          const invSY = 1/sy;
-          const invSZ = 1/sz;
-    
-          affCopy.set(aff);
-          affCopy[0] *= invSX;
-          affCopy[1] *= invSX;
-          affCopy[2] *= invSX;
-          affCopy[4] *= invSY;
-          affCopy[5] *= invSY;
-          affCopy[6] *= invSY;
-          affCopy[8] *= invSZ;
-          affCopy[9] *= invSZ;
-          affCopy[10] *= invSZ;
-    
-          setFromUnscaledAffine4(outQuaternion, affCopy);
-        }
-      }
-    
-      return aff
-    }  
-  })();
-
-  const setFromObject3D = (function() {
-    let tempPosition = new THREE.Vector3();
-    let tempQuaternion = new THREE.Quaternion();
-    let tempScale = new THREE.Vector3();
-    let tempBox3 = new THREE.Box3();
-
-    return function setFromObject3D(ext, object3D) {
-      if (object3D.children.length === 0) {
-        return ext
-      }
-
-      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
-      // based around the origin
-      tempPosition.copy(object3D.position);
-      tempQuaternion.copy(object3D.quaternion);
-      tempScale.copy(object3D.scale);
-
-      object3D.position.set(0,0,0);
-      object3D.quaternion.set(0,0,0,1);
-      object3D.scale.set(1,1,1);
-
-      tempBox3.setFromObject(object3D); // expensive for models
-      // ext.setFromObject(object3D) // expensive for models
-
-      object3D.position.copy(tempPosition);
-      object3D.quaternion.copy(tempQuaternion);
-      object3D.scale.copy(tempScale);
-      object3D.updateMatrixWorld(true);
-
-      ext.min.x = tempBox3.min.x;
-      ext.min.y = tempBox3.min.y; 
-      ext.min.z = tempBox3.min.z; 
-      ext.max.x = tempBox3.max.x; 
-      ext.max.y = tempBox3.max.y; 
-      ext.max.z = tempBox3.max.z; 
-
-      return ext
-    }
-  })();
-
-  function volume(ext) {
-    return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
-  }
-
-  /**
-   * Returns the distance between pointA and the surface of boxB. Negative values indicate
-   * that pointA is inside of boxB
-   * 
-   * @param {{x,y,z}} pointA - point
-   * @param {{x,y,z}} boxBMin - min extents of boxB
-   * @param {{x,y,z}} boxBMax - max extents of boxB
-   * @param {float32[16]} affineB - colum-wise matrix for B
-   * @param {{x,y,z}} extraScale - additional scale to apply to the output distance
-   */
-  const pointToBox = (function() {
-    let vertA = {};
-    let scaleA = {};
-
-    return function pointToBox(pointA, boxBMin, boxBMax, affineB) {
-      decompose( affineB, undefined, undefined, scaleA );
-      invertAndMultiplyVecXYZ( vertA, affineB, pointA );
-      const vx = vertA.x, vy = vertA.y, vz = vertA.z;
-      const minx = boxBMin.x - vx, miny = boxBMin.y - vy, minz = boxBMin.z - vz;
-      const maxx = vx - boxBMax.x, maxy = vy - boxBMax.y, maxz = vz - boxBMax.z;
-      const dx = Math.max(maxx, minx)*scaleA.x;
-      const dy = Math.max(maxy, miny)*scaleA.y;
-      const dz = Math.max(maxz, minz)*scaleA.z;
-
-      // for points inside (dx and dy and dz < 0) take the smallest distent to an edge, otherwise
-      // determine the hypotenuese to the outside edges
-      return dx <= 0 && dy <= 0 && dz <= 0 ? Math.max(dx, dy, dz) : Math.hypot(Math.max(0, dx), Math.max(0, dy), Math.max(0, dz))
-    }
   })();
 
   // Copyright 2019 harlyq
@@ -2699,7 +2920,7 @@
         RANDOM_REPEAT_COUNT,
         USE_MAP: true,
       };
-      for (key of domDefines) {
+      for (let key of domDefines) {
         defines[key] = true;
       }
 
@@ -3906,7 +4127,7 @@ void main() {
     function add() {
       if (event && callback) {
         for (let el of elements) {
-          console.log("scopedListener:add", el.id, event);
+          // console.log("scopedListener:add", el.id, event)
           el.addEventListener(event, callback);
         }
       }
@@ -3915,7 +4136,7 @@ void main() {
     function remove() {
       if (event && callback) {
         for (let el of elements) {
-          console.log("scopedListener:remove", el.id, event);
+          // console.log("scopedListener:remove", el.id, event)
           el.removeEventListener(event, callback);
         }
       }
@@ -3998,75 +4219,6 @@ void main() {
   // Copyright 2018-2019 harlyq
 
   /**
-   * Breaks a selector string into {type, id, classes, attrs}
-   * 
-   * @param {string} str - selector in the form type#id.class1.class2[attr1=value1][attr2=value2]
-   * @return {object} { type, id, classes[], attrs{} }
-   */
-  function parseSelector(str) {
-    let results = {type: "", id: "", classes: [], attrs: {}};
-    let token = "type";
-    let tokenStart = 0;
-    let lastAttr = "";
-
-    const setToken = (newToken, i) => {
-      let tokenValue = str.slice(tokenStart, i);
-
-      if (i > tokenStart) {
-        switch (token) {
-          case "type":
-          case "id":
-            results[token] = tokenValue;
-            break
-          case "class":
-            results.classes.push(tokenValue);
-            break
-          case "attr":
-            lastAttr = tokenValue;
-            break
-          case "value":
-            if (lastAttr) {
-              results.attrs[lastAttr] = tokenValue;
-            }
-            break
-          case "none":
-          case "end":
-            break
-        }
-      }
-
-      token = newToken;
-      tokenStart = i + 1; // ignore the token character
-    };
-
-    for (let i = 0, n = str.length; i < n; i++) {
-      const c = str[i];
-      switch (c) {
-        case "\\": i++; break // escape the next character
-        case "#": if (token !== "attr" && token !== "value") setToken("id", i); break
-        case ".": if (token !== "attr" && token !== "value") setToken("class", i); break
-        case "[": if (token !== "attr" && token !== "value") setToken("attr", i); break
-        case "]": if (token === "attr" || token === "value") setToken("none", i); break
-        case "=": if (token === "attr") setToken("value", i); break
-      }
-    }
-    setToken("end", str.length);
-
-    return results
-  }
-
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(""), {type: "", id: "", classes: [], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("xyz"), {type: "xyz", id: "", classes: [], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("#xyz"), {type: "", id: "xyz", classes: [], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(".xyz"), {type: "", id: "", classes: ["xyz"], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("[xyz=1]"), {type: "", id: "", classes: [], attrs: {"xyz": "1"}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("type.class#id[attr=value]"), {type: "type", id: "id", classes: ["class"], attrs: {attr: "value"}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(".class#id[]"), {type: "", id: "id", classes: ["class"], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector(".class1#id.class2"), {type: "", id: "id", classes: ["class1", "class2"], attrs: {}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("[foo=bar][one.two=three.four]"), {type: "", id: "", classes: [], attrs: {"foo": "bar", "one.two": "three.four"}}))
-  // console.assert(AFRAME.utils.deepEqual(parseSelector("xyz[foo=bar]#abc"), {type: "xyz", id: "abc", classes: [], attrs: {"foo": "bar"}}))
-
-  /**
    * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
    * creates a "div" with className "door", id "door1" and attribute "state=open".  If no type is
    * provided then defaults to a-entity.
@@ -4079,6 +4231,7 @@ void main() {
     let type = info.type || 'a-entity';
     let newEl = document.createElement(type);
     if (newEl) {
+      if (info.id) newEl.id = info.id;
       if (info.classes.length > 0) newEl.classList.add(...info.classes);
 
       for (let attr in info.attrs) {
@@ -4248,15 +4401,6 @@ void main() {
   function trim(str) {
     return str.trim()
   }
-
-  // console.assert(deepEqual(parseValue(""), {type: "any", value: ""}))
-  // console.assert(deepEqual(parseValue("1"), {type: "numbers", value: [1]}))
-  // console.assert(deepEqual(parseValue(" 2  3  4"), {type: "numbers", value: [2,3,4]}))
-  // console.assert(deepEqual(parseValue(" 2.5 "), {type: "numbers", value: [2.5]}))
-  // console.assert(deepEqual(parseValue(" 2,3 ,4 "), {type: "string", value: "2,3 ,4"}))
-  // console.assert(parseValue("red").type === "color" && parseValue("red").value.getHexString() === "ff0000")
-  // console.assert(parseValue("#123").type === "color" && parseValue("#123").value.getHexString() === "112233")
-  // console.assert(parseValue("  burple "), {type: "string", value: "burple"})
 
   // Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
   // Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
