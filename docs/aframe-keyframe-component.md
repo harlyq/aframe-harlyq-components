@@ -52,6 +52,6 @@ The seed to use for the random number generator. If -1 then a different random s
 
 Custom attribute which defines a property to set.  This property can use dot notation (e.g. component.property) and value is an array of either: a single value; a list of options (separated by `|`) where one is chosen at random; or a range of two values separated by `..` where a random number is chosen which is greater than or equal to the first value and less than the second value. For the range operator (`..`) the values may be either vectors of numbers (eg. a single number, vec2, vec3 or vec4) or colors
 
-The value can also be a comma separate list, with the first value for the start of the animation, the last for the end, and intermediate values are evenly distributed across the timeline.  All missing values are replaced by the starting value of the property
+The value can also be a comma separate list, with the first value for the start of the animation, the last for the end, and intermediate values are evenly distributed across the timeline.  All missing values are treated as maintaining their existing value
 
 When color values are used in a range e.g. `rgb(0,1,0)...red`, the interpolation is performed in RGB space

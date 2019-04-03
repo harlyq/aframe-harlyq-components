@@ -3,7 +3,7 @@
 
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
-import { parser } from "helpers"
+import { selector } from "helpers"
 
 /**
  * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
@@ -14,7 +14,7 @@ import { parser } from "helpers"
  * @return {object} returns an HTMLElement matching the selector string
  */
 function createElementFromSelector(str) {
-  let info = parser.parseSelector(str)
+  let info = selector.parse(str)
   let type = info.type || 'a-entity'
   let newEl = document.createElement(type)
   if (newEl) {

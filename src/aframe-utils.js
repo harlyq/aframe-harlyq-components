@@ -1,4 +1,4 @@
-import { rgbcolor } from "helpers"
+import { rgbcolor, utils } from "helpers"
 
 // Copyright 2018-2019 harlyq
 // MIT license
@@ -11,7 +11,7 @@ export function deepEqual(a, b) {
         return false
       }
       
-      for (let i = 0; i < a.length; a++) {
+      for (let i = 0; i < a.length; i++) {
         if (!deepEqual(a[i], b[i])) {
           return false
         }
@@ -47,10 +47,6 @@ export function convertToString(thing) {
   if (typeof thing == "object") {
     if (Array.isArray(thing)) {
       return thing.map(convertToString)
-    }
-
-    if (thing instanceof THREE.Color) {
-      return "#" + thing.getHexString()
     }
 
     if ("r" in thing && "g" in thing && "b" in thing) {
@@ -102,10 +98,10 @@ export const setProperty = (() => {
     }
   
     // e.g. object3dmap.mesh.material.uniforms.color
-    const path = buildPath(target, parts)
+    const path = utils.getWithPath(target, parts)
     if (path) {
       // this only works for boolean, string, color and an array of one element
-      path[part] = Array.isArray(value) && value.length === 1 ? value[0] : value
+      path[prop] = Array.isArray(value) && value.length === 1 ? value[0] : value
     } else {
       console.warn(`unknown path for setProperty() '${prop}'`)
     }

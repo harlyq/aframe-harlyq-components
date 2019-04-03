@@ -229,8 +229,8 @@ AFRAME.registerComponent("sprite-particles", {
     if (this.mesh) {
       this.el.removeObject3D(this.mesh.name)
     }
-    if (data.model) {
-      data.model.removeEventListener("object3dset", this.handleObject3DSet)
+    if (this.data.model) {
+      this.data.model.removeEventListener("object3dset", this.handleObject3DSet)
     }
   },
 
@@ -969,7 +969,7 @@ AFRAME.registerComponent("sprite-particles", {
       let index = startIndex
       let id = this.nextID
 
-      modelFillFn = randomPointInTriangle
+      let modelFillFn = randomPointInTriangle
       switch (data.modelFill) {
         case "edge": modelFillFn = randomPointOnTriangleEdge; break
         case "vertex": modelFillFn = randomVertex; break
@@ -1110,7 +1110,7 @@ const randomPointOnTriangleEdge = (function() {
     v1.fromArray(vertices, triangleOffset)
     v2.fromArray(vertices, triangleOffset + 3)
     v3.fromArray(vertices, triangleOffset + 6)
-    r1 = Math.random()
+    let r1 = Math.random()
     if (r1 > 2/3) {
       pos.copy(v1).sub(v3).multiplyScalar(r1*3 - 2).add(v3)
     } else if (r1 > 1/3) {

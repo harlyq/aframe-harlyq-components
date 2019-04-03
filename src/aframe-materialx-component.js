@@ -16,6 +16,8 @@ var shaders = AFRAME.shaders;
  * @member {object} shader - Determines how material is shaded. Defaults to `standard`,
  *         three.js's implementation of PBR. Another standard shading model is `flat` which
  *         uses MeshBasicMaterial.
+ * @member {object} material
+ * @member {object[]} oldMaterials
  */
 AFRAME.registerComponent('materialx', {
   schema: {
@@ -289,8 +291,8 @@ function disposeMaterial (material, system) {
  * @param {object} el - element to replace material on
  * @param {string} nameGlob - regex of name of the material to replace. use '' for the material from getObject3D('mesh')
  * @param {object} newMaterials - list of materials to use
- * @param {object} replacedList - materials that have been replaced
- * @returns {object[]} - list of replaced materials
+ * @param {object} outReplacedList - materials that have been replaced
+ * @returns {boolean} - list of replaced materials
  */
 function replaceMaterial (el, nameGlob, newMaterials, outReplacedList) {
   var hasMaterials = false;

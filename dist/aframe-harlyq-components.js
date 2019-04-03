@@ -251,7 +251,7 @@
     /**
      * Fetch, cache, and select from GLTF.
      *
-     * @param {modelLoadedCallback} cb - Called when the model is loaded
+     * @param {function(object)} cb - Called when the model is loaded
      * @returns {object} - Selected subset of model.
      */
     getModel: function (cb) {
@@ -298,20 +298,55 @@
     }
   });
 
+  /**
+   * @typedef {{x: number, y: number, z: number}} VecXYZ
+   * @typedef {{x: number, y: number, z: number, w: number}} QuatXYZW
+   * @typedef {Float32Array | number[]} Affine4
+   * @typedef {number} Radians
+   * @typedef {number} Distance
+   */
+
+  /** @type {VecXYZ} */
   const ZERO = Object.freeze({x: 0, y: 0, z: 0});
+
+  /** @type {VecXYZ} */
   const UNIT_X = Object.freeze({x: 1, y: 0, z: 0});
+
+  /** @type {VecXYZ} */
   const UNIT_Y = Object.freeze({x: 0, y: 1, z: 0});
+
+  /** @type {VecXYZ} */
   const UNIT_Z = Object.freeze({x: 0, y: 0, z: 1});
 
+  /**
+   * @typedef {{x: number, y: number, z: number, w: number}} QuatXYZW
+   * @typedef {Float32Array | number[]} Affine4
+   */
+
   const SQRT_1_2 = Math.sqrt(0.5);
+
+  /** @type {QuatXYZW} */
   const IDENTITY = Object.freeze({x:0, y:0, z:0, w:1});
+
+  /** @type {QuatXYZW} */
   const ROTATE_X_180 = Object.freeze({x:1, y:0, z:0, w:0});
+
+  /** @type {QuatXYZW} */
   const ROTATE_Y_180 = Object.freeze({x:0, y:1, z:0, w:0});
+
+  /** @type {QuatXYZW} */
   const ROTATE_Z_180 = Object.freeze({x:0, y:0, z:1, w:0});
+
+  /** @type {QuatXYZW} */
   const ROTATE_X_90 = Object.freeze({x:SQRT_1_2, y:0, z:0, w:SQRT_1_2});
+
+  /** @type {QuatXYZW} */
   const ROTATE_Y_90 = Object.freeze({x:0, y:SQRT_1_2, z:0, w:SQRT_1_2});
+
+  /** @type {QuatXYZW} */
   const ROTATE_Z_90 = Object.freeze({x:0, y:0, z:SQRT_1_2, w:SQRT_1_2});
 
+  /** @type {<T extends QuatXYZW>(out: T, aff: Affine4) => T} */
   function setFromUnscaledAffine4(out, aff) {
     const m11 = aff[0], m12 = aff[4], m13 = aff[8];
     const m21 = aff[1], m22 = aff[5], m23 = aff[9];
@@ -359,6 +394,7 @@
     return out
   }
 
+  /** @type {<T extends VecXYZ, TA extends Affine4, TV extends VecXYZ>(out: T, aff: TA, v: TV) => T} */
   function invertAndMultiplyVecXYZ(out, aff, v) {
     const n11 = aff[0], n21 = aff[1], n31 = aff[2];
     const n12 = aff[4], n22 = aff[5], n32 = aff[6];
@@ -394,6 +430,7 @@
     return out
   }
 
+  /** @type {<TA extends Affine4>(aff: TA) => number} */
   function determinant(aff) {
     const n11 = aff[0], n21 = aff[1], n31 = aff[2];
     const n12 = aff[4], n22 = aff[5], n32 = aff[6];
@@ -406,10 +443,12 @@
     return n11 * t11 + n21 * t12 + n31 * t13
   }
 
+  /** @typedef {<T extends Affine4, VP extends VecXYZ, VQ extends QuatXYZW, VS extends VecXYZ>(aff: T, outPosition: VP, outQuaterion: VQ, outScale: VS) => T} DecomposeFN */
+  /** @type {DecomposeFN} */
   const decompose = (function() {
     let affCopy = new Float32Array(16);
 
-    return function decompose(aff, outPosition = undefined, outQuaternion = undefined, outScale = undefined) {
+    return /** @type {DecomposeFN} */function decompose(aff, outPosition = undefined, outQuaternion = undefined, outScale = undefined) {
       if (outPosition) {
         outPosition.x = aff[12];
         outPosition.y = aff[13];
@@ -452,15 +491,119 @@
     }  
   })();
 
+  /**
+   * @typedef {{r: number, g: number, b: number}} RGBColor
+   */
+
+  /** @type {<T>(list: T[], randFn: () => number) => T} */
+  function entry(list, randFn = Math.random) {
+    return list[ index(list.length, randFn) ]
+  }
+
+  /** @type {(length: number, randFn: () => number) => number} */
+  function index(length, randFn = Math.random) {
+    return ~~(randFn()*length)
+  }
+
+  // range is (min,max]
+  /** @type {(min: number, max: number, randFn: () => number) => number} */
+  function float(min, max, randFn = Math.random) {
+    if (max === min) return min
+    return randFn()*(max - min) + min
+  }
+
+  // in RGB space. TODO rgbMax should be a valid result
+  /** @type {<T extends RGBColor, RN extends RGBColor, RX extends RGBColor>(out: T, rgbMin: RN, rgbMax: RX, randFn: () => number) => T} */
+  function color(out, rgbMin, rgbMax, randFn = Math.random) {
+    out.r = float(rgbMin.r, rgbMax.r, randFn);
+    out.g = float(rgbMin.g, rgbMax.g, randFn);
+    out.b = float(rgbMin.b, rgbMax.b, randFn);
+    return out
+  }
+
+  /** @type {(out: number[], vecMin: number[], vecMax: number[], randFn: () => number) => number[]} */
+  function vector(out, vecMin, vecMax, randFn = Math.random) {
+    const lengthOfMin = vecMin.length;
+    const lengthOfMax = vecMax.length;
+    const m = Math.min(lengthOfMin, lengthOfMax);
+    out.length = Math.max(lengthOfMin, lengthOfMax);
+
+    for (let i = 0; i < m; i++) {
+      out[i] = float(vecMin[i], vecMax[i], randFn);
+    }
+
+    if (lengthOfMax > lengthOfMin) {
+      for (let i = m; i < lengthOfMax; i++) {
+        out[i] = vecMax[i];
+      }
+    } else {
+      for (let i = m; i < lengthOfMin; i++) {
+        out[i] = vecMin[i];
+      }
+    }
+    return out
+  }
+
+  // https://en.wikipedia.org/wiki/Linear_congruential_generator
+  function lcg() {
+    let seed = -1;
+    
+    /** @type {(s: number) => void}*/
+    function setSeed(s) {
+      seed = s;
+    }
+
+    /** @type {() => number} */
+    function random() {
+      if (seed < 0) {
+        return Math.random()
+      }
+    
+      seed = (1664525*seed + 1013904223) % 0x100000000;
+      return seed/0x100000000
+    }
+    
+    return {
+      setSeed,
+      random,
+    }
+  }
+
+  /** @type {(v: number, min: number, max: number) => number} */
   function clamp(v, min, max) {
     return v < min ? min : v > max ? max : v
   }
 
+  /** @type {(v: number, m: number) => number} */
   function euclideanModulo(v, m) {
     return ( ( v % m ) + m ) % m  
   }
 
+  /** @type {(a: number, b: number, t: number) => number} */
+  function lerp(a, b, t) {
+    return a + (b - a)*t
+  }
+
+  /** @type {<TA extends {[key: string]: number}>(a: TA, b: {[key: string]: number}, t: number) => TA} */
+  function lerpObject(a, b, t) {
+    let out = Object.assign({}, a); // copy values from a in case the keys do not exist in b
+    for (let k in b) {
+      out[k] = typeof a[k] !== "undefined" ? lerp(a[k], b[k], t) : b[k];
+    }
+    return out
+  }
+
+  /** @type {<TA extends number[] | Float32Array, TB extends number[] | Float32Array>(a: TA, b: TB, t: number) => number[]} */
+  function lerpArray(a, b, t) {
+    let out = Array.from(a);
+    for (let i = 0; i < b.length; i++) {
+      out[i] = typeof a[i] !== "undefined" ? lerp(a[i], b[i], t) : b[i];
+    }
+    return out
+  }
+
   // returns a value from a 'root' and an array of 'properties', each property is considered the child of the previous property
+  /** @type {(root: {[key: string]: any}, properties: string[]) => any} */
   function getWithPath(root, properties) {
     let path = root;
     let parts = properties.slice().reverse();
@@ -469,6 +612,291 @@
     }
 
     return path
+  }
+
+  // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
+
+  /**
+   * @typedef {{r:number, g:number, b:number}} RGBColor
+   * @typedef {{r:number, g:number, b:number, a:number}} RGBAColor
+   */
+
+  /** @type {(a: any) => boolean} */
+  function isColor(a) {
+    return "r" in a && "g" in a && "b" in a
+  }
+
+  /** @type {<T extends RGBColor>(out: T, hex: number) => T} */
+  function setHex(out, hex) {
+    out.r = ( hex >> 16 & 255 )/255;
+    out.g = ( hex >> 8 & 255 )/255;
+    out.b = ( hex & 255 )/255;
+    return out
+  }
+
+  /** @typedef {<T extends RGBColor>(out: T, h: number, s: number, l: number) => T} SetHSLFn */
+  /** @type {SetHSLFn} */
+  const setHSL = (function () {
+    /**
+     * @param {number} p 
+     * @param {number} q 
+     * @param {number} t 
+     */
+    function hue2rgb( p, q, t ) {
+      if ( t < 0 ) t += 1;
+      if ( t > 1 ) t -= 1;
+      if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
+      if ( t < 1 / 2 ) return q;
+      if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
+      return p;
+    }
+
+    return /** @type {SetHSLFn} */ function setHSL(out, h, s, l) {
+      // h,s,l ranges are in 0.0 - 1.0
+      h = euclideanModulo( h, 1 );
+      s = clamp( s, 0, 1 );
+      l = clamp( l, 0, 1 );
+
+      if ( s === 0 ) {
+        out.r = out.g = out.b = l;
+      } else {
+        let p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
+        let q = ( 2 * l ) - p;
+
+        out.r = hue2rgb( q, p, h + 1 / 3 );
+        out.g = hue2rgb( q, p, h );
+        out.b = hue2rgb( q, p, h - 1 / 3 );
+      }
+
+      return out;
+    }
+  })();
+
+  /** @type {<TA extends RGBColor>(a: TA) => number} */
+  function toHex(a) {
+    return (a.r*255) << 16 ^ (a.g*255) << 8 ^ (a.b*255) << 0
+  }
+
+  /** @type {<TA extends RGBColor>(a: TA) => string} */
+  function toString(a) {
+    // @ts-ignore padStart()
+    return "#" + toHex(a).toString(16).padStart(6, '0')
+  }
+
+  // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
+  /** @type {Object.<string, number>} */
+  const COLOR_KEYWORDS = { 'aliceblue': 0xF0F8FF, 'antiquewhite': 0xFAEBD7, 'aqua': 0x00FFFF, 'aquamarine': 0x7FFFD4, 'azure': 0xF0FFFF,
+  	'beige': 0xF5F5DC, 'bisque': 0xFFE4C4, 'black': 0x000000, 'blanchedalmond': 0xFFEBCD, 'blue': 0x0000FF, 'blueviolet': 0x8A2BE2,
+  	'brown': 0xA52A2A, 'burlywood': 0xDEB887, 'cadetblue': 0x5F9EA0, 'chartreuse': 0x7FFF00, 'chocolate': 0xD2691E, 'coral': 0xFF7F50,
+  	'cornflowerblue': 0x6495ED, 'cornsilk': 0xFFF8DC, 'crimson': 0xDC143C, 'cyan': 0x00FFFF, 'darkblue': 0x00008B, 'darkcyan': 0x008B8B,
+  	'darkgoldenrod': 0xB8860B, 'darkgray': 0xA9A9A9, 'darkgreen': 0x006400, 'darkgrey': 0xA9A9A9, 'darkkhaki': 0xBDB76B, 'darkmagenta': 0x8B008B,
+  	'darkolivegreen': 0x556B2F, 'darkorange': 0xFF8C00, 'darkorchid': 0x9932CC, 'darkred': 0x8B0000, 'darksalmon': 0xE9967A, 'darkseagreen': 0x8FBC8F,
+  	'darkslateblue': 0x483D8B, 'darkslategray': 0x2F4F4F, 'darkslategrey': 0x2F4F4F, 'darkturquoise': 0x00CED1, 'darkviolet': 0x9400D3,
+  	'deeppink': 0xFF1493, 'deepskyblue': 0x00BFFF, 'dimgray': 0x696969, 'dimgrey': 0x696969, 'dodgerblue': 0x1E90FF, 'firebrick': 0xB22222,
+  	'floralwhite': 0xFFFAF0, 'forestgreen': 0x228B22, 'fuchsia': 0xFF00FF, 'gainsboro': 0xDCDCDC, 'ghostwhite': 0xF8F8FF, 'gold': 0xFFD700,
+  	'goldenrod': 0xDAA520, 'gray': 0x808080, 'green': 0x008000, 'greenyellow': 0xADFF2F, 'grey': 0x808080, 'honeydew': 0xF0FFF0, 'hotpink': 0xFF69B4,
+  	'indianred': 0xCD5C5C, 'indigo': 0x4B0082, 'ivory': 0xFFFFF0, 'khaki': 0xF0E68C, 'lavender': 0xE6E6FA, 'lavenderblush': 0xFFF0F5, 'lawngreen': 0x7CFC00,
+  	'lemonchiffon': 0xFFFACD, 'lightblue': 0xADD8E6, 'lightcoral': 0xF08080, 'lightcyan': 0xE0FFFF, 'lightgoldenrodyellow': 0xFAFAD2, 'lightgray': 0xD3D3D3,
+  	'lightgreen': 0x90EE90, 'lightgrey': 0xD3D3D3, 'lightpink': 0xFFB6C1, 'lightsalmon': 0xFFA07A, 'lightseagreen': 0x20B2AA, 'lightskyblue': 0x87CEFA,
+  	'lightslategray': 0x778899, 'lightslategrey': 0x778899, 'lightsteelblue': 0xB0C4DE, 'lightyellow': 0xFFFFE0, 'lime': 0x00FF00, 'limegreen': 0x32CD32,
+  	'linen': 0xFAF0E6, 'magenta': 0xFF00FF, 'maroon': 0x800000, 'mediumaquamarine': 0x66CDAA, 'mediumblue': 0x0000CD, 'mediumorchid': 0xBA55D3,
+  	'mediumpurple': 0x9370DB, 'mediumseagreen': 0x3CB371, 'mediumslateblue': 0x7B68EE, 'mediumspringgreen': 0x00FA9A, 'mediumturquoise': 0x48D1CC,
+  	'mediumvioletred': 0xC71585, 'midnightblue': 0x191970, 'mintcream': 0xF5FFFA, 'mistyrose': 0xFFE4E1, 'moccasin': 0xFFE4B5, 'navajowhite': 0xFFDEAD,
+  	'navy': 0x000080, 'oldlace': 0xFDF5E6, 'olive': 0x808000, 'olivedrab': 0x6B8E23, 'orange': 0xFFA500, 'orangered': 0xFF4500, 'orchid': 0xDA70D6,
+  	'palegoldenrod': 0xEEE8AA, 'palegreen': 0x98FB98, 'paleturquoise': 0xAFEEEE, 'palevioletred': 0xDB7093, 'papayawhip': 0xFFEFD5, 'peachpuff': 0xFFDAB9,
+  	'peru': 0xCD853F, 'pink': 0xFFC0CB, 'plum': 0xDDA0DD, 'powderblue': 0xB0E0E6, 'purple': 0x800080, 'rebeccapurple': 0x663399, 'red': 0xFF0000, 'rosybrown': 0xBC8F8F,
+  	'royalblue': 0x4169E1, 'saddlebrown': 0x8B4513, 'salmon': 0xFA8072, 'sandybrown': 0xF4A460, 'seagreen': 0x2E8B57, 'seashell': 0xFFF5EE,
+  	'sienna': 0xA0522D, 'silver': 0xC0C0C0, 'skyblue': 0x87CEEB, 'slateblue': 0x6A5ACD, 'slategray': 0x708090, 'slategrey': 0x708090, 'snow': 0xFFFAFA,
+  	'springgreen': 0x00FF7F, 'steelblue': 0x4682B4, 'tan': 0xD2B48C, 'teal': 0x008080, 'thistle': 0xD8BFD8, 'tomato': 0xFF6347, 'turquoise': 0x40E0D0,
+    'violet': 0xEE82EE, 'wheat': 0xF5DEB3, 'white': 0xFFFFFF, 'whitesmoke': 0xF5F5F5, 'yellow': 0xFFFF00, 'yellowgreen': 0x9ACD32 };
+
+  const COLOR_REGEX = /^((?:rgb|hsl)a?)\(\s*([^\)]*)\)/;
+
+  /** @type {(str: string) => RGBColor | RGBAColor} */
+  function parse(str) {
+    let m;
+
+    if ( m = COLOR_REGEX.exec( str ) ) {
+
+      // rgb / hsl
+      let color;
+      const name = m[ 1 ];
+      const components = m[ 2 ];
+
+      switch ( name ) {
+
+        case 'rgb':
+        case 'rgba':
+
+          if ( color = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
+
+            // rgb(255,0,0) rgba(255,0,0,0.5)
+            return {
+              r: Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255,
+              g: Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255,
+              b: Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255,
+              a: color[5] ? parseFloat( color[5] ) : undefined,
+            }
+          }
+
+          if ( color = /^(\d+)\%\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
+
+            // rgb(100%,0%,0%) rgba(100%,0%,0%,0.5)
+            return {
+              r: Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100,
+              g: Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100,
+              b: Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100,
+              a: color[5] ? parseFloat( color[5] ) : undefined,
+            }
+          }
+          break;
+
+        case 'hsl':
+        case 'hsla':
+
+          if ( color = /^([0-9]*\.?[0-9]+)\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
+
+            // hsl(120,50%,50%) hsla(120,50%,50%,0.5)
+            const rgba = setHSL({r:0,g:0,b:0,a:0}, parseFloat( color[ 1 ] )/360, parseInt( color[ 2 ], 10 )/100, parseInt( color[ 3 ], 10 )/100);
+            rgba.a = color[5] ? parseFloat( color[5] ) : undefined;
+            return rgba
+          }
+          break;
+
+      }
+
+    } else if ( m = /^\#([A-Fa-f0-9]+)$/.exec( str ) ) {
+
+      // hex color
+      const hex = m[ 1 ];
+      const size = hex.length;
+
+      if ( size === 3 ) {
+
+        // #ff0
+        return {
+          r: parseInt( hex.charAt( 0 ) + hex.charAt( 0 ), 16 ) / 255,
+          g: parseInt( hex.charAt( 1 ) + hex.charAt( 1 ), 16 ) / 255,
+          b: parseInt( hex.charAt( 2 ) + hex.charAt( 2 ), 16 ) / 255,
+        }
+
+      } else if ( size === 6 ) {
+
+        // #ff0000
+        return {
+          r: parseInt( hex.charAt( 0 ) + hex.charAt( 1 ), 16 ) / 255,
+          g: parseInt( hex.charAt( 2 ) + hex.charAt( 3 ), 16 ) / 255,
+          b: parseInt( hex.charAt( 4 ) + hex.charAt( 5 ), 16 ) / 255,
+        }
+      }
+    }
+
+    if ( str && str.length > 0 ) {
+      // color keywords
+      const hex = COLOR_KEYWORDS[ str ];
+
+      if ( hex !== undefined ) {
+        return setHex({r:0,g:0,b:0}, hex)
+      }
+    }
+  }
+
+  /**
+   * @typedef {{r: number, g: number, b: number}} RGBColor
+   * @typedef {number[] | RGBColor | string} AttributePart
+   * @typedef {{range?: AttributePart[], options?: AttributePart[]}} Attribute
+   */
+
+  /** @type {(str: string) => Attribute} */
+  function parse$1(str) {
+    const rangeOptions = parseRangeOptions(str);
+    if (rangeOptions.range) {
+      return { range: rangeOptions.range.map(part => parsePart(part)) }
+    } else {
+      return { options: rangeOptions.options.map(part => parsePart(part)) }
+    }
+  }
+
+  /** @typedef {(str: string) => AttributePart} ParsePartFn */
+  /** @type {ParsePartFn} */
+  const parsePart = (function() {
+    const toNumber = str => Number(str.trim());
+    
+    return /** @type {ParsePartFn} */function parsePart(str) {
+      if (str === "") {
+        return ""
+      }
+
+      let vec = str.split(" ").filter(x => x !== "").map(toNumber);
+      if (!vec.some(isNaN)) {
+        return vec
+      }
+    
+      let col = parse(str.trim());
+      if (col) {
+        return col
+      }
+    
+      return str.trim()
+    }
+  })();
+
+
+  // Convert a string "1..3" into {range: ["1","3"]}
+  // Convert a string "1|2|3" into {options: ["1","2","3"]}
+  /** @type {(str: string) => {options?: string[], range?: string[]}} */
+  function parseRangeOptions(str) {
+    const options = str.split("|");
+    if (options.length > 1) {
+      return { options }
+    }
+
+    const range = str.split("..");
+    if (range.length > 1) {
+      return { range: [ range[0], range[1] ] } 
+    }
+
+    return { options }
+  }
+
+  /** @typedef {(att: Attribute, randFn: () => number) => AttributePart} RandomizeFn */
+  /** @type {RandomizeFn} */
+  const randomize = (function() {
+    let col = {r: 0, g: 0, b: 0};
+    let vec = [];
+
+    return /** @type {RandomizeFn} */ function randomize(attr, randFn = Math.random) {
+      if (attr.range) {
+        const min = attr.range[0];
+        const max = attr.range[1];
+
+        if (isColor(min)) {
+          return color(col, /** @type {RGBColor} */ (min), /** @type {RGBColor} */ (max))
+        } else if (Array.isArray(min) && min.length > 0 && typeof min[0] === "number") {
+          return vector(vec, /** @type {number[]} */ (min), /** @type {number[]} */ (max))
+        // } else if (typeof min === "number") {
+        //   return pseudorandom.float(min, max) // not needed all numbers should be in a float array
+        } else {
+          return min
+        }
+        
+      } else if (attr.options) {
+        return entry(attr.options, randFn)
+      }
+    }
+
+  })();
+
+  /** @type {(attr: any) => string} */
+  function stringify(attr) {
+    if (typeof attr === "object") {
+      if (attr.range) { return stringify(attr.range[0]) + ".." + stringify(attr.range[1]) }
+      if (attr.options) { return attr.options.map(option => stringify(option)).join("|") }
+      if (isColor(attr)) { return toString(attr) }
+      if ("x" in attr && "y" in attr) { return attr.x + " " + attr.y + ("z" in attr ? " " + attr.z : "") }
+      if (attr.length && "0" in attr) { return typeof attr[0] === "number" ? attr.join(" ") : attr.join(",") }
+    }
+    return attr.toString()
   }
 
   // remix of https://github.com/tweenjs/tween.js/blob/master/src/Tween.js
@@ -719,13 +1147,25 @@
     'ease-in-out-bounce': Bounce.InOut,
   };
 
+  /**
+   * @typedef {{x: number, y: number, z: number}} VecXYZ
+   * @typedef {{min: VecXYZ, max: VecXYZ}} Extent
+   * @typedef {number} Distance
+   */
+
+  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetFromObject3DFn */
+  /** @type {SetFromObject3DFn} */
   const setFromObject3D = (function() {
+    // @ts-ignore
     let tempPosition = new THREE.Vector3();
+    // @ts-ignore
     let tempQuaternion = new THREE.Quaternion();
+    // @ts-ignore
     let tempScale = new THREE.Vector3();
+    // @ts-ignore
     let tempBox3 = new THREE.Box3();
 
-    return function setFromObject3D(ext, object3D) {
+    return /** @type {SetFromObject3DFn} */function setFromObject3D(ext, object3D) {
       if (object3D.children.length === 0) {
         return ext
       }
@@ -759,25 +1199,20 @@
     }
   })();
 
+  /** @type {<TE extends Extent>(ext: TE) => number} */
   function volume(ext) {
     return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
   }
 
-  /**
-   * Returns the distance between pointA and the surface of boxB. Negative values indicate
-   * that pointA is inside of boxB
-   * 
-   * @param {{x,y,z}} pointA - point
-   * @param {{x,y,z}} boxBMin - min extents of boxB
-   * @param {{x,y,z}} boxBMax - max extents of boxB
-   * @param {float32[16]} affineB - colum-wise matrix for B
-   * @param {{x,y,z}} extraScale - additional scale to apply to the output distance
-   */
+  // Returns the distance between pointA and the surface of boxB. Negative values indicate
+  // that pointA is inside of boxB
+  /** @typedef {<PA extends VecXYZ, BN extends VecXYZ, BX extends VecXYZ>(pointA: PA, boxBMin: BN, boxBMax: BX, affineB: Affine4) => number} PointToBoxFn */
+  /** @type {PointToBoxFn} */
   const pointToBox = (function() {
-    let vertA = {};
-    let scaleA = {};
+    let vertA = {x:0,y:0,z:0};
+    let scaleA = {x:1,y:1,z:1};
 
-    return function pointToBox(pointA, boxBMin, boxBMax, affineB) {
+    return /** @type {PointToBoxFn} */function pointToBox(pointA, boxBMin, boxBMax, affineB) {
       decompose( affineB, undefined, undefined, scaleA );
       invertAndMultiplyVecXYZ( vertA, affineB, pointA );
       const vx = vertA.x, vy = vertA.y, vz = vertA.z;
@@ -793,206 +1228,16 @@
     }
   })();
 
-  // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
-
-  function setHex(out, hex) {
-    out.r = ( hex >> 16 & 255 )/255;
-    out.g = ( hex >> 8 & 255 )/255;
-    out.b = ( hex & 255 )/255;
-    return out
-  }
-
-  const setHSL = (function () {
-    function hue2rgb( p, q, t ) {
-      if ( t < 0 ) t += 1;
-      if ( t > 1 ) t -= 1;
-      if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
-      if ( t < 1 / 2 ) return q;
-      if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
-      return p;
-    }
-
-    return function setHSL(out, h, s, l) {
-      // h,s,l ranges are in 0.0 - 1.0
-      h = euclideanModulo( h, 1 );
-      s = clamp( s, 0, 1 );
-      l = clamp( l, 0, 1 );
-
-      if ( s === 0 ) {
-        out.r = out.g = out.b = l;
-      } else {
-        let p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
-        let q = ( 2 * l ) - p;
-
-        out.r = hue2rgb( q, p, h + 1 / 3 );
-        out.g = hue2rgb( q, p, h );
-        out.b = hue2rgb( q, p, h - 1 / 3 );
-      }
-
-      return out;
-    }
-  })();
-
-  function toHex(a) {
-    return (a.r*255) << 16 ^ (a.g*255) << 8 ^ (a.b*255) << 0
-  }
-
-  function toString(a) {
-    return "#" + toHex(a).toString(16).padStart(6, '0')
-  }
-
-  // Convert a string "1 2 3" into a type and value {type: "numbers", value: [1,2,3]}
-  const parseValue = (function() {
-    const toNumber = str => Number(str.trim());
-
-    return function parseValue(str) {
-      if (str === "") {
-        return {type: "any", value: ""}
-      }
-
-      let vec = str.split(" ").filter(x => x !== "").map(toNumber);
-      if (!vec.every(isNaN)) {
-        return {type: "numbers", value: vec}
-      }
-    
-      let col = parseColor(str.trim());
-      if (col) {
-        return {type: "color", value: col}
-      }
-    
-      return {type: "string", value: str.trim()}
-    }
-  })();
-
-  // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
-  const COLOR_KEYWORDS = { 'aliceblue': 0xF0F8FF, 'antiquewhite': 0xFAEBD7, 'aqua': 0x00FFFF, 'aquamarine': 0x7FFFD4, 'azure': 0xF0FFFF,
-  	'beige': 0xF5F5DC, 'bisque': 0xFFE4C4, 'black': 0x000000, 'blanchedalmond': 0xFFEBCD, 'blue': 0x0000FF, 'blueviolet': 0x8A2BE2,
-  	'brown': 0xA52A2A, 'burlywood': 0xDEB887, 'cadetblue': 0x5F9EA0, 'chartreuse': 0x7FFF00, 'chocolate': 0xD2691E, 'coral': 0xFF7F50,
-  	'cornflowerblue': 0x6495ED, 'cornsilk': 0xFFF8DC, 'crimson': 0xDC143C, 'cyan': 0x00FFFF, 'darkblue': 0x00008B, 'darkcyan': 0x008B8B,
-  	'darkgoldenrod': 0xB8860B, 'darkgray': 0xA9A9A9, 'darkgreen': 0x006400, 'darkgrey': 0xA9A9A9, 'darkkhaki': 0xBDB76B, 'darkmagenta': 0x8B008B,
-  	'darkolivegreen': 0x556B2F, 'darkorange': 0xFF8C00, 'darkorchid': 0x9932CC, 'darkred': 0x8B0000, 'darksalmon': 0xE9967A, 'darkseagreen': 0x8FBC8F,
-  	'darkslateblue': 0x483D8B, 'darkslategray': 0x2F4F4F, 'darkslategrey': 0x2F4F4F, 'darkturquoise': 0x00CED1, 'darkviolet': 0x9400D3,
-  	'deeppink': 0xFF1493, 'deepskyblue': 0x00BFFF, 'dimgray': 0x696969, 'dimgrey': 0x696969, 'dodgerblue': 0x1E90FF, 'firebrick': 0xB22222,
-  	'floralwhite': 0xFFFAF0, 'forestgreen': 0x228B22, 'fuchsia': 0xFF00FF, 'gainsboro': 0xDCDCDC, 'ghostwhite': 0xF8F8FF, 'gold': 0xFFD700,
-  	'goldenrod': 0xDAA520, 'gray': 0x808080, 'green': 0x008000, 'greenyellow': 0xADFF2F, 'grey': 0x808080, 'honeydew': 0xF0FFF0, 'hotpink': 0xFF69B4,
-  	'indianred': 0xCD5C5C, 'indigo': 0x4B0082, 'ivory': 0xFFFFF0, 'khaki': 0xF0E68C, 'lavender': 0xE6E6FA, 'lavenderblush': 0xFFF0F5, 'lawngreen': 0x7CFC00,
-  	'lemonchiffon': 0xFFFACD, 'lightblue': 0xADD8E6, 'lightcoral': 0xF08080, 'lightcyan': 0xE0FFFF, 'lightgoldenrodyellow': 0xFAFAD2, 'lightgray': 0xD3D3D3,
-  	'lightgreen': 0x90EE90, 'lightgrey': 0xD3D3D3, 'lightpink': 0xFFB6C1, 'lightsalmon': 0xFFA07A, 'lightseagreen': 0x20B2AA, 'lightskyblue': 0x87CEFA,
-  	'lightslategray': 0x778899, 'lightslategrey': 0x778899, 'lightsteelblue': 0xB0C4DE, 'lightyellow': 0xFFFFE0, 'lime': 0x00FF00, 'limegreen': 0x32CD32,
-  	'linen': 0xFAF0E6, 'magenta': 0xFF00FF, 'maroon': 0x800000, 'mediumaquamarine': 0x66CDAA, 'mediumblue': 0x0000CD, 'mediumorchid': 0xBA55D3,
-  	'mediumpurple': 0x9370DB, 'mediumseagreen': 0x3CB371, 'mediumslateblue': 0x7B68EE, 'mediumspringgreen': 0x00FA9A, 'mediumturquoise': 0x48D1CC,
-  	'mediumvioletred': 0xC71585, 'midnightblue': 0x191970, 'mintcream': 0xF5FFFA, 'mistyrose': 0xFFE4E1, 'moccasin': 0xFFE4B5, 'navajowhite': 0xFFDEAD,
-  	'navy': 0x000080, 'oldlace': 0xFDF5E6, 'olive': 0x808000, 'olivedrab': 0x6B8E23, 'orange': 0xFFA500, 'orangered': 0xFF4500, 'orchid': 0xDA70D6,
-  	'palegoldenrod': 0xEEE8AA, 'palegreen': 0x98FB98, 'paleturquoise': 0xAFEEEE, 'palevioletred': 0xDB7093, 'papayawhip': 0xFFEFD5, 'peachpuff': 0xFFDAB9,
-  	'peru': 0xCD853F, 'pink': 0xFFC0CB, 'plum': 0xDDA0DD, 'powderblue': 0xB0E0E6, 'purple': 0x800080, 'rebeccapurple': 0x663399, 'red': 0xFF0000, 'rosybrown': 0xBC8F8F,
-  	'royalblue': 0x4169E1, 'saddlebrown': 0x8B4513, 'salmon': 0xFA8072, 'sandybrown': 0xF4A460, 'seagreen': 0x2E8B57, 'seashell': 0xFFF5EE,
-  	'sienna': 0xA0522D, 'silver': 0xC0C0C0, 'skyblue': 0x87CEEB, 'slateblue': 0x6A5ACD, 'slategray': 0x708090, 'slategrey': 0x708090, 'snow': 0xFFFAFA,
-  	'springgreen': 0x00FF7F, 'steelblue': 0x4682B4, 'tan': 0xD2B48C, 'teal': 0x008080, 'thistle': 0xD8BFD8, 'tomato': 0xFF6347, 'turquoise': 0x40E0D0,
-    'violet': 0xEE82EE, 'wheat': 0xF5DEB3, 'white': 0xFFFFFF, 'whitesmoke': 0xF5F5F5, 'yellow': 0xFFFF00, 'yellowgreen': 0x9ACD32 };
-
-  const COLOR_REGEX = /^((?:rgb|hsl)a?)\(\s*([^\)]*)\)/;
-
-  function parseColor(str) {
-    let m;
-
-    if ( m = COLOR_REGEX.exec( str ) ) {
-
-      // rgb / hsl
-      let color;
-      const name = m[ 1 ];
-      const components = m[ 2 ];
-
-      switch ( name ) {
-
-        case 'rgb':
-        case 'rgba':
-
-          if ( color = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
-
-            // rgb(255,0,0) rgba(255,0,0,0.5)
-            return {
-              r: Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255,
-              g: Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255,
-              b: Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255,
-              a: color[5] ? parseFloat( color[5] ) : undefined,
-            }
-          }
-
-          if ( color = /^(\d+)\%\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
-
-            // rgb(100%,0%,0%) rgba(100%,0%,0%,0.5)
-            return {
-              r: Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100,
-              g: Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100,
-              b: Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100,
-              a: color[5] ? parseFloat( color[5] ) : undefined,
-            }
-          }
-          break;
-
-        case 'hsl':
-        case 'hsla':
-
-          if ( color = /^([0-9]*\.?[0-9]+)\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec( components ) ) {
-
-            // hsl(120,50%,50%) hsla(120,50%,50%,0.5)
-            const rgba = setHSL({}, parseFloat( color[ 1 ] )/360, parseInt( color[ 2 ], 10 )/100, parseInt( color[ 3 ], 10 )/100);
-            rgba.a = color[5] ? parseFloat( color[5] ) : undefined;
-            return rgba
-          }
-          break;
-
-      }
-
-    } else if ( m = /^\#([A-Fa-f0-9]+)$/.exec( str ) ) {
-
-      // hex color
-      const hex = m[ 1 ];
-      const size = hex.length;
-
-      if ( size === 3 ) {
-
-        // #ff0
-        return {
-          r: parseInt( hex.charAt( 0 ) + hex.charAt( 0 ), 16 ) / 255,
-          g: parseInt( hex.charAt( 1 ) + hex.charAt( 1 ), 16 ) / 255,
-          b: parseInt( hex.charAt( 2 ) + hex.charAt( 2 ), 16 ) / 255,
-        }
-
-      } else if ( size === 6 ) {
-
-        // #ff0000
-        return {
-          r: parseInt( hex.charAt( 0 ) + hex.charAt( 1 ), 16 ) / 255,
-          g: parseInt( hex.charAt( 2 ) + hex.charAt( 3 ), 16 ) / 255,
-          b: parseInt( hex.charAt( 4 ) + hex.charAt( 5 ), 16 ) / 255,
-        }
-      }
-    }
-
-    if ( str && str.length > 0 ) {
-      // color keywords
-      const hex = COLOR_KEYWORDS[ str ];
-
-      if ( hex !== undefined ) {
-        return setHex({}, hex)
-      }
-    }
-  }
-
-  /**
-   * Breaks a selector string into {type, id, classes, attrs}
-   * 
-   * @param {string} str - selector in the form type#id.class1.class2[attr1=value1][attr2=value2]
-   * @return {object} { type, id, classes[], attrs{} }
-   */
-  function parseSelector(str) {
+  // Breaks a selector string into {type, id, classes, attrs}
+  /** @type { (str: string) => {type: string, id: string, classes: string[], attrs: {[key: string]: string}} } */
+  function parse$2(str) {
     let results = {type: "", id: "", classes: [], attrs: {}};
     let token = "type";
     let tokenStart = 0;
     let lastAttr = "";
 
-    const setToken = (newToken, i) => {
+    /** @type {(newToken: string, i: number) => void} */
+    function setToken(newToken, i) {
       let tokenValue = str.slice(tokenStart, i);
 
       if (i > tokenStart) {
@@ -1022,7 +1267,7 @@
 
       token = newToken;
       tokenStart = i + 1; // ignore the token character
-    };
+    }
 
     for (let i = 0, n = str.length; i < n; i++) {
       const c = str[i];
@@ -1058,10 +1303,6 @@
     if (typeof thing == "object") {
       if (Array.isArray(thing)) {
         return thing.map(convertToString)
-      }
-
-      if (thing instanceof THREE.Color) {
-        return "#" + thing.getHexString()
       }
 
       if ("r" in thing && "g" in thing && "b" in thing) {
@@ -1112,10 +1353,10 @@
       }
     
       // e.g. object3dmap.mesh.material.uniforms.color
-      const path = buildPath(target, parts);
+      const path = getWithPath(target, parts);
       if (path) {
         // this only works for boolean, string, color and an array of one element
-        path[part] = Array.isArray(value) && value.length === 1 ? value[0] : value;
+        path[prop] = Array.isArray(value) && value.length === 1 ? value[0] : value;
       } else {
         console.warn(`unknown path for setProperty() '${prop}'`);
       }
@@ -1124,256 +1365,12 @@
   })();
 
   // Copyright 2018-2019 harlyq
-  // MIT license
-
-  function BasicRandom() {
-    const MAX_UINT32 = 0xffffffff;
-    let seed = -1;
-    
-    function setSeed(s) {
-      seed = s;
-    }
-    
-    function random() {
-      if (seed < 0) {
-        return Math.random()
-      }
-    
-      seed = (1664525*seed + 1013904223) % MAX_UINT32;
-      return seed/MAX_UINT32
-    }
-    
-    function randomInt(n) {
-      return ~~(random()*n)
-    }
-    
-    function randomNumber(min, max) {
-      if (min === max) { return min }
-      return random()*(max - min) + min
-    }
-    
-    return {
-      setSeed,
-      random,
-      randomInt,
-      randomNumber,
-    }
-  }
-
-  // Copyright 2018-2019 harlyq
 
   const MAX_FRAME_TIME_MS = 100;
 
-  // given [{type: "numbers", value: [1,2]}, {type: "any", value: ""}, {type: "numbers", value: [5]}] return type "numbers"
-  // if there are inconsistencies in the the types then generate an warning
-  function calcTypeOfArrayOfTypes(list) {
-    let type = "any";
-    for (let item of list) {
-      if (item.type === "any" || item.type === type) {
-        continue
-      } else if (type === "any") {
-        type = item.type;
-      } else {
-        console.warn(`incompatible type found '${item.type}', expecting '${type}'`);
-      }
-    }
-    return type
-  }
-
-  // Convert a string "1 2 3" into {type: "numbers", value: [1,2,3]}
-  // Convert a string "1..3" into {type: "numbers", range: [1,3]}
-  // Convert a string "1|2|3" into {type: "numbers", options: [1,2,3]}
-  function parseValueRangeOption(str) {
-    const options = str.split("|");
-    if (options.length > 1) {
-      const parsedOptions = options.map(parseValue);
-      return { options: parsedOptions.map(x => x.value), type: calcTypeOfArrayOfTypes(parsedOptions) }
-    }
-
-    const range = str.split("..");
-    if (range.length > 1) {
-      const parsedRange = range.map(parseValue);
-      return { range: parsedRange.map(x => x.value), type: calcTypeOfArrayOfTypes(parsedRange) } 
-    }
-
-    const info = parseValue(str);
-    return { value: info.value, type: info.type }
-  }
-
-  // console.assert(deepEqual(parseValueRangeOption("1 2 3"), { type: "numbers", value: [1,2,3]}))
-  // console.assert(deepEqual(parseValueRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
-  // console.assert(deepEqual(parseValueRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
-  // console.assert(deepEqual(parseValueRangeOption("1 2||3"), { type: "numbers", options: [[1,2],"",[3]]}))
-  // console.assert(deepEqual(parseValueRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
-
-
-  // Convert a string "1 2 3, 4|5 6, 7..8" into a type and an array of values, ranges or options {type: "numbers", slots: [value: [1,2,3], options: [[4],[5,6]]: range: [[7],[8]]]}
-  function parseKeyframeData(str) {
-    let slots = str.split(",").map(parseValueRangeOption);
-
-    // return the type and slots (stripping type information from each slot)
-    return { 
-      type: calcTypeOfArrayOfTypes(slots), 
-      slots: slots.map(x => {
-        if ("range" in x) return { range: x.range }
-        if ("options" in x) return { options: x.options }
-        if ("value" in x) return { value: x.value }
-      })
-    }
-  }
-
-
-  // const colorRulesToHexString = (rules) => { 
-  //   const colorToString = x => x instanceof THREE.Color ? x.getHexString() : x
-  //   return { 
-  //     type: rules.type, 
-  //     slots: rules.slots.map(x => { 
-  //       for (let type in x) { 
-  //         return { [type] : Array.isArray(x[type]) ? x[type].map(colorToString) : colorToString(x[type]) }
-  //       } 
-  //     }) 
-  //   }
-  // }
-  // console.assert(deepEqual(parseKeyframeData("1,2,3"), { type: "numbers", slots: [{value: [1]}, {value: [2]}, {value: [3]}] }))
-  // console.assert(deepEqual(parseKeyframeData("1..2, 3, 4..5"), { type: "numbers", slots: [{range: [[1],[2]]}, {value: [3]}, {range: [[4],[5]]}] }))
-  // console.assert(deepEqual(parseKeyframeData("a|b|c, d|e, f"), { type: "string", slots: [{options: ["a","b","c"]}, {options: ["d","e"]}, {value: "f"}] }))
-  // console.assert(deepEqual(colorRulesToHexString(parseKeyframeData("yellow, black..blue, orange|green")), { type: "color", slots: [{value: "ffff00"}, {range: ["000000", "0000ff"]}, {options: ["ffa500","008000"]}] }))
-  // console.assert(deepEqual(parseKeyframeData(",1 2,3 4 5"), { type: "numbers", slots: [{value: ""}, {value: [1,2]}, {value: [3,4,5]}] }))
-  // console.assert(deepEqual(colorRulesToHexString(parseKeyframeData("..red,,blue|green|")), { type: "color", slots: [{range: ["", "ff0000"]}, {value: ""}, {options: ["0000ff", "008000", ""]}] }))
-
-
-  function randomizeRange(type, range, randFn) {
-    const min = range[0];
-    const max = range[1];
-
-    const randomNumber = (min, max) => {
-      if (min === max) return min
-      return randFn()*(max - min) + min
-    };
-
-    if (type === "numbers") {
-      const m = Math.min(min.length, max.length); // count the least elements
-      let result = max.length > m ? max.slice() : min.slice(); // copy the larger array
-      for (let i = 0; i < m; i++) {
-        result[i] = randomNumber(min[i], max[i]); // randomize the parts where values exist for both min and max
-      }
-      return result
-    }
-    
-    if (type === "color") {
-      return new THREE.Color(randomNumber(min.r, max.r), randomNumber(min.g, max.g), randomNumber(min.b, max.b))
-    }
-
-    return randFn() > 0.5 ? min : max
-  }
-
-
-  const RULE_RANDOMIZER = {
-    "value": (type, value, randFn) => value,
-    "options": (type, parts, randFn) => parts[~~(randFn()*parts.length)],
-    "range": randomizeRange
-  };
-
-
-  // const stringParts = ["a","ab","bc"];
-  // const vecParts = [[1,2,3],[10,20]]
-  // for (let i = 0; i < 50; i++) {
-  //   console.assert(typeof RULE_RANDOMIZER["options"]("numbers", [], Math.random) === "undefined")
-  //   console.assert(RULE_RANDOMIZER["options"]("string", ["x"], Math.random) === "x")
-  //   console.assert(stringParts.includes(RULE_RANDOMIZER["options"]("string", stringParts, Math.random)))
-  //   console.assert(["a", "b"].includes(RULE_RANDOMIZER["range"]("string", ["a", "b", "c"], Math.random)))
-    
-  //   const x = RULE_RANDOMIZER["range"]("numbers", [[1],[2]], Math.random)
-  //   console.assert(x >= 1 && x < 2)
-
-  //   const y = RULE_RANDOMIZER["range"]("numbers", vecParts, Math.random)
-  //   console.assert(y.length === 3 && y[0] >= vecParts[0][0] && y[0] < vecParts[1][0] && y[1] >= vecParts[0][1] && y[1] < vecParts[1][1] && y[2] === vecParts[0][2])
-  // }
-
-
-  // takes a set of rules (e.g from parseKeyframeData) and provides an array of random values that meets those rules
-  // e.g. {type: "numbers", slots: [value: [1,2,3], options: [[4],[5,6]]: range: [[7],[8]]]} produces [[1,2,3],[5,6],[7.5]]
-  function randomRules(rules, randFn) {
-    let prevX; // this will always be value because the first slot will always contain valid data
-
-    return rules.slots.map(x => {
-      const slotType = Object.keys(x)[0];
-      
-      // replace empty parts with the previous value
-      let slot = x[slotType];
-      if (Array.isArray(slot) && slot.includes("")) {
-        console.assert(typeof prevX !== "undefined");
-        slot = slot.map(x => x === "" ? prevX : x);
-      } else if (slot === "") {
-        console.assert(typeof prevX !== "undefined");
-        slot = prevX;
-      }
-
-      prevX = RULE_RANDOMIZER[slotType](rules.type, slot, randFn);
-      return prevX
-    })
-  }
-
-  function hasRandomness(rules) {
-    return rules.slots.some(x => !("value" in x))
-  }
-
-  // a and b may be different lengths
-  function lerpNumbers(a, b, t, out) {
-    const m = Math.min(a.length, b.length);
-    out.length = Math.max(a.length, b.length);
-
-    for (let i = 0; i < m; i++) {
-      out[i] = THREE.Math.lerp(a[i], b[i], t);
-    }
-    for (let i = m; i < a.length; i++) {
-      out[i] = a[i];
-    }
-    for (let i = m; i < b.length; i++) {
-      out[i] = b[i];
-    }
-
-    return out
-  }
-
-  // const lerpHSL = (a, b, t) => {
-  //   let h = THREE.Math.lerp(a.h, b.h, t)
-  //   let s = THREE.Math.lerp(a.s, b.s, t)
-  //   let l = THREE.Math.lerp(a.l, b.l, t)
-  //   return {h,s,l}
-  // }
-
-
-  function lerpColor(a, b, t, outColor) {
-    return outColor.setRGB(a.r, a.g, a.b).lerp(b, t)
-  }
-
-
-  function lerpReturnFirst(a, b, t, out) {
-    return a
-  }
-
-
-  const SLOT_LERP_FUNCTION = {
-    "numbers": lerpNumbers,
-    "color": lerpColor,
-    "string": lerpReturnFirst,
-    "boolean": lerpReturnFirst,
-    "any": lerpReturnFirst,
-  };
-
-
-  let lerpResultHolder = {
-    "numbers": [],
-    "color": new THREE.Color(),
-    "string": "",
-    "boolean": false,
-    "any": ""
-  };
-
   // Takes a set of keys (from randomRules()), and provides an interpolated value, where r is 0 (first key) to 1 (last key)
   // e.g. [[1,2,3],[5,6],[7.5]] @ r = 0.25 becomes [3,4,3]
-  function lerpKeys(type, keys, r, easingFn) {
+  function lerpKeys(type, keys, r, easingFn = Linear) {
     const n = keys.length;
 
     if (r <= 0 || n <= 1) {
@@ -1385,16 +1382,22 @@
     const k = r*(n - 1);
     const i = ~~k;
     const t = easingFn(k - i);
-    return SLOT_LERP_FUNCTION[type](keys[i], keys[i+1], t, lerpResultHolder[type])
+    switch (type) {
+      case "object": return lerpObject(keys[i], keys[i+1], t)
+      case "vector": return lerpArray(keys[i], keys[i+1], t)
+      case "number": return lerp(keys[i], keys[i+1], t)
+      default: return keys[i]
+    }
   }
 
   // const EPSILON = 1e-4
-  // console.assert( Math.abs(lerpKeys("numbers", [[1],[2],[3]], 0)[0] - 1) < EPSILON )
-  // console.assert( Math.abs(lerpKeys("numbers", [[1],[2],[3]], 0.5)[0] - 2) < EPSILON )
-  // console.assert( Math.abs(lerpKeys("numbers", [[1],[2],[3]], 0.25)[0] - 1.5) < EPSILON )
-  // console.assert( Math.abs(lerpKeys("numbers", [[1],[2],[3]], 0.75)[0] - 2.5) < EPSILON )
-  // console.assert( Math.abs(lerpKeys("numbers", [[1],[2],[3]], 1)[0] - 3) < EPSILON )
-  // console.assert( Math.abs(lerpKeys("numbers", [[1,2,3],[4,5,6],[7,8,9]], 0.75)[1] - 6.5) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("vector", [[1],[2],[3]], 0)[0] - 1) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("vector", [[1],[2],[3]], 0.5)[0] - 2) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("vector", [[1],[2],[3]], 0.25)[0] - 1.5) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("vector", [[1],[2],[3]], 0.75)[0] - 2.5) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("vector", [[1],[2],[3]], 1)[0] - 3) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("vector", [[1,2,3],[4,5,6],[7,8,9]], 0.75)[1] - 6.5) < EPSILON )
+  // console.assert( Math.abs(lerpKeys("object", [{r:0,g:0,b:0},{r:1,g:1,b:1}], 0.5).r - 0.5) < EPSILON )
   // console.assert( lerpKeys("string", ["a","b","c"], 0) === "a" )
   // console.assert( lerpKeys("string", ["a","b","c"], 1) === "c" )
   // console.assert( lerpKeys("string", ["a","b","c"], 0.25) === "a" )
@@ -1410,7 +1413,7 @@
     // e.g. object3dmap.mesh.material.uniforms.color
     const path = getWithPath(target, parts);
     if (path) {
-      return convertToString(path[part])
+      return convertToString(path[prop])
     } else {
       console.warn(`unknown path for getProperty() '${prop}'`);
     }
@@ -1432,7 +1435,7 @@
     multiple: true,
 
     init() {
-      this.pseudoRandom = BasicRandom();
+      this.lcg = lcg();
 
       this.loopTime = 0; // seconds
       this.loops = 0;
@@ -1462,7 +1465,7 @@
       const originalSchema = AFRAME.components[this.name].schema;
 
       if (oldData.seed !== data.seed) {
-        this.pseudoRandom.setSeed(data.seed); // must be updated before other attributes
+        this.lcg.setSeed(data.seed); // must be updated before other attributes
       }
 
       // remove old rules and keys
@@ -1475,11 +1478,8 @@
 
       for (let prop in data) {
         if (oldData[prop] !== data[prop] && !(prop in originalSchema)) {
-          this.rules[prop] = parseKeyframeData(data[prop]);
-
-          this.guessMissingFirstValue(prop, this.rules[prop]);
-
-          this.keys[prop] = randomRules(this.rules[prop], this.pseudoRandom.random);
+          const value = data[prop];
+          this.rules[prop] = value.split(",").map(attr => parse$1(attr));
         }
       }
 
@@ -1492,6 +1492,8 @@
         this.forward = (data.direction !== "backward");
         this.loopTime = this.forward ? 0 : data.duration;
       }
+
+      this.generateKeys(true);
     },
 
     tick(time, timeDelta) {
@@ -1521,11 +1523,7 @@
           }
 
           if (data.randomizeEachLoop) {
-            for (let prop in this.keys) {
-              if (hasRandomness(this.rules[prop])) {
-                this.keys[prop] = randomRules(this.rules[prop], this.pseudoRandom.random);
-              }
-            }
+            this.generateKeys(false); // no need to resolve missing rules because none should be missing
           }
         }
 
@@ -1533,24 +1531,54 @@
         
         for (let prop in this.keys) {
           let r = THREE.Math.clamp(this.loopTime/data.duration, 0, 1);
-          const value = lerpKeys(this.rules[prop].type, this.keys[prop], r, easingFn);
+          const value = lerpKeys(this.keyTypes[prop], this.keys[prop], r, easingFn);
           setProperty(this.el, prop, value);
         }
       }
     },
 
-    guessMissingFirstValue(prop, rule) {
-      if (rule.slots.length > 0) {
-        let slot0 = rule.slots[0];
-        const emptyValue = slot0.value === "";
-        const emptyRange = slot0.range && slot0.range.includes("");
-        const emptyOption = slot0.options && slot0.options.includes("");
+    generateKeys(resolveMissingRules) {
+      let lastKey;
 
-        if (emptyValue || emptyRange || emptyOption) {
-          let info = parseValue(getPropertyAsString(this.el, prop));
-          if (emptyValue) slot0.value = info.value;
-          if (emptyRange) slot0.range = slot0.range.map(x => x === "" ? info.value : x);
-          if (emptyOption) slot0.options = slot0.options.map(x => x === "" ? info.value : x);
+      function guessType(thing) {
+        if (typeof thing === "object") {
+          if (thing.length && typeof thing[0] === "number") {
+            return "vector" 
+          } else {
+            return "object"
+          }
+        } else {
+          return typeof thing
+        }
+      }
+
+      this.keys = {};
+      this.keyTypes = {};
+
+      for (let prop in this.rules) {
+        this.keys[prop] = [];
+
+        for (let i = 0, n = this.rules[prop].length; i < n; i++) {
+          // if moving backwards then the last rule is the first rule executed
+          const ruleIndex = this.forward ? i : n - 1 - i;
+          const rule = this.rules[prop][ruleIndex];
+
+          if (resolveMissingRules) {
+            // if we are missing a value, use the last value, or the current value if this is the first rule
+            const emptyRange = rule.range && rule.range.includes("");
+            const emptyOption = rule.options && rule.options.includes("");
+      
+            if (emptyRange || emptyOption) {
+              // if missing the first rule then replace it with the existing value
+              let info = i == 0 ? parsePart(getPropertyAsString(this.el, prop)) : lastKey;
+              if (emptyRange) rule.range = rule.range.map(x => x === "" ? info : x);
+              if (emptyOption) rule.options = rule.options.map(x => x === "" ? info : x);
+            }
+          }
+
+          lastKey = randomize(rule, this.lcg.random);
+          this.keys[prop][ruleIndex] = lastKey;
+          this.keyTypes[prop] = this.keyTypes[prop] || guessType(lastKey);
         }
       }
     },
@@ -1574,6 +1602,8 @@
    * @member {object} shader - Determines how material is shaded. Defaults to `standard`,
    *         three.js's implementation of PBR. Another standard shading model is `flat` which
    *         uses MeshBasicMaterial.
+   * @member {object} material
+   * @member {object[]} oldMaterials
    */
   AFRAME.registerComponent('materialx', {
     schema: {
@@ -1847,8 +1877,8 @@
    * @param {object} el - element to replace material on
    * @param {string} nameGlob - regex of name of the material to replace. use '' for the material from getObject3D('mesh')
    * @param {object} newMaterials - list of materials to use
-   * @param {object} replacedList - materials that have been replaced
-   * @returns {object[]} - list of replaced materials
+   * @param {object} outReplacedList - materials that have been replaced
+   * @returns {boolean} - list of replaced materials
    */
   function replaceMaterial (el, nameGlob, newMaterials, outReplacedList) {
     var hasMaterials = false;
@@ -2329,8 +2359,8 @@
       if (this.mesh) {
         this.el.removeObject3D(this.mesh.name);
       }
-      if (data.model) {
-        data.model.removeEventListener("object3dset", this.handleObject3DSet);
+      if (this.data.model) {
+        this.data.model.removeEventListener("object3dset", this.handleObject3DSet);
       }
     },
 
@@ -3069,7 +3099,7 @@
         let index = startIndex;
         let id = this.nextID;
 
-        modelFillFn = randomPointInTriangle;
+        let modelFillFn = randomPointInTriangle;
         switch (data.modelFill) {
           case "edge": modelFillFn = randomPointOnTriangleEdge; break
           case "vertex": modelFillFn = randomVertex; break
@@ -3210,7 +3240,7 @@
       v1.fromArray(vertices, triangleOffset);
       v2.fromArray(vertices, triangleOffset + 3);
       v3.fromArray(vertices, triangleOffset + 6);
-      r1 = Math.random();
+      let r1 = Math.random();
       if (r1 > 2/3) {
         pos.copy(v1).sub(v3).multiplyScalar(r1*3 - 2).add(v3);
       } else if (r1 > 1/3) {
@@ -4227,7 +4257,7 @@ void main() {
    * @return {object} returns an HTMLElement matching the selector string
    */
   function createElementFromSelector(str) {
-    let info = parseSelector(str);
+    let info = parse$2(str);
     let type = info.type || 'a-entity';
     let newEl = document.createElement(type);
     if (newEl) {
@@ -4396,81 +4426,6 @@ void main() {
   });
 
   // Copyright 2018-2019 harlyq
-  // import {deepEqual} from "./aframe-utils"
-
-  function trim(str) {
-    return str.trim()
-  }
-
-  // Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
-  // Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
-  function parseRangeOption(str) {
-    let range = str.split("..");
-    if (range.length > 1) {
-      const start = parseValue(range[0]);
-      const end = parseValue(range[1]);
-    
-      if (start.type !== end.type && start.type !== "any" && end.type !== "any") {
-        console.error(`incompatible types for range ${str}`);
-      } else {
-        return { type: start.type !== "any" ? start.type : end.type, range: [start.value, end.value]}
-      }
-    }
-
-    let options = str.split("|");
-    return { type: "string", options: options.map(trim) }
-  }
-
-  // console.assert(deepEqual(parseRangeOption("1 2 3"), { type: "string", options: ["1 2 3"]}))
-  // console.assert(deepEqual(parseRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
-  // console.assert(deepEqual(parseRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
-  // console.assert(deepEqual(parseRangeOption("1 2||3"), { type: "string", options: ["1 2","","3"]}))
-  // console.assert(deepEqual(parseRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
-  // console.assert(deepEqual(parseRangeOption("a..b"), { type: "string", range: ["a","b"]}))
-
-  function randomizeOptions(options, randFn) {
-    return options[Math.floor(randFn()*options.length)]
-  }
-
-  function randomizeRange$1(type, range, randFn) {
-    const min = range[0];
-    const max = range[1];
-    const randomNumber = (min, max) => {
-      if (min === max) return min
-      return randFn()*(max - min) + min
-    };
-
-    if (type === "numbers") {
-      const m = Math.min(min.length, max.length); // count the least elements
-      let result = max.length > m ? max.slice() : min.slice(); // copy the larger array
-      for (let i = 0; i < m; i++) {
-        result[i] = randomNumber(min[i], max[i]); // randomize the parts where values exist for both min and max
-      }
-      return result
-    }
-    
-    if (type === "color") {
-      return new THREE.Color(randomNumber(min.r, max.r), randomNumber(min.g, max.g), randomNumber(min.b, max.b))
-    }
-
-    return randFn() > 0.5 ? min : max
-  }
-
-
-  // const stringParts = ["a","ab","bc"];
-  // const vecParts = [[1,2,3],[10,20]]
-  // for (let i = 0; i < 50; i++) {
-  //   console.assert(randomizeOptions(["x"], Math.random) === "x")
-  //   console.assert(stringParts.includes(randomizeOptions(stringParts, Math.random)))
-  //   console.assert(["a", "b"].includes(randomizeRange("string", ["a", "b", "c"], Math.random)))
-    
-  //   const x = randomizeRange("numbers", [[1],[2]], Math.random)
-  //   console.assert(x >= 1 && x < 2)
-
-  //   const y = randomizeRange("numbers", vecParts, Math.random)
-  //   console.assert(y.length === 3 && y[0] >= vecParts[0][0] && y[0] < vecParts[1][0] && y[1] >= vecParts[0][1] && y[1] < vecParts[1][1] && y[2] === vecParts[0][2])
-  // }
-
 
   //-----------------------------------------------------------------------------
   // "wait-set" component for setting attributes on this or other elements after a delay or event
@@ -4497,7 +4452,7 @@ void main() {
 
       this.waitListener = ScopedListener();
       this.waitTimer = BasicTimer();
-      this.psuedoRandom = BasicRandom();
+      this.lcg = lcg();
     },
 
     remove() {
@@ -4526,7 +4481,7 @@ void main() {
       const data = this.data;
 
       if (data.seed !== oldData.seed) {
-        this.psuedoRandom.setSeed(data.seed);
+        this.lcg.setSeed(data.seed);
       }
 
       for (let prop in this.rules) {
@@ -4537,7 +4492,7 @@ void main() {
 
       for (let prop in data) {
         if (!(prop in originalSchema) && data[prop] !== oldData[prop]) {
-          this.rules[prop] = parseRangeOption(data[prop]);
+          this.rules[prop] = parse$1(data[prop]);
         }
       }
 
@@ -4573,7 +4528,7 @@ void main() {
         for (let prop in this.rules) {
           let rule = this.rules[prop];
 
-          const value = rule.options ? randomizeOptions(rule.options, this.psuedoRandom.random) : randomizeRange$1(rule.type, rule.range, this.psuedoRandom.random);
+          const value = stringify( randomize(rule, this.lcg.random) );
           // console.log("wait-set:setProperties", el.id, prop, value)
           setProperty(el, prop, value);
         }

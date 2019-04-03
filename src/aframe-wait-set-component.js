@@ -2,84 +2,8 @@
 // MIT license
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
-import BasicRandom from "./basic-random.js"
 import { setProperty } from "./aframe-utils.js"
-import { parser } from "helpers"
-// import {deepEqual} from "./aframe-utils"
-
-function trim(str) {
-  return str.trim()
-}
-
-// Convert a string "1..3" into {type: "numbers", range: [[1],[3]]}
-// Convert a string "1|2|3" into {type: "string", options: ["1","2","3"]}
-function parseRangeOption(str) {
-  let range = str.split("..")
-  if (range.length > 1) {
-    const start = parser.parseValue(range[0])
-    const end = parser.parseValue(range[1])
-  
-    if (start.type !== end.type && start.type !== "any" && end.type !== "any") {
-      console.error(`incompatible types for range ${str}`)
-    } else {
-      return { type: start.type !== "any" ? start.type : end.type, range: [start.value, end.value]}
-    }
-  }
-
-  let options = str.split("|")
-  return { type: "string", options: options.map(trim) }
-}
-
-// console.assert(deepEqual(parseRangeOption("1 2 3"), { type: "string", options: ["1 2 3"]}))
-// console.assert(deepEqual(parseRangeOption("1 2..3 4 5"), { type: "numbers", range: [[1,2],[3,4,5]]}))
-// console.assert(deepEqual(parseRangeOption("a|b|c"), { type: "string", options: ["a","b","c"]}))
-// console.assert(deepEqual(parseRangeOption("1 2||3"), { type: "string", options: ["1 2","","3"]}))
-// console.assert(deepEqual(parseRangeOption("..3"), { type: "numbers", range: ["",[3]]}))
-// console.assert(deepEqual(parseRangeOption("a..b"), { type: "string", range: ["a","b"]}))
-
-function randomizeOptions(options, randFn) {
-  return options[Math.floor(randFn()*options.length)]
-}
-
-function randomizeRange(type, range, randFn) {
-  const min = range[0]
-  const max = range[1]
-  const randomNumber = (min, max) => {
-    if (min === max) return min
-    return randFn()*(max - min) + min
-  }
-
-  if (type === "numbers") {
-    const m = Math.min(min.length, max.length) // count the least elements
-    let result = max.length > m ? max.slice() : min.slice() // copy the larger array
-    for (let i = 0; i < m; i++) {
-      result[i] = randomNumber(min[i], max[i]) // randomize the parts where values exist for both min and max
-    }
-    return result
-  }
-  
-  if (type === "color") {
-    return new THREE.Color(randomNumber(min.r, max.r), randomNumber(min.g, max.g), randomNumber(min.b, max.b))
-  }
-
-  return randFn() > 0.5 ? min : max
-}
-
-
-// const stringParts = ["a","ab","bc"];
-// const vecParts = [[1,2,3],[10,20]]
-// for (let i = 0; i < 50; i++) {
-//   console.assert(randomizeOptions(["x"], Math.random) === "x")
-//   console.assert(stringParts.includes(randomizeOptions(stringParts, Math.random)))
-//   console.assert(["a", "b"].includes(randomizeRange("string", ["a", "b", "c"], Math.random)))
-  
-//   const x = randomizeRange("numbers", [[1],[2]], Math.random)
-//   console.assert(x >= 1 && x < 2)
-
-//   const y = randomizeRange("numbers", vecParts, Math.random)
-//   console.assert(y.length === 3 && y[0] >= vecParts[0][0] && y[0] < vecParts[1][0] && y[1] >= vecParts[0][1] && y[1] < vecParts[1][1] && y[2] === vecParts[0][2])
-// }
-
+import { attribute, pseudorandom } from "helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or event
@@ -106,7 +30,7 @@ AFRAME.registerComponent("wait-set", {
 
     this.waitListener = ScopedListener()
     this.waitTimer = BasicTimer()
-    this.psuedoRandom = BasicRandom()
+    this.lcg = pseudorandom.lcg()
   },
 
   remove() {
@@ -135,7 +59,7 @@ AFRAME.registerComponent("wait-set", {
     const data = this.data
 
     if (data.seed !== oldData.seed) {
-      this.psuedoRandom.setSeed(data.seed)
+      this.lcg.setSeed(data.seed)
     }
 
     for (let prop in this.rules) {
@@ -146,7 +70,7 @@ AFRAME.registerComponent("wait-set", {
 
     for (let prop in data) {
       if (!(prop in originalSchema) && data[prop] !== oldData[prop]) {
-        this.rules[prop] = parseRangeOption(data[prop])
+        this.rules[prop] = attribute.parse(data[prop])
       }
     }
 
@@ -182,7 +106,7 @@ AFRAME.registerComponent("wait-set", {
       for (let prop in this.rules) {
         let rule = this.rules[prop]
 
-        const value = rule.options ? randomizeOptions(rule.options, this.psuedoRandom.random) : randomizeRange(rule.type, rule.range, this.psuedoRandom.random)
+        const value = attribute.stringify( attribute.randomize(rule, this.lcg.random) )
         // console.log("wait-set:setProperties", el.id, prop, value)
         setProperty(el, prop, value)
       }

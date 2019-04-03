@@ -23,7 +23,7 @@ AFRAME.registerComponent("gltf-part", {
   /**
    * Fetch, cache, and select from GLTF.
    *
-   * @param {modelLoadedCallback} cb - Called when the model is loaded
+   * @param {function(object)} cb - Called when the model is loaded
    * @returns {object} - Selected subset of model.
    */
   getModel: function (cb) {
