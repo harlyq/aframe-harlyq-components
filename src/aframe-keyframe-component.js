@@ -1,13 +1,13 @@
 // Copyright 2018-2019 harlyq
 // MIT license
 import { convertToString, setProperty } from "./aframe-utils.js"
-import { utils, attribute, easing, pseudorandom } from "harlyq-helpers"
+import { utils, attribute, interpolation, pseudorandom } from "harlyq-helpers"
 
 const MAX_FRAME_TIME_MS = 100
 
 // Takes a set of keys (from randomRules()), and provides an interpolated value, where r is 0 (first key) to 1 (last key)
 // e.g. [[1,2,3],[5,6],[7.5]] @ r = 0.25 becomes [3,4,3]
-function lerpKeys(type, keys, r, easingFn = easing.Linear) {
+function lerpKeys(type, keys, r, easingFn = interpolation.Linear) {
   const n = keys.length
 
   if (r <= 0 || n <= 1) {
@@ -20,9 +20,9 @@ function lerpKeys(type, keys, r, easingFn = easing.Linear) {
   const i = ~~k
   const t = easingFn(k - i)
   switch (type) {
-    case "object": return utils.lerpObject(keys[i], keys[i+1], t)
-    case "vector": return utils.lerpArray(keys[i], keys[i+1], t)
-    case "number": return utils.lerp(keys[i], keys[i+1], t)
+    case "object": return interpolation.lerpObject(keys[i], keys[i+1], t)
+    case "vector": return interpolation.lerpArray(keys[i], keys[i+1], t)
+    case "number": return interpolation.lerp(keys[i], keys[i+1], t)
     default: return keys[i]
   }
 }
@@ -66,7 +66,7 @@ AFRAME.registerComponent("keyframe", {
     direction: { default: "forward", oneOf: ["forward", "backward", "alternate"] },
     loops: { default: -1 },
     seed: { default: -1, type: "int" },
-    easing: { default: "linear", oneOf: Object.keys(easing.EASING_FUNCTIONS) },
+    easing: { default: "linear", oneOf: Object.keys(interpolation.EASING_FUNCTIONS) },
     randomizeEachLoop: { default: true },
   },
   multiple: true,
@@ -164,7 +164,7 @@ AFRAME.registerComponent("keyframe", {
         }
       }
 
-      const easingFn = easing.EASING_FUNCTIONS[data.easing] || easing.EASING_FUNCTIONS["linear"]
+      const easingFn = interpolation.EASING_FUNCTIONS[data.easing] || interpolation.EASING_FUNCTIONS["linear"]
       
       for (let prop in this.keys) {
         let r = THREE.Math.clamp(this.loopTime/data.duration, 0, 1)

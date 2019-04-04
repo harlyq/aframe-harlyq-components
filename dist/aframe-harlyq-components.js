@@ -580,29 +580,6 @@
     return ( ( v % m ) + m ) % m  
   }
 
-  /** @type {(a: number, b: number, t: number) => number} */
-  function lerp(a, b, t) {
-    return a + (b - a)*t
-  }
-
-  /** @type {<TA extends {[key: string]: number}>(a: TA, b: {[key: string]: number}, t: number) => TA} */
-  function lerpObject(a, b, t) {
-    let out = Object.assign({}, a); // copy values from a in case the keys do not exist in b
-    for (let k in b) {
-      out[k] = typeof a[k] !== "undefined" ? lerp(a[k], b[k], t) : b[k];
-    }
-    return out
-  }
-
-  /** @type {<TA extends number[] | Float32Array, TB extends number[] | Float32Array>(a: TA, b: TB, t: number) => number[]} */
-  function lerpArray(a, b, t) {
-    let out = Array.from(a);
-    for (let i = 0; i < b.length; i++) {
-      out[i] = typeof a[i] !== "undefined" ? lerp(a[i], b[i], t) : b[i];
-    }
-    return out
-  }
-
   // returns a value from a 'root' and an array of 'properties', each property is considered the child of the previous property
   /** @type {(root: {[key: string]: any}, properties: string[]) => any} */
   function getWithPath(root, properties) {
@@ -900,6 +877,86 @@
     return attr.toString()
   }
 
+  /**
+   * @typedef {{x: number, y: number, z: number}} VecXYZ
+   * @typedef {{min: VecXYZ, max: VecXYZ}} Extent
+   * @typedef {number} Distance
+   */
+
+  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetFromObject3DFn */
+  /** @type {SetFromObject3DFn} */
+  const setFromObject3D = (function() {
+    // @ts-ignore
+    let tempPosition = new THREE.Vector3();
+    // @ts-ignore
+    let tempQuaternion = new THREE.Quaternion();
+    // @ts-ignore
+    let tempScale = new THREE.Vector3();
+    // @ts-ignore
+    let tempBox3 = new THREE.Box3();
+
+    return /** @type {SetFromObject3DFn} */function setFromObject3D(ext, object3D) {
+      if (object3D.children.length === 0) {
+        return ext
+      }
+
+      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
+      // based around the origin
+      tempPosition.copy(object3D.position);
+      tempQuaternion.copy(object3D.quaternion);
+      tempScale.copy(object3D.scale);
+
+      object3D.position.set(0,0,0);
+      object3D.quaternion.set(0,0,0,1);
+      object3D.scale.set(1,1,1);
+
+      tempBox3.setFromObject(object3D); // expensive for models
+      // ext.setFromObject(object3D) // expensive for models
+
+      object3D.position.copy(tempPosition);
+      object3D.quaternion.copy(tempQuaternion);
+      object3D.scale.copy(tempScale);
+      object3D.updateMatrixWorld(true);
+
+      ext.min.x = tempBox3.min.x;
+      ext.min.y = tempBox3.min.y; 
+      ext.min.z = tempBox3.min.z; 
+      ext.max.x = tempBox3.max.x; 
+      ext.max.y = tempBox3.max.y; 
+      ext.max.z = tempBox3.max.z; 
+
+      return ext
+    }
+  })();
+
+  /** @type {<TE extends Extent>(ext: TE) => number} */
+  function volume(ext) {
+    return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
+  }
+
+  /** @type {(a: number, b: number, t: number) => number} */
+  function lerp(a, b, t) {
+    return a + (b - a)*t
+  }
+
+  /** @type {<TA extends {[key: string]: number}>(a: TA, b: {[key: string]: number}, t: number) => TA} */
+  function lerpObject(a, b, t) {
+    let out = Object.assign({}, a); // copy values from a in case the keys do not exist in b
+    for (let k in b) {
+      out[k] = typeof a[k] !== "undefined" ? lerp(a[k], b[k], t) : b[k];
+    }
+    return out
+  }
+
+  /** @type {<TA extends number[] | Float32Array, TB extends number[] | Float32Array>(a: TA, b: TB, t: number) => number[]} */
+  function lerpArray(a, b, t) {
+    let out = Array.from(a);
+    for (let i = 0; i < b.length; i++) {
+      out[i] = typeof a[i] !== "undefined" ? lerp(a[i], b[i], t) : b[i];
+    }
+    return out
+  }
+
   // remix of https://github.com/tweenjs/tween.js/blob/master/src/Tween.js
 
   function Linear(k) {
@@ -1147,63 +1204,6 @@
     'ease-out-bounce': Bounce.Out,
     'ease-in-out-bounce': Bounce.InOut,
   };
-
-  /**
-   * @typedef {{x: number, y: number, z: number}} VecXYZ
-   * @typedef {{min: VecXYZ, max: VecXYZ}} Extent
-   * @typedef {number} Distance
-   */
-
-  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetFromObject3DFn */
-  /** @type {SetFromObject3DFn} */
-  const setFromObject3D = (function() {
-    // @ts-ignore
-    let tempPosition = new THREE.Vector3();
-    // @ts-ignore
-    let tempQuaternion = new THREE.Quaternion();
-    // @ts-ignore
-    let tempScale = new THREE.Vector3();
-    // @ts-ignore
-    let tempBox3 = new THREE.Box3();
-
-    return /** @type {SetFromObject3DFn} */function setFromObject3D(ext, object3D) {
-      if (object3D.children.length === 0) {
-        return ext
-      }
-
-      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
-      // based around the origin
-      tempPosition.copy(object3D.position);
-      tempQuaternion.copy(object3D.quaternion);
-      tempScale.copy(object3D.scale);
-
-      object3D.position.set(0,0,0);
-      object3D.quaternion.set(0,0,0,1);
-      object3D.scale.set(1,1,1);
-
-      tempBox3.setFromObject(object3D); // expensive for models
-      // ext.setFromObject(object3D) // expensive for models
-
-      object3D.position.copy(tempPosition);
-      object3D.quaternion.copy(tempQuaternion);
-      object3D.scale.copy(tempScale);
-      object3D.updateMatrixWorld(true);
-
-      ext.min.x = tempBox3.min.x;
-      ext.min.y = tempBox3.min.y; 
-      ext.min.z = tempBox3.min.z; 
-      ext.max.x = tempBox3.max.x; 
-      ext.max.y = tempBox3.max.y; 
-      ext.max.z = tempBox3.max.z; 
-
-      return ext
-    }
-  })();
-
-  /** @type {<TE extends Extent>(ext: TE) => number} */
-  function volume(ext) {
-    return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
-  }
 
   // Returns the distance between pointA and the surface of boxB. Negative values indicate
   // that pointA is inside of boxB
@@ -4207,6 +4207,7 @@ void main() {
     }
 
     function stop() {
+      // @ts-ignore
       clearTimeout(self.sendEventTimer);
       sendEventTimer = undefined;
       timeOfStart = undefined;
