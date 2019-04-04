@@ -1,3 +1,4 @@
+// @ts-nocheck Property 'object3D' does not exist on type 'HTMLElement'.ts(2339)
 // Copyright 2018-2019 harlyq
 // MIT license
 

@@ -2,15 +2,15 @@
 <html>
   <head>
     <script src="https://aframe.io/releases/0.9.0/aframe.min.js"></script>
-    <script src="dist/aframe-harlyq-components.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
   </head>
   <body>
     <a-scene background="color: black" audio-vis="src: #music">
       <a-assets>
 
       </a-assets>
-      <audio id="music" src="../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay></audio>
-      <a-entity id="snow" sprite-particles="texture: url(../aframe-sprite-particles-component/assets/blob.png); lifeTime: 1..3; spawnRate: 1000; opacity: 0,1,1,0; position: -10 -10 -10..10 10 10; velocity: -.2 -.2 -.2 .. .2 .2 .2; particleSize: 20"></a-entity>
+      <audio id="music" src="../../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay></audio>
+      <a-entity id="snow" sprite-particles="texture: url(../../aframe-sprite-particles-component/assets/blob.png); lifeTime: 1..3; spawnRate: 1000; opacity: 0,1,1,0; position: -10 -10 -10..10 10 10; velocity: -.2 -.2 -.2 .. .2 .2 .2; particleSize: 20"></a-entity>
       <a-entity id="shapes" position="0 0 -20" visible="false">
         <a-plane position="0 -4 0" scale="2 2 2"></a-plane>
         <a-circle position="-4 -4 0"></a-circle>

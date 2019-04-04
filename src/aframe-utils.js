@@ -3,45 +3,6 @@ import { rgbcolor, utils } from "helpers"
 // Copyright 2018-2019 harlyq
 // MIT license
 
-// JSON deepEqual test
-export function deepEqual(a, b) {
-  if (typeof a === "object" && a && b && a.constructor === b.constructor) {
-    if (Array.isArray(a)) {
-      if (a.length !== b.length) {
-        return false
-      }
-      
-      for (let i = 0; i < a.length; i++) {
-        if (!deepEqual(a[i], b[i])) {
-          return false
-        }
-      }
-    } else {
-      for (let k in a) {
-        if (!(k in b) || !deepEqual(a[k], b[k])) {
-          return false
-        }
-      }
-    }
-    return true
-  }
-
-  return a === b
-}
-
-// console.assert(deepEqual(null, null))
-// console.assert(deepEqual(undefined, undefined))
-// console.assert(deepEqual([], []))
-// console.assert(deepEqual([1], [1]))
-// console.assert(deepEqual([1,2,3], [1,2,3]))
-// console.assert(!deepEqual([1,2], [1,2,3]))
-// console.assert(!deepEqual([1,2,3], [1,2]))
-// console.assert(deepEqual({a:1, b:"c"}, {a:1, b:"c"}))
-// console.assert(!deepEqual({a:1, b:"c"}, {a:1, b:"d"}))
-// console.assert(!deepEqual({a:1, b:"c"}, {a:2, b:"c"}))
-// console.assert(!deepEqual({a:1, b:"c"}, null))
-// console.assert(deepEqual({a:[1,2], b:{x: 3, y:4}}, {a:[1,2], b:{x: 3, y:4}}))
-
 // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers
 export function convertToString(thing) {
   if (typeof thing == "object") {

@@ -2,7 +2,7 @@
 <html>
   <head>
     <script src="https://aframe.io/releases/0.9.0/aframe.js"></script>
-    <script src="dist/aframe-harlyq-components.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
     <script>
       AFRAME.registerComponent("foo-bar", {
         schema: { 
@@ -17,7 +17,7 @@
   <body>
     <div style="position: absolute; z-index: 9999" onclick="document.getElementById('music').play()">click to start audio</div>
     <a-scene>
-      <audio id="music" src="../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay2></audio>
+      <audio id="music" src="../../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay2></audio>
       <a-entity timer-emit="src: #music; target: #listener; start: 0; one: 2; two: 4; three: 6; four: 10; periodic: 1,2,3"></a-entity>
       <a-entity id="listener" wait-add-remove__1="event: one; add: a-box.one.a#one[color=red][position=0 0 -10]"
         wait-add-remove__2="event: two; add: a-box.two.b#two[color=blue][position=5 2 -5]"

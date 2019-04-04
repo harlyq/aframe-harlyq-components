@@ -35,7 +35,6 @@
     "rollup-plugin-node-resolve": "^4.0.1"
   },
   "dependencies": {
-    "@types/three": "^0.93.30",
     "helpers": "git+https://git@github.com/harlyq/helpers.git"
   }
 }

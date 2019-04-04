@@ -16,7 +16,7 @@ AFRAME.registerComponent("clone-entity", {
 
     const makeUniqueIDs = el => {
       if (el.id) el.id += idPostFix + cloneID
-      el.children.forEach(addUniqueIDs)
+      el.children.forEach(makeUniqueIDs)
     }
     makeUniqueIDs(cloneEl)
 

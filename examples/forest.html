@@ -2,13 +2,13 @@
 <html>
   <head>
     <script src="https://aframe.io/releases/0.9.0/aframe.js"></script>
-    <script src="../aframe-proctree-component/dist/aframe-proctree-component.js"></script>
-    <script src="dist/aframe-harlyq-components.js"></script>
+    <script src="../../aframe-proctree-component/dist/aframe-proctree-component.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
   </head>
   <body>
     <a-scene background="color: black" fog2="type: linear; color: #000; far: 10; near: 0">
       <a-assets>
-        <img id="twig" src="../aframe-proctree-component/assets/twig-1.png">
+        <img id="twig" src="../../aframe-proctree-component/assets/twig-1.png">
         <a-mixin id="tree" proctree="trunkLength: 20" materialx__1="remap: trunk; color: red; metalness:1; fog: true" materialx__2="remap: twigs; visible: false;"></a-mixin>
         <a-mixin id="spread" ></a-mixin>
       </a-assets>
