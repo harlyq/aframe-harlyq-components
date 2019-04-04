@@ -1,7 +1,7 @@
 // Copyright 2018-2019 harlyq
 // MIT license
 import { convertToString, setProperty } from "./aframe-utils.js"
-import { utils, attribute, easing, pseudorandom } from "helpers"
+import { utils, attribute, easing, pseudorandom } from "harlyq-helpers"
 
 const MAX_FRAME_TIME_MS = 100
 

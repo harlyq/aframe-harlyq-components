@@ -183,7 +183,7 @@
 
       const makeUniqueIDs = el => {
         if (el.id) el.id += idPostFix + cloneID;
-        el.children.forEach(addUniqueIDs);
+        el.children.forEach(makeUniqueIDs);
       };
       makeUniqueIDs(cloneEl);
 
@@ -192,6 +192,7 @@
     }
   });
 
+  // @ts-nocheck Property 'object3D' does not exist on type 'HTMLElement'.ts(2339)
   // Copyright 2018-2019 harlyq
   // MIT license
 
@@ -1285,18 +1286,8 @@
     return results
   }
 
-  // console.assert(deepEqual(null, null))
-  // console.assert(deepEqual(undefined, undefined))
-  // console.assert(deepEqual([], []))
-  // console.assert(deepEqual([1], [1]))
-  // console.assert(deepEqual([1,2,3], [1,2,3]))
-  // console.assert(!deepEqual([1,2], [1,2,3]))
-  // console.assert(!deepEqual([1,2,3], [1,2]))
-  // console.assert(deepEqual({a:1, b:"c"}, {a:1, b:"c"}))
-  // console.assert(!deepEqual({a:1, b:"c"}, {a:1, b:"d"}))
-  // console.assert(!deepEqual({a:1, b:"c"}, {a:2, b:"c"}))
-  // console.assert(!deepEqual({a:1, b:"c"}, null))
-  // console.assert(deepEqual({a:[1,2], b:{x: 3, y:4}}, {a:[1,2], b:{x: 3, y:4}}))
+  // Copyright 2018-2019 harlyq
+  // MIT license
 
   // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers
   function convertToString(thing) {

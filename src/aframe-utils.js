@@ -1,4 +1,4 @@
-import { rgbcolor, utils } from "helpers"
+import { rgbcolor, utils } from "harlyq-helpers"
 
 // Copyright 2018-2019 harlyq
 // MIT license

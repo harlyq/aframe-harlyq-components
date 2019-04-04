@@ -3,7 +3,7 @@
 
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
-import { selector } from "helpers"
+import { selector } from "harlyq-helpers"
 
 /**
  * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 

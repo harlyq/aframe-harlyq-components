@@ -3,7 +3,7 @@
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
 import { setProperty } from "./aframe-utils.js"
-import { attribute, pseudorandom } from "helpers"
+import { attribute, pseudorandom } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or event

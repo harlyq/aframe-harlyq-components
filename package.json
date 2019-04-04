@@ -35,6 +35,6 @@
     "rollup-plugin-node-resolve": "^4.0.1"
   },
   "dependencies": {
-    "helpers": "git+https://git@github.com/harlyq/helpers.git"
+    "harlyq-helpers": "git+https://git@github.com/harlyq/harlyq-helpers.git"
   }
 }

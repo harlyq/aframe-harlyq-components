@@ -1,8 +1,8 @@
 // Copyright 2019 harlyq
 // MIT license
 
-import { proximity } from "helpers"
-import { extent } from "helpers"
+import { proximity } from "harlyq-helpers"
+import { extent } from "harlyq-helpers"
 
 /**
  * Based on donmccurdy/aframe-extras/sphere-collider.js
