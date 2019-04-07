@@ -661,6 +661,14 @@
     return "#" + toHex(a).toString(16).padStart(6, '0')
   }
 
+  function toArray(out, x) {
+    out[0] = x.r;
+    out[1] = x.g;
+    out[2] = x.b;
+    if (typeof x.a !== "undefined") out[3] = x.a;
+    return out
+  }
+
   // remix of https://github.com/mrdoob/three.js/blob/master/src/math/Color.js
   /** @type {Object.<string, number>} */
   const COLOR_KEYWORDS = { 'aliceblue': 0xF0F8FF, 'antiquewhite': 0xFAEBD7, 'aqua': 0x00FFFF, 'aquamarine': 0x7FFFD4, 'azure': 0xF0FFFF,
@@ -1924,6 +1932,214 @@
   }
 
   })();
+
+  var proceduralVertexShader = "\n#define GLSLIFY 1\nvarying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}";
+
+  var proceduralFragmentShader = "precision highp float;\n#define GLSLIFY 1\nconst mat2 myt=mat2(.12121212,.13131313,-.13131313,.12121212);const vec2 mys=vec2(1e4,1e6);vec2 rhash(vec2 uv){uv*=myt;uv*=mys;return fract(fract(uv/mys)*uv);}vec3 hash(vec3 p){return fract(sin(vec3(dot(p,vec3(1.0,57.0,113.0)),dot(p,vec3(57.0,113.0,1.0)),dot(p,vec3(113.0,1.0,57.0))))*43758.5453);}float voronoi2d(const in vec2 point){vec2 p=floor(point);vec2 f=fract(point);float res=0.0;for(int j=-1;j<=1;j++){for(int i=-1;i<=1;i++){vec2 b=vec2(i,j);vec2 r=vec2(b)-f+rhash(p+b);res+=1./pow(dot(r,r),8.);}}return pow(1./res,0.0625);}float remap(float v,float amin,float amax,float bmin,float bmax){return (v-amin)*(bmax-bmin)/(amax-amin)+bmin;}float rand(const vec2 n){return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);}float noise(const vec2 n){const vec2 d=vec2(0.0,1.0);vec2 b=floor(n),f=smoothstep(vec2(0.0),vec2(1.0),fract(n));return mix(mix(rand(b),rand(b+d.yx),f.x),mix(rand(b+d.xy),rand(b+d.yy),f.x),f.y);}float fbm(vec2 n){float total=0.0,amplitude=1.0;for(int i=0;i<4;i++){total+=noise(n)*amplitude;n+=n;amplitude*=0.5;}return total;}float turbulence(const vec2 P){float val=0.0;float freq=1.0;for(int i=0;i<4;i++){val+=abs(noise(P*freq)/freq);freq*=2.07;}return val;}float roundF(const float number){return sign(number)*floor(abs(number)+0.5);}vec2 brickUV(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);}float brick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight,const float jointWidthPercentage,const float jointHeightPercentage){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);xi=abs(xi-nxi);yi=abs(yi-nyi);return 1.-clamp(min(yi/jointHeightPercentage,xi/jointWidthPercentage)+0.2,0.,1.);}vec3 marbleColorize(vec3 color,float x){x=0.5*(x+1.);x=sqrt(x);x=sqrt(x);x=sqrt(x);color=color*vec3(.2+.75*x);return color;}float marble(const vec2 uv,float amplitude,float t){t=6.28*uv.x/t;t+=amplitude*turbulence(uv.xy);t=sin(t);t=.5*(t+1.);t=sqrt(sqrt(sqrt(t)));return .2+.75*t;}float checkerboard(const vec2 uv,const float numCheckers){float cx=floor(numCheckers*uv.x);float cy=floor(numCheckers*uv.y);return sign(mod(cx+cy,2.));}float gaussian(const vec2 uv,const float repeat){vec2 xy=(uv-.5)*2.;float exponent=dot(xy,xy)/0.31831;return exp(-exponent);}";
+
+  // uses @shotamatsuda/rollup-plugin-glslify
+
+  AFRAME.registerSystem("procedural-texture", {
+    init() {
+      this.renderer = new THREE.WebGLRenderer({alpha: true});
+      this.renderer.setPixelRatio( window.devicePixelRatio );
+      this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
+    }
+  });
+
+  AFRAME.registerComponent("procedural-texture", {
+    schema: {
+      shader: { type: "string" },
+      dest: { type: "selector" }
+    },
+    multiple: true,
+
+    init() {
+      this.dest = undefined;
+    },
+
+    updateSchema(newData) {
+      if (!this.data || this.data.shader !== newData.shader) {
+        this.shaderProgram = "";
+        this.uniforms = {};
+
+        if (newData.shader) {
+          let shaderEl = document.querySelector(newData.shader);
+          if (shaderEl) {
+            this.shaderProgram = shaderEl.textContent;
+          } else if (/main\(/.test(newData.shader)) {
+            this.shaderProgram = newData.shader;
+          }
+          this.uniforms = this.parseShaderUniforms(this.shaderProgram);
+        }
+      }
+
+      const newSchema = this.uniformsToSchema(this.uniforms);
+      if (Object.keys(newSchema).length > 0) {
+        this.extendSchema(newSchema);
+      }
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      if (data.dest !== oldData.dest) {
+        this.dest = (data.dest && data.dest instanceof HTMLCanvasElement) ? data.dest : undefined;
+      }
+
+      if (this.dest && this.shaderProgram) {
+        if (!this.scene) {
+          this.setupScene(this.dest, this.shaderProgram);
+        }
+        this.renderScene(data);
+      }
+    },
+
+    setupScene(canvas, shader) {
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.Camera();
+      this.camera.position.z = 1;
+      
+      this.uniforms = this.parseShaderUniforms(shader);
+      const fullFragmentShader = proceduralFragmentShader + shader;
+
+      var shaderMaterial = new THREE.ShaderMaterial( {
+        uniforms: this.uniforms,
+        vertexShader: proceduralVertexShader,
+        fragmentShader: fullFragmentShader,
+      } );
+    
+      const mesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), shaderMaterial );
+      this.scene.add( mesh );
+    
+      // this.renderer = new THREE.WebGLRenderer({canvas, alpha: true});
+      // this.renderer.setPixelRatio( window.devicePixelRatio );
+      // this.renderer.setSize( canvas.width, canvas.height );
+      // this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
+
+      this.ctx = canvas.getContext("2d");
+    },
+    
+    renderScene(data) {
+      this.updateUniforms(this.uniforms, data);
+
+      // this.renderer.render( this.scene, this.camera );
+
+      const canvas = this.ctx.canvas;
+      const width = canvas.width;
+      const height = canvas.height;
+
+      this.system.renderer.setSize( width, height );
+      this.system.renderer.render( this.scene, this.camera );
+
+      this.ctx.drawImage(this.system.renderer.domElement, 0, 0);
+
+      // trigger an update for materials that use this canvas
+      const root = this.el.sceneEl.object3D;
+      root.traverse((node) => {
+        if (node.isMesh && node.material) {
+          if (node.material.map && node.material.map.image === this.dest) {
+            node.material.map.needsUpdate = true;
+          }
+        }
+      });
+    },
+
+    parseShaderUniforms(shader) {
+      const varRegEx = /uniform (vec2|vec3|vec4|float|int|uint|bool) ([a-zA-Z0-9_]+);/;
+      let uniforms = {};
+    
+      shader.split("\n").forEach(line => {
+        const match = varRegEx.exec(line);
+        if (match) {
+          const uniformType = match[1];
+          const name = match[2];
+          if (name) {
+            const newUniform = uniforms[name] || this.allocateUniform(uniformType);
+            uniforms[name] = newUniform;
+          }
+        }
+      });
+    
+      return uniforms
+    },
+
+    uniformsToSchema(uniforms) {
+      let newSchema = [];
+
+      for (let key in uniforms) {
+        const uniform = uniforms[key];
+        switch (uniform.type) {
+          case "float32array": 
+          case "int32array":
+            newSchema[key] = { type: "string" };
+            break
+          default:
+            newSchema[key] = { type: uniform.type };
+        }
+      }
+
+      return newSchema
+    },
+    
+    updateUniforms(uniforms, data) {
+      for (let name in uniforms) {
+        const dataValue = data[name];
+        const uniform = uniforms[name];
+    
+        if (typeof dataValue === "undefined") {
+          console.warn(`no attribute for uniform: ${name}`);
+        } else {
+          switch (uniform.type) {
+            case "number":
+              uniform.value = parseFloat(dataValue);
+              break
+            case "boolean":
+              uniform.value = !!dataValue;
+              break
+            case "float32array":
+            case "int32array":
+              const vec = dataValue.split(" ").map(x => Number(x)).filter(x => !isNaN(x));
+              if (vec.length > 0 && (uniform.value instanceof Float32Array || uniform.value instanceof Int32Array)) {
+                uniform.value.set(vec);
+              } else {
+                let col = new Array(4).fill(1); // default alpha is 1
+                uniform.value.set(toArray(col, parse(dataValue)).slice(0, uniform.value.length));
+              }
+              break
+            default:
+              break
+          }
+        }
+      }
+    },
+    
+    allocateUniform(type) {
+      switch (type) {
+        case "float":
+        case "int": 
+          return { type: "number", value: 0 }
+        case "bool": 
+          return { type: "boolean", value: false }
+        case "ivec2":
+        case "bvec2":
+        case "vec2": 
+          return { type: "float32array", value: new Float32Array(2) }
+        case "vec3": 
+          return { type: "float32array", value: new Float32Array(3) }
+        case "vec4": 
+          return { type: "float32array", value: new Float32Array(4) }
+        case "ivec3": 
+        case "bvec3":
+          return { type: "int32array", value: new Int32Array(3) }
+        case "ivec4": 
+        case "bvec4":
+          return { type: "int32array", value: new Int32Array(4) }
+        default:
+          console.warn(`unknown uniform type ${type}`);
+      }
+    }, 
+  });
 
   // Copyright 2019 harlyq
 
