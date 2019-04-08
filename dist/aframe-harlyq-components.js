@@ -1973,7 +1973,7 @@
 
   var proceduralVertexShader = "\n#define GLSLIFY 1\nvarying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}";
 
-  var proceduralFragmentShader = "precision highp float;\n#define GLSLIFY 1\nconst mat2 myt=mat2(.12121212,.13131313,-.13131313,.12121212);const vec2 mys=vec2(1e4,1e6);vec2 rhash(vec2 uv){uv*=myt;uv*=mys;return fract(fract(uv/mys)*uv);}vec3 hash(vec3 p){return fract(sin(vec3(dot(p,vec3(1.0,57.0,113.0)),dot(p,vec3(57.0,113.0,1.0)),dot(p,vec3(113.0,1.0,57.0))))*43758.5453);}float voronoi2d(const in vec2 point){vec2 p=floor(point);vec2 f=fract(point);float res=0.0;for(int j=-1;j<=1;j++){for(int i=-1;i<=1;i++){vec2 b=vec2(i,j);vec2 r=vec2(b)-f+rhash(p+b);res+=1./pow(dot(r,r),8.);}}return pow(1./res,0.0625);}float remap(float v,float amin,float amax,float bmin,float bmax){return (v-amin)*(bmax-bmin)/(amax-amin)+bmin;}float rand(const vec2 n){return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);}float noise(const vec2 n){const vec2 d=vec2(0.0,1.0);vec2 b=floor(n),f=smoothstep(vec2(0.0),vec2(1.0),fract(n));return mix(mix(rand(b),rand(b+d.yx),f.x),mix(rand(b+d.xy),rand(b+d.yy),f.x),f.y);}float fbm(vec2 n){float total=0.0,amplitude=1.0;for(int i=0;i<4;i++){total+=noise(n)*amplitude;n+=n;amplitude*=0.5;}return total;}float turbulence(const vec2 P){float val=0.0;float freq=1.0;for(int i=0;i<4;i++){val+=abs(noise(P*freq)/freq);freq*=2.07;}return val;}float roundF(const float number){return sign(number)*floor(abs(number)+0.5);}vec2 uvBrick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);}float brick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight,const float jointWidthPercentage,const float jointHeightPercentage){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);xi=abs(xi-nxi);yi=abs(yi-nyi);return 1.-clamp(min(yi/jointHeightPercentage,xi/jointWidthPercentage)+0.2,0.,1.);}float marble(const vec2 uv,float amplitude,float k){k=6.28*uv.x/k;k+=amplitude*turbulence(uv.xy);k=sin(k);k=.5*(k+1.);k=sqrt(sqrt(sqrt(k)));return .2+.75*k;}float checkerboard(const vec2 uv,const float numCheckers){float cx=floor(numCheckers*uv.x);float cy=floor(numCheckers*uv.y);return sign(mod(cx+cy,2.));}float gaussian(const vec2 uv){vec2 xy=(mod(uv,vec2(1.,1.))-.5)*2.;float exponent=dot(xy,xy)/0.31831;return exp(-exponent);}vec2 uvTransform(const vec2 uv,const vec2 center,const vec2 scale,const float rad,const vec2 translate){float c=cos(-rad);float s=sin(-rad);float x=(uv.x-translate.x-center.x);float y=(uv.y-translate.y-center.y);float x2=(x*c+y*s)/scale.x+center.x;float y2=(-x*s+y*c)/scale.y+center.y;return vec2(x2,y2);}vec2 uvCrop(const vec2 uv,const vec2 uvMin,const vec2 uvMax){vec2 scale=1./(uvMax-uvMin);return uvTransform(uv,vec2(0.),scale,0.,-uvMin*scale);}float normpdf(const float x,const float sigma){return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;}vec4 blur9(const sampler2D image,const vec2 uv,const vec2 resolution,const float sigma){const int kernelWidth=9;const int kSize=(kernelWidth)/2-1;float kernel[kernelWidth];float Z=0.;for(int j=0;j<=kSize;j++){kernel[kSize+j]=kernel[kSize-j]=normpdf(float(j),sigma);}for(int j=0;j<kernelWidth;j++){Z+=kernel[j];}vec4 color=vec4(0.);for(int i=-kSize;i<=kSize;i++){for(int j=-kSize;j<=kSize;j++){color+=kernel[kSize+j]*kernel[kSize+i]*texture2D(image,uv+vec2(float(i),float(j))/resolution);}}return color/(Z*Z);}";
+  var proceduralFragmentShader = "precision highp float;\n#define GLSLIFY 1\nconst mat2 myt=mat2(.12121212,.13131313,-.13131313,.12121212);const vec2 mys=vec2(1e4,1e6);vec2 rhash(vec2 uv){uv*=myt;uv*=mys;return fract(fract(uv/mys)*uv);}vec3 hash(vec3 p){return fract(sin(vec3(dot(p,vec3(1.0,57.0,113.0)),dot(p,vec3(57.0,113.0,1.0)),dot(p,vec3(113.0,1.0,57.0))))*43758.5453);}float voronoi2d(const in vec2 point){vec2 p=floor(point);vec2 f=fract(point);float res=0.0;for(int j=-1;j<=1;j++){for(int i=-1;i<=1;i++){vec2 b=vec2(i,j);vec2 r=vec2(b)-f+rhash(p+b);res+=1./pow(dot(r,r),8.);}}return pow(1./res,0.0625);}float remap(float v,float amin,float amax,float bmin,float bmax){return (v-amin)*(bmax-bmin)/(amax-amin)+bmin;}float rand(const vec2 n){return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);}float noise(const vec2 n){const vec2 d=vec2(0.0,1.0);vec2 b=floor(n),f=smoothstep(vec2(0.0),vec2(1.0),fract(n));return mix(mix(rand(b),rand(b+d.yx),f.x),mix(rand(b+d.xy),rand(b+d.yy),f.x),f.y);}float fbm(vec2 n){float total=0.0,amplitude=1.0;for(int i=0;i<4;i++){total+=noise(n)*amplitude;n+=n;amplitude*=0.5;}return total;}float turbulence(const vec2 P){float val=0.0;float freq=1.0;for(int i=0;i<4;i++){val+=abs(noise(P*freq)/freq);freq*=2.07;}return val;}float roundF(const float number){return sign(number)*floor(abs(number)+0.5);}vec2 uvBrick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);}float brick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight,const float jointWidthPercentage,const float jointHeightPercentage){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);xi=abs(xi-nxi);yi=abs(yi-nyi);return 1.-clamp(min(yi/jointHeightPercentage,xi/jointWidthPercentage)+0.2,0.,1.);}float marble(const vec2 uv,float amplitude,float k){k=6.28*uv.x/k;k+=amplitude*turbulence(uv.xy);k=sin(k);k=.5*(k+1.);k=sqrt(sqrt(sqrt(k)));return .2+.75*k;}float checkerboard(const vec2 uv,const float numCheckers){float cx=floor(numCheckers*uv.x);float cy=floor(numCheckers*uv.y);return sign(mod(cx+cy,2.));}float gaussian(const vec2 uv){vec2 xy=(mod(uv,vec2(1.,1.))-.5)*2.;float exponent=dot(xy,xy)/0.31831;return exp(-exponent);}vec2 uvTransform(const vec2 uv,const vec2 center,const vec2 scale,const float rad,const vec2 translate){float c=cos(-rad);float s=sin(-rad);float x=(uv.x-translate.x-center.x);float y=(uv.y-translate.y-center.y);float x2=(x*c+y*s)/scale.x+center.x;float y2=(-x*s+y*c)/scale.y+center.y;return vec2(x2,y2);}vec2 uvCrop(const vec2 uv,const vec2 uvMin,const vec2 uvMax){vec2 scale=1./(uvMax-uvMin);return uvTransform(uv,vec2(0.),scale,0.,-uvMin*scale);}float normpdf(const float x,const float sigma){return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;}vec4 blur13(const sampler2D image,const vec2 uv,const vec2 resolution,const float sigma){const int kernelWidth=13;const int kSize=(kernelWidth)/2-1;float kernel[kernelWidth];float Z=0.;for(int j=0;j<=kSize;j++){kernel[kSize+j]=kernel[kSize-j]=normpdf(float(j),sigma);}for(int j=0;j<kernelWidth;j++){Z+=kernel[j];}vec4 color=vec4(0.);for(int i=-kSize;i<=kSize;i++){for(int j=-kSize;j<=kSize;j++){color+=kernel[kSize+j]*kernel[kSize+i]*texture2D(image,uv+vec2(float(i),float(j))/resolution);}}return color/(Z*Z);}";
 
   // uses @shotamatsuda/rollup-plugin-glslify
 
@@ -1982,7 +1982,37 @@
       this.renderer = new THREE.WebGLRenderer({alpha: true});
       this.renderer.setPixelRatio( window.devicePixelRatio );
       this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
-    }
+
+      this.proceduralTextureComponents = [];
+    },
+
+    registerComponent(component) {
+      this.proceduralTextureComponents.push(component);
+    },
+
+    unregisterComponent(component) {
+      const i = this.proceduralTextureComponents.indexOf(component);
+      if (i !== -1) {
+        this.proceduralTextureComponents.slice(i, 1);
+      }
+    },
+
+    updateUsersOfTexture(canvas, exceptComponent) {
+      for (let component of this.proceduralTextureComponents) {
+        if (exceptComponent === component) {
+          continue
+        }
+
+        if (Object.keys(component.uniforms).some( (name) => {
+          const uniform = component.uniforms[name];
+          return uniform.type === "texture" && 
+            (Array.isArray(uniform.value) ? uniform.value.any(texture => texture.image === canvas) : uniform.value.image === canvas)
+        } )) {
+          // if another procedural texture is using 
+          component.update(component.data);
+        }
+      }
+    },
   });
 
   AFRAME.registerComponent("procedural-texture", {
@@ -1995,6 +2025,11 @@
 
     init() {
       this.dest = undefined;
+      this.system.registerComponent(this);
+    },
+
+    remove() {
+      this.system.unregisterComponent(this);
     },
 
     updateSchema(newData) {
@@ -2094,6 +2129,8 @@
           }
         }
       });
+
+      this.system.updateUsersOfTexture(this.dest);
     },
 
     parseShaderUniforms(shader) {

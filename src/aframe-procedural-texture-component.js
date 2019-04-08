@@ -11,7 +11,37 @@ AFRAME.registerSystem("procedural-texture", {
     this.renderer = new THREE.WebGLRenderer({alpha: true});
     this.renderer.setPixelRatio( window.devicePixelRatio );
     this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
-  }
+
+    this.proceduralTextureComponents = []
+  },
+
+  registerComponent(component) {
+    this.proceduralTextureComponents.push(component)
+  },
+
+  unregisterComponent(component) {
+    const i = this.proceduralTextureComponents.indexOf(component)
+    if (i !== -1) {
+      this.proceduralTextureComponents.slice(i, 1)
+    }
+  },
+
+  updateUsersOfTexture(canvas, exceptComponent) {
+    for (let component of this.proceduralTextureComponents) {
+      if (exceptComponent === component) {
+        continue
+      }
+
+      if (Object.keys(component.uniforms).some( (name) => {
+        const uniform = component.uniforms[name]
+        return uniform.type === "texture" && 
+          (Array.isArray(uniform.value) ? uniform.value.any(texture => texture.image === canvas) : uniform.value.image === canvas)
+      } )) {
+        // if another procedural texture is using 
+        component.update(component.data)
+      }
+    }
+  },
 })
 
 AFRAME.registerComponent("procedural-texture", {
@@ -24,6 +54,11 @@ AFRAME.registerComponent("procedural-texture", {
 
   init() {
     this.dest = undefined
+    this.system.registerComponent(this)
+  },
+
+  remove() {
+    this.system.unregisterComponent(this)
   },
 
   updateSchema(newData) {
@@ -123,6 +158,8 @@ AFRAME.registerComponent("procedural-texture", {
         }
       }
     })
+
+    this.system.updateUsersOfTexture(this.dest)
   },
 
   parseShaderUniforms(shader) {

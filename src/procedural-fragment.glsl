@@ -125,9 +125,9 @@ float normpdf(const float x, const float sigma)
   return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;
 }
 
-vec4 blur9(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
+vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
 {
-  const int kernelWidth = 9;
+  const int kernelWidth = 13;
   const int kSize = (kernelWidth)/2 - 1;
   float kernel[kernelWidth];
 

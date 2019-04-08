@@ -136,7 +136,7 @@ remaps uv into a new space which can have **scale**, **rad** rotations about **c
 remaps a cropped uv from **uvMin**:**uvMax** into (0,0):(1,1)
 
 ---
-`vec4 blur9(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)`
+`vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)`
 
 returns a blured color, given an **image**, a **uv**, an original pixel **resolution** for the image and a **sigma** for the blur amount
 
