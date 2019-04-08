@@ -31,6 +31,8 @@ or individual components in ESM format
 
 [docs/aframe-materialx-component.md](docs/aframe-materialx-component.md)
 
+[docs/aframe-procedural-texture-component.md](docs/aframe-procedural-texture-component.md)
+
 [docs/aframe-simple-hands-component.md](docs/aframe-simple-hands-component.md)
 
 [docs/aframe-sprite-particles-component.md](docs/aframe-sprite-particles-component.md)

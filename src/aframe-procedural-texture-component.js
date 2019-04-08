@@ -15,6 +15,7 @@ AFRAME.registerSystem("procedural-texture", {
 })
 
 AFRAME.registerComponent("procedural-texture", {
+  dependencies: ["geometry"], // this is for the case where 'dest' is not set
   schema: {
     shader: { type: "string" },
     dest: { type: "selector" }
@@ -52,6 +53,18 @@ AFRAME.registerComponent("procedural-texture", {
 
     if (data.dest !== oldData.dest) {
       this.dest = (data.dest && data.dest instanceof HTMLCanvasElement) ? data.dest : undefined
+    }
+
+    if (!data.dest && !this.dest) {
+      this.dest = document.createElement("canvas")
+      this.dest.width = data.width || 256
+      this.dest.height = data.height || 256
+
+      const mesh = this.el.getObject3D("mesh")
+      if (mesh && mesh.material) {
+        mesh.material.map = new THREE.CanvasTexture(this.dest)
+        mesh.material.map.needsUpdate = true
+      }
     }
 
     if (this.dest && this.shaderProgram) {
@@ -179,10 +192,15 @@ AFRAME.registerComponent("procedural-texture", {
           let vec = dataValue.split(" ").map(toNumber).filter(isNumber)
           if (vec.length == 0) {
             let col = rgbcolor.parse(dataValue)
-            colArray.fill(1) // default, white, alpha 1
-            vec = rgbcolor.toArray(colArray, col)
+            if (col) {
+              colArray.fill(1) // default, white, alpha 1
+              vec = rgbcolor.toArray(colArray, col)
+            }
           }
-          setFn(vec)
+
+          if (vec.length > 0) {
+            setFn(vec)
+          }
           break
       }
     }

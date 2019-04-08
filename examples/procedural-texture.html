@@ -43,7 +43,6 @@
         vec2 p = vUv*8.0;
         float q = fbm(p - time*0.1);
         vec2 r = vec2(fbm(p + q + time*speed.x - p.x - p.y), fbm(p + q - time*speed.y));
-        //vec3 c = mix(color1, color2, fbm(p+r)) + mix(color3, color4, r.x) - mix(color5, color6, r.y);
         vec3 c = mix(colors[0], colors[1], fbm(p+r)) + mix(colors[2], colors[3], r.x) - mix(colors[4], colors[5], r.y);
         vec3 color = c*cos(shift*vUv.y);
         float luminance = dot(color.rgb, vec3(.3, .59, .11));
@@ -222,6 +221,7 @@
       <a-box position="2 4 -5" material="src:#gaussian;"></a-box>
       <a-box position="4 4 -5" material="src:#blur;"></a-box>
       <a-box position="-6 4 -5" material="src:#test;"></a-box>
+      <a-box position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
 
       <a-sphere scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
       <a-sphere scale="0.5 0.5 0.5" position="-4 2 -5" material="src:#cloud;"></a-sphere>

@@ -79,17 +79,6 @@ float brick(const vec2 uv, const float numberOfBricksWidth, const float numberOf
   return 1. - clamp( min(yi/jointHeightPercentage, xi/jointWidthPercentage) + 0.2, 0., 1. );
 }
 
-vec3 marbleColorize(vec3 color, float x)
-{
-  x=0.5*(x+1.);
-  x=sqrt(x); 
-  x=sqrt(x);
-  x=sqrt(x);
-  color=color*vec3(.2+.75*x); 
-  // color.b*=0.95; 
-  return color;
-}
-
 float marble(const vec2 uv, float amplitude, float k)
 {
   k = 6.28*uv.x/k;
@@ -138,9 +127,6 @@ float normpdf(const float x, const float sigma)
 
 vec4 blur9(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
 {
-  // kernelWidth = 2*(kernelWidth/2) + 1;
-  // int kSize = (kernelWidth - 1)/2;
-  // float kernel[kernelWidth];
   const int kernelWidth = 9;
   const int kSize = (kernelWidth)/2 - 1;
   float kernel[kernelWidth];
