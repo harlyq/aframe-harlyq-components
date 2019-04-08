@@ -13,15 +13,6 @@ float rand(const vec2 n)
   return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);
 }
 
-// const mat2 myt = mat2(.12121212, .13131313, -.13131313, .12121212);
-// const vec2 mys = vec2(1e4, 1e6);
-
-// vec2 rhash(vec2 uv) {
-//   uv *= myt;
-//   uv *= mys;
-//   return fract(fract(uv / mys) * uv);
-// }
-
 float noise(const vec2 n)
 {
   const vec2 d=vec2(0.0,1.0);
@@ -61,7 +52,7 @@ float roundF(const float number)
   return sign(number)*floor(abs(number)+0.5);
 }
 
-vec2 brickUV(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight)
+vec2 uvBrick(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight)
 {
   float yi=uv.y*numberOfBricksHeight;
   float nyi=roundF(yi);
@@ -99,14 +90,14 @@ vec3 marbleColorize(vec3 color, float x)
   return color;
 }
 
-float marble(const vec2 uv, float amplitude, float t)
+float marble(const vec2 uv, float amplitude, float k)
 {
-  t = 6.28*uv.x/t;
-  t += amplitude*turbulence(uv.xy);
-  t = sin(t);
-  t = .5*(t + 1.);
-  t = sqrt( sqrt( sqrt(t) ) ); 
-  return .2 + .75*t;
+  k = 6.28*uv.x/k;
+  k += amplitude*turbulence(uv.xy);
+  k = sin(k);
+  k = .5*(k + 1.);
+  k = sqrt( sqrt( sqrt(k) ) ); 
+  return .2 + .75*k;
 }
 
 float checkerboard(const vec2 uv, const float numCheckers)
@@ -116,23 +107,63 @@ float checkerboard(const vec2 uv, const float numCheckers)
   return sign( mod(cx + cy, 2.) );
 }
 
-float gaussian(const vec2 uv, const float repeat)
+float gaussian(const vec2 uv)
 {
-  vec2 xy = (uv - .5)*2.;
+  vec2 xy = (mod(uv, vec2(1.,1.)) - .5)*2.;
   float exponent = dot(xy,xy)/0.31831;
   return exp(-exponent);
 }
 
-// float voronoi2d(const in vec2 point) {
-//   vec2 p = floor(point);
-//   vec2 f = fract(point);
-//   float res = 0.0;
-//   for (int j = -1; j <= 1; j++) {
-//     for (int i = -1; i <= 1; i++) {
-//       vec2 b = vec2(i, j);
-//       vec2 r = vec2(b) - f + rhash(p + b);
-//       res += 1. / pow(dot(r, r), 8.);
-//     }
-//   }
-//   return pow(1. / res, 0.0625);
-// }
+vec2 uvTransform(const vec2 uv, const vec2 center, const vec2 scale, const float rad, const vec2 translate) 
+{
+  float c = cos(-rad);
+  float s = sin(-rad);
+  float x = (uv.x - translate.x - center.x);
+  float y = (uv.y - translate.y - center.y);
+  float x2 = (x*c + y*s)/scale.x + center.x;
+  float y2 = (-x*s + y*c)/scale.y + center.y;
+  return vec2(x2, y2);
+}
+
+vec2 uvCrop(const vec2 uv, const vec2 uvMin, const vec2 uvMax) 
+{
+  vec2 scale = 1./(uvMax - uvMin);
+  return uvTransform(uv, vec2(0.), scale, 0., -uvMin*scale);
+}
+
+float normpdf(const float x, const float sigma)
+{
+  return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;
+}
+
+vec4 blur9(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
+{
+  // kernelWidth = 2*(kernelWidth/2) + 1;
+  // int kSize = (kernelWidth - 1)/2;
+  // float kernel[kernelWidth];
+  const int kernelWidth = 9;
+  const int kSize = (kernelWidth)/2 - 1;
+  float kernel[kernelWidth];
+
+  float Z = 0.;
+
+  for (int j = 0; j <= kSize; j++)
+  {
+    kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j), sigma);
+  }
+  for (int j = 0; j < kernelWidth; j++)
+  {
+    Z += kernel[j];
+  }
+
+  vec4 color = vec4(0.);
+  for (int i = -kSize; i <= kSize; i++)
+  {
+    for (int j = -kSize; j <= kSize; j++)
+    {
+      color += kernel[kSize + j]*kernel[kSize + i]*texture2D( image, uv + vec2(float(i), float(j))/resolution );
+    }
+  }
+
+  return color/(Z*Z);
+}

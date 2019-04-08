@@ -32,12 +32,7 @@
     </script>
     <script id="fireshader" type="x-shader/x-fragment">
       uniform float time;
-      uniform vec3 color1;
-      uniform vec3 color2;
-      uniform vec3 color3;
-      uniform vec3 color4;
-      uniform vec3 color5;
-      uniform vec3 color6;
+      uniform vec3 colors[6];
       uniform vec2 speed;
       uniform float shift;
       uniform float alphaThreshold;
@@ -48,7 +43,8 @@
         vec2 p = vUv*8.0;
         float q = fbm(p - time*0.1);
         vec2 r = vec2(fbm(p + q + time*speed.x - p.x - p.y), fbm(p + q - time*speed.y));
-        vec3 c = mix(color1, color2, fbm(p+r)) + mix(color3, color4, r.x) - mix(color5, color6, r.y);
+        //vec3 c = mix(color1, color2, fbm(p+r)) + mix(color3, color4, r.x) - mix(color5, color6, r.y);
+        vec3 c = mix(colors[0], colors[1], fbm(p+r)) + mix(colors[2], colors[3], r.x) - mix(colors[4], colors[5], r.y);
         vec3 color = c*cos(shift*vUv.y);
         float luminance = dot(color.rgb, vec3(.3, .59, .11));
         gl_FragColor = vec4(color, luminance*alphaThreshold + (1. - alphaThreshold));
@@ -64,7 +60,7 @@
 
       void main(void)
       {
-        vec2 brickvUv = brickUV(vUv, numberOfBricksWidth, numberOfBricksHeight);
+        vec2 brickvUv = uvBrick(vUv, numberOfBricksWidth, numberOfBricksHeight);
 
         vec4 color = brickColor;
         color = mix(color, jointColor, brick(vUv, numberOfBricksWidth, numberOfBricksHeight, .02*numberOfBricksWidth, .03*numberOfBricksHeight));
@@ -87,7 +83,7 @@
 
       void main()
       {
-        vec2 brickUv = brickUV(vUv, numberOfTilesWidth, numberOfTilesHeight);
+        vec2 brickUv = uvBrick(vUv, numberOfTilesWidth, numberOfTilesHeight);
 
         vec4 color = marbleColor;
         color = mix(vec4(0.), color, marble(brickUv, amplitude, 1.1 + detailA + detailB*noise(vec2(vUv))));
@@ -152,8 +148,36 @@
 
       void main()
       {
-        vec4 color = mix(backgroundColor, fillColor, gaussian(vUv, 1.));
+        vec4 color = mix(backgroundColor, fillColor, gaussian(vUv));
         gl_FragColor = color;
+      }
+    </script>
+    <script id="blurshader" type="x-shader/x-fragment">
+      uniform sampler2D image;
+      uniform vec2 size;
+
+      varying vec2 vUv;
+
+      void main()
+      {
+        gl_FragColor = blur9(image, vUv, size, 2.);
+      }
+    </script>
+    <script id="testshader" type="x-shader/x-fragment">
+      uniform float rotation;
+      uniform vec2 center;
+      uniform vec2 scale;
+      uniform vec2 translation;
+
+      varying vec2 vUv;
+
+      void main()
+      {
+        //vec2 uv = uvTransform(vUv, center, scale, rotation, translation);
+        vec2 uv = uvCrop(vUv, vec2(0.,0.), vec2(.51,.51));
+        float val = (uv.x > 0. && uv.y > 0. && uv.x < .5 && uv.y < .5) ? 1. : 0.;
+        vec3 color = mix(vec3(0.), vec3(1.), val);
+        gl_FragColor = vec4(color, 1.);
       }
     </script>
   </head>
@@ -169,19 +193,24 @@
         <canvas id="voronoi" width="128" height="128"></canvas>
         <canvas id="altbrick" width="128" height="128"></canvas>        
         <canvas id="gaussian" width="512" height="512"></canvas>
+        <canvas id="blur" width="128" height="128"></canvas>
+        <canvas id="test" width="512" height="512"></canvas>
       </a-assets>
       <a-sky color="lightgray"></a-sky>
       <a-entity 
         procedural-texture__voronoi="shader: #voronoishader; dest: #voronoi; amplitude: 5; phase: 1; innerColor: rgba(0,0,0,0); outerColor: black"
         procedural-texture__cloud="shader: #cloudshader; dest: #cloud; skyColor: rgba(0,0,255,1); cloudColor: white; resolution: 0; threshold: 0"
         procedural-texture__wood="shader: #woodshader; dest: #wood; ampScale: 10.5; woodColor: #4B2513"
-        procedural-texture__fire="shader: #fireshader; dest: #fire; shift: .8; alphaThreshold: 0; time: 0; speed: .5 .3; color1:rgb(127,0,255); color2:rgb(230,0,255); color3:rgb(51,0,255); color4:rgb(255,230,255); color5:rgb(25,25,255); color6:rgb(230,230,255)"
+        procedural-texture__fire="shader: #fireshader; dest: #fire; shift: .8; alphaThreshold: 0; time: 0; speed: .5 .3; colors: rgb(127,0,255), rgb(230,0,255), rgb(51,0,255), rgb(255,230,255), rgb(25,25,255), rgb(230,230,255)"
         procedural-texture__brick="shader: #brickshader; dest: #brick; numberOfBricksHeight: 5; numberOfBricksWidth: 4; brickColor: black; jointColor: white"
         procedural-texture__marble="shader: #marbleshader; dest: #marble; numberOfTilesHeight: 2; numberOfTilesWidth: 2; amplitude: 5; detailA: 0.5; detailB: 6; marbleColor: lightgray; jointColor: black"
         procedural-texture__checkerboard="shader: #checkerboardshader; dest: #checkerboard; numberOfCheckers: 4; colorA: teal; colorB: brown"
         procedural-texture__altbrick="shader: #altbrickshader; dest: #altbrick; numberOfBricksHeight: 6; numberOfBricksWidth: 4; brickColor: brown;"
-        procedural-texture__test="shader: #gaussianshader; dest: #gaussian; backgroundColor: black; fillColor: yellow"
-        ></a-entity>
+        procedural-texture__gaussian="shader: #gaussianshader; dest: #gaussian; backgroundColor: black; fillColor: yellow"
+        procedural-texture__blur="shader: #blurshader; dest: #blur; image: #altbrick; size: 128 128"
+        procedural-texture__test="shader: #testshader; dest: #test;"
+      ></a-entity>
+
       <a-box position="-6 0 -5" material="src:#voronoi"></a-box>
       <a-box position="-4 0 -5" material="src:#cloud"></a-box>
       <a-box position="-2 0 -5" material="src:#wood"></a-box>
@@ -191,6 +220,8 @@
       <a-box position="6 0 -5" material="src:#checkerboard"></a-box>
       <a-box position="0 4 -5" material="src:#altbrick"></a-box>
       <a-box position="2 4 -5" material="src:#gaussian;"></a-box>
+      <a-box position="4 4 -5" material="src:#blur;"></a-box>
+      <a-box position="-6 4 -5" material="src:#test;"></a-box>
 
       <a-sphere scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
       <a-sphere scale="0.5 0.5 0.5" position="-4 2 -5" material="src:#cloud;"></a-sphere>

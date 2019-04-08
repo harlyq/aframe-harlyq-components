@@ -4,6 +4,7 @@ import proceduralVertexShader from "./procedural-vertex.glsl"
 // @ts-ignore
 import proceduralFragmentShader from "./procedural-fragment.glsl"
 import { rgbcolor } from "harlyq-helpers"
+import { attribute } from "harlyq-helpers"
 
 AFRAME.registerSystem("procedural-texture", {
   init() {
@@ -112,7 +113,7 @@ AFRAME.registerComponent("procedural-texture", {
   },
 
   parseShaderUniforms(shader) {
-    const varRegEx = /uniform (vec2|vec3|vec4|float|int|uint|bool) ([a-zA-Z0-9_]+);/
+    const varRegEx = /uniform (vec2|vec3|vec4|float|int|uint|bool|sampler2D) ([a-zA-Z0-9_]+)(\[(\d+)\])?;/
     let uniforms = {}
   
     shader.split("\n").forEach(line => {
@@ -120,8 +121,9 @@ AFRAME.registerComponent("procedural-texture", {
       if (match) {
         const uniformType = match[1]
         const name = match[2]
+        const arrayCount = typeof match[4] !== "undefined" ? parseInt(match[4], 10) : 0
         if (name) {
-          const newUniform = uniforms[name] || this.allocateUniform(uniformType)
+          const newUniform = uniforms[name] || this.allocateUniform(uniformType, arrayCount)
           uniforms[name] = newUniform
         }
       }
@@ -136,71 +138,125 @@ AFRAME.registerComponent("procedural-texture", {
     for (let key in uniforms) {
       const uniform = uniforms[key]
       switch (uniform.type) {
+        case "texture":
+          newSchema[key] = { type: "string" }
+          break
         case "float32array": 
         case "int32array":
           newSchema[key] = { type: "string" }
           break
         default:
-          newSchema[key] = { type: uniform.type }
+          newSchema[key] = { type: uniform.count > 1 ? "string" : uniform.type }
       }
     }
 
     return newSchema
   },
   
-  updateUniforms(uniforms, data) {
-    for (let name in uniforms) {
-      const dataValue = data[name]
-      const uniform = uniforms[name]
-  
-      if (typeof dataValue === "undefined") {
-        console.warn(`no attribute for uniform: ${name}`)
-      } else {
-        switch (uniform.type) {
-          case "number":
-            uniform.value = parseFloat(dataValue)
-            break
-          case "boolean":
-            uniform.value = !!dataValue
-            break
-          case "float32array":
-          case "int32array":
-            const vec = dataValue.split(" ").map(x => Number(x)).filter(x => !isNaN(x))
-            if (vec.length > 0 && (uniform.value instanceof Float32Array || uniform.value instanceof Int32Array)) {
-              uniform.value.set(vec)
-            } else {
-              let col = new Array(4).fill(1) // default alpha is 1
-              uniform.value.set(rgbcolor.toArray(col, rgbcolor.parse(dataValue)).slice(0, uniform.value.length))
+  updateUniforms: (function () {
+    let colArray = new Array(4)
+    const toNumber = x => Number(x)
+    const isNumber = x => !isNaN(x)
+
+    function setValue(type, dataValue, setFn, el = undefined) {
+      switch (type) {
+        case "texture":
+          const materialSystem = el.sceneEl.systems["material"]
+          const textureEl = document.querySelector(dataValue)          
+          const textureRef = textureEl ? textureEl : dataValue
+          materialSystem.loadTexture(textureRef, {src: textureRef}, (texture) => {
+            setFn(texture)
+          })
+          break
+        case "number":
+          setFn(parseFloat(dataValue))
+          break
+        case "boolean":
+          setFn(!!dataValue)
+          break
+        case "float32array":
+        case "int32array":
+          let vec = dataValue.split(" ").map(toNumber).filter(isNumber)
+          if (vec.length == 0) {
+            let col = rgbcolor.parse(dataValue)
+            colArray.fill(1) // default, white, alpha 1
+            vec = rgbcolor.toArray(colArray, col)
+          }
+          setFn(vec)
+          break
+      }
+    }
+
+    return function updateUniforms(uniforms, data) {
+      for (let name in uniforms) {
+        const dataStr = data[name]
+        const uniform = uniforms[name]
+    
+        if (typeof dataStr === "undefined") {
+          console.warn(`no attribute for uniform: ${name}`)
+        } else {
+          const dataValues = (typeof dataStr === "string" ? attribute.nestedSplit(dataStr) : [dataStr.toString()]).map(x => x.trim())
+            
+          if (uniform.arrayCount > 0) {
+            for (let i = 0; i < dataValues.length; i++) {
+              const dataValue = dataValues[i]
+
+              switch (uniform.type) {
+                case "texture":
+                  setValue(uniform.type, dataValue, v => uniform.value[i] = v, this.el)
+                  break
+                case "number":
+                case "boolean":
+                  setValue(uniform.type, dataValue, v => uniform.value[i] = v, this.el)
+                  break
+                case "float32array":
+                case "in32array":
+                  setValue(uniform.type, dataValue, v => uniform.value.set(v.slice(0, uniform.size), i*uniform.size))
+                  break
+              }
             }
-            break
-          default:
-            break
+          } else {
+            switch (uniform.type) {
+              case "texture": 
+              case "number":
+              case "boolean":
+                setValue(uniform.type, dataValues[0], v => uniform.value = v, this.el)
+                break
+              case "float32array":
+              case "in32array":
+                setValue(uniform.type, dataValues[0], v => uniform.value.set(v.slice(0, uniform.size)))
+                break
+            }
+          }
         }
       }
     }
-  },
+  })(),
   
-  allocateUniform(type) {
+  allocateUniform(type, arrayCount) {
+    const blockCount = Math.max(1, arrayCount)
     switch (type) {
+      case "sampler2D":
+        return { type: "texture", value: arrayCount > 0 ? new Array(arrayCount).fill(undefined) : undefined, arrayCount }
       case "float":
       case "int": 
-        return { type: "number", value: 0 }
+        return { type: "number", value: arrayCount > 0 ? new Array(arrayCount).fill(0) : 0, arrayCount }
       case "bool": 
-        return { type: "boolean", value: false }
+        return { type: "boolean", value: arrayCount > 0 ? new Array(arrayCount).fill(false) : false, arrayCount }
       case "ivec2":
       case "bvec2":
       case "vec2": 
-        return { type: "float32array", value: new Float32Array(2) }
+        return { type: "float32array", value: new Float32Array(2*blockCount), size: 2, arrayCount }
       case "vec3": 
-        return { type: "float32array", value: new Float32Array(3) }
+        return { type: "float32array", value: new Float32Array(3*blockCount), size: 3, arrayCount }
       case "vec4": 
-        return { type: "float32array", value: new Float32Array(4) }
+        return { type: "float32array", value: new Float32Array(4*blockCount), size: 4, arrayCount }
       case "ivec3": 
       case "bvec3":
-        return { type: "int32array", value: new Int32Array(3) }
+        return { type: "int32array", value: new Int32Array(3*blockCount), size: 3, arrayCount }
       case "ivec4": 
       case "bvec4":
-        return { type: "int32array", value: new Int32Array(4) }
+        return { type: "int32array", value: new Int32Array(4*blockCount), size: 4, arrayCount }
       default:
         console.warn(`unknown uniform type ${type}`)
     }
