@@ -929,52 +929,6 @@
    * @typedef {number} Distance
    */
 
-  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetFromObject3DFn */
-  /** @type {SetFromObject3DFn} */
-  const setFromObject3D = (function() {
-    // @ts-ignore
-    let tempPosition = new THREE.Vector3();
-    // @ts-ignore
-    let tempQuaternion = new THREE.Quaternion();
-    // @ts-ignore
-    let tempScale = new THREE.Vector3();
-    // @ts-ignore
-    let tempBox3 = new THREE.Box3();
-
-    return /** @type {SetFromObject3DFn} */function setFromObject3D(ext, object3D) {
-      if (object3D.children.length === 0) {
-        return ext
-      }
-
-      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
-      // based around the origin
-      tempPosition.copy(object3D.position);
-      tempQuaternion.copy(object3D.quaternion);
-      tempScale.copy(object3D.scale);
-
-      object3D.position.set(0,0,0);
-      object3D.quaternion.set(0,0,0,1);
-      object3D.scale.set(1,1,1);
-
-      tempBox3.setFromObject(object3D); // expensive for models
-      // ext.setFromObject(object3D) // expensive for models
-
-      object3D.position.copy(tempPosition);
-      object3D.quaternion.copy(tempQuaternion);
-      object3D.scale.copy(tempScale);
-      object3D.updateMatrixWorld(true);
-
-      ext.min.x = tempBox3.min.x;
-      ext.min.y = tempBox3.min.y; 
-      ext.min.z = tempBox3.min.z; 
-      ext.max.x = tempBox3.max.x; 
-      ext.max.y = tempBox3.max.y; 
-      ext.max.z = tempBox3.max.z; 
-
-      return ext
-    }
-  })();
-
   /** @type {<TE extends Extent>(ext: TE) => number} */
   function volume(ext) {
     return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
@@ -1331,6 +1285,80 @@
 
     return results
   }
+
+  /**
+   * @typedef {{x: number, y: number, z: number}} VecXYZ
+   * @typedef {{min: VecXYZ, max: VecXYZ}} Extent
+   * 
+   */
+
+   /** @type {(rootObject3D: object, canvas: object) => void} */
+  function updateMaterialsUsingThisCanvas(rootObject3D, canvas) {
+    rootObject3D.traverse((node) => {
+      if (node.material) {
+        for (let map of ["map", "alphaMap", "aoMap", "bumpMap", "displacementMap", "emissiveMap", "envMap", "lighMap", "metalnessMap", "normalMap", "roughnessMap"]) {
+          if (node.material[map] && node.material[map].image === canvas) {
+            node.material[map].needsUpdate = true;
+          }
+        }
+
+        if (node.material.uniforms) {
+          for (let key in node.material.uniforms) {
+            const uniform = node.material.uniforms[key];
+            if (uniform.value && typeof uniform.value === "object" && uniform.value.image === canvas) {
+              uniform.value.needsUpdate = true;
+            }
+          }
+        }
+      }
+    });
+  }
+
+  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetFromObject3DFn */
+  /** @type {SetFromObject3DFn} */
+  const setFromObject3D = (function() {
+    // @ts-ignore
+    let tempPosition = new THREE.Vector3();
+    // @ts-ignore
+    let tempQuaternion = new THREE.Quaternion();
+    // @ts-ignore
+    let tempScale = new THREE.Vector3();
+    // @ts-ignore
+    let tempBox3 = new THREE.Box3();
+
+    return /** @type {SetFromObject3DFn} */function setFromObject3D(ext, object3D) {
+      if (object3D.children.length === 0) {
+        return ext
+      }
+
+      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
+      // based around the origin
+      tempPosition.copy(object3D.position);
+      tempQuaternion.copy(object3D.quaternion);
+      tempScale.copy(object3D.scale);
+
+      object3D.position.set(0,0,0);
+      object3D.quaternion.set(0,0,0,1);
+      object3D.scale.set(1,1,1);
+
+      tempBox3.setFromObject(object3D); // expensive for models
+      // ext.setFromObject(object3D) // expensive for models
+
+      object3D.position.copy(tempPosition);
+      object3D.quaternion.copy(tempQuaternion);
+      object3D.scale.copy(tempScale);
+      object3D.updateMatrixWorld(true);
+
+      ext.min.x = tempBox3.min.x;
+      ext.min.y = tempBox3.min.y; 
+      ext.min.z = tempBox3.min.z; 
+      ext.max.x = tempBox3.max.x; 
+      ext.max.y = tempBox3.max.y; 
+      ext.max.z = tempBox3.max.z; 
+
+      return ext
+    }
+  })();
 
   // Copyright 2018-2019 harlyq
   // MIT license
@@ -1997,7 +2025,7 @@
       }
     },
 
-    updateUsersOfTexture(canvas, exceptComponent) {
+    updateProceduralTexturesUsingThisCanvas(canvas, exceptComponent = undefined) {
       for (let component of this.proceduralTextureComponents) {
         if (exceptComponent === component) {
           continue
@@ -2043,12 +2071,20 @@
             this.shaderProgram = shaderEl.textContent;
           } else if (/main\(/.test(newData.shader)) {
             this.shaderProgram = newData.shader;
+          } else {
+            console.warn(`unknown shader: ${newData.shader}`);
           }
           this.uniforms = this.parseShaderUniforms(this.shaderProgram);
         }
       }
 
-      const newSchema = this.uniformsToSchema(this.uniforms);
+      let newSchema = this.uniformsToSchema(this.uniforms);
+
+      if (!newData.dest) {
+        newSchema.width = { type: "int", value: 256 };
+        newSchema.height = { type: "int", value: 256 };
+      }
+
       if (Object.keys(newSchema).length > 0) {
         this.extendSchema(newSchema);
       }
@@ -2069,7 +2105,6 @@
         const mesh = this.el.getObject3D("mesh");
         if (mesh && mesh.material) {
           mesh.material.map = new THREE.CanvasTexture(this.dest);
-          mesh.material.map.needsUpdate = true;
         }
       }
 
@@ -2078,6 +2113,9 @@
           this.setupScene(this.dest, this.shaderProgram);
         }
         this.renderScene(data);
+
+        updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.dest);
+        this.system.updateProceduralTexturesUsingThisCanvas(this.dest);
       }
     },
 
@@ -2119,18 +2157,6 @@
       this.system.renderer.render( this.scene, this.camera );
 
       this.ctx.drawImage(this.system.renderer.domElement, 0, 0);
-
-      // trigger an update for materials that use this canvas
-      const root = this.el.sceneEl.object3D;
-      root.traverse((node) => {
-        if (node.isMesh && node.material) {
-          if (node.material.map && node.material.map.image === this.dest) {
-            node.material.map.needsUpdate = true;
-          }
-        }
-      });
-
-      this.system.updateUsersOfTexture(this.dest);
     },
 
     parseShaderUniforms(shader) {

@@ -5,6 +5,7 @@ import proceduralVertexShader from "./procedural-vertex.glsl"
 import proceduralFragmentShader from "./procedural-fragment.glsl"
 import { rgbcolor } from "harlyq-helpers"
 import { attribute } from "harlyq-helpers"
+import { three_helper } from "harlyq-helpers"
 
 AFRAME.registerSystem("procedural-texture", {
   init() {
@@ -26,7 +27,7 @@ AFRAME.registerSystem("procedural-texture", {
     }
   },
 
-  updateUsersOfTexture(canvas, exceptComponent) {
+  updateProceduralTexturesUsingThisCanvas(canvas, exceptComponent = undefined) {
     for (let component of this.proceduralTextureComponents) {
       if (exceptComponent === component) {
         continue
@@ -72,12 +73,20 @@ AFRAME.registerComponent("procedural-texture", {
           this.shaderProgram = shaderEl.textContent
         } else if (/main\(/.test(newData.shader)) {
           this.shaderProgram = newData.shader
+        } else {
+          console.warn(`unknown shader: ${newData.shader}`)
         }
         this.uniforms = this.parseShaderUniforms(this.shaderProgram)
       }
     }
 
-    const newSchema = this.uniformsToSchema(this.uniforms)
+    let newSchema = this.uniformsToSchema(this.uniforms)
+
+    if (!newData.dest) {
+      newSchema.width = { type: "int", value: 256 }
+      newSchema.height = { type: "int", value: 256 }
+    }
+
     if (Object.keys(newSchema).length > 0) {
       this.extendSchema(newSchema)
     }
@@ -98,7 +107,6 @@ AFRAME.registerComponent("procedural-texture", {
       const mesh = this.el.getObject3D("mesh")
       if (mesh && mesh.material) {
         mesh.material.map = new THREE.CanvasTexture(this.dest)
-        mesh.material.map.needsUpdate = true
       }
     }
 
@@ -107,6 +115,9 @@ AFRAME.registerComponent("procedural-texture", {
         this.setupScene(this.dest, this.shaderProgram)
       }
       this.renderScene(data)
+
+      three_helper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.dest)
+      this.system.updateProceduralTexturesUsingThisCanvas(this.dest)
     }
   },
 
@@ -148,18 +159,6 @@ AFRAME.registerComponent("procedural-texture", {
     this.system.renderer.render( this.scene, this.camera );
 
     this.ctx.drawImage(this.system.renderer.domElement, 0, 0)
-
-    // trigger an update for materials that use this canvas
-    const root = this.el.sceneEl.object3D
-    root.traverse((node) => {
-      if (node.isMesh && node.material) {
-        if (node.material.map && node.material.map.image === this.dest) {
-          node.material.map.needsUpdate = true
-        }
-      }
-    })
-
-    this.system.updateUsersOfTexture(this.dest)
   },
 
   parseShaderUniforms(shader) {
