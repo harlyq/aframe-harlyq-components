@@ -3,7 +3,7 @@
 
 import { proximity } from "harlyq-helpers"
 import { extent } from "harlyq-helpers"
-import { three_helper } from "harlyq-helpers"
+import { threeHelper } from "harlyq-helpers"
 
 /**
  * Based on donmccurdy/aframe-extras/sphere-collider.js
@@ -160,7 +160,7 @@ AFRAME.registerComponent("simple-hands", {
     // cache boundingBox and boundingSphere
     obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3()
     obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere()
-    three_helper.setFromObject3D(obj3D.boundingBox, obj3D)
+    threeHelper.setFromObject3D(obj3D.boundingBox, obj3D)
 
     if (!obj3D.boundingBox.isEmpty()) {
       obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere)

@@ -2,8 +2,7 @@
 // MIT license
 import ScopedListener from "./scoped-listener.js"
 import BasicTimer from "./basic-timer.js"
-import { setProperty } from "./aframe-utils.js"
-import { attribute, pseudorandom } from "harlyq-helpers"
+import { aframeHelper, attribute, pseudorandom } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or event
@@ -108,7 +107,7 @@ AFRAME.registerComponent("wait-set", {
 
         const value = attribute.stringify( attribute.randomize(rule, this.lcg.random) )
         // console.log("wait-set:setProperties", el.id, prop, value)
-        setProperty(el, prop, value)
+        aframeHelper.setProperty(el, prop, value)
       }
     }
   },

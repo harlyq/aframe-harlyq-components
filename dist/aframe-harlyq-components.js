@@ -923,6 +923,58 @@
     return split
   }
 
+  // *value* can be boolean, string, color or array of numbers
+  /** 
+   * @typedef { (target: object, prop: string, value: any) => void } SetPropertyFn
+   * @type { SetPropertyFn } 
+   * */
+  const setProperty = (() => {
+    const trim = x => x.trim();
+    const OBJECT3D_FAST_SET = {
+      // @ts-ignore
+      "rotation": x => isNaN(x) ? 0 : THREE.Math.degToRad(x),
+      "position": x => isNaN(x) ? 0 : x,
+      "scale": x => isNaN(x) ? 1 : x,
+    };
+    
+    return /** @type { SetPropertyFn } */function setProperty(target, prop, value) {
+      let fn = OBJECT3D_FAST_SET[prop];
+      if (fn) {
+        if (Array.isArray(value)) ; else if (typeof value === "object") {
+          value = [value.x, value.y, value.z];
+        } else {
+          value = value.split(" ").map(trim);
+        }
+        value.length = 3;
+        target.object3D[prop].set(...value.map(fn));
+        return
+      }
+    
+      const parts = prop.split(".");
+      if (parts.length <= 2) {
+        // component or component.property
+        parts[0] = parts[0].replace(/[A-Z]/g, x => "-" + x.toLowerCase()); // convert component names from camelCase to kebab-case
+        if (value) {
+          // @ts-ignore
+          AFRAME.utils.entity.setComponentProperty(target, parts.join("."), stringify(value)); // does this work for vectors??
+        } else {
+          target.removeAttribute(parts.join("."));
+        }
+        return
+      }
+    
+      // e.g. object3dmap.mesh.material.uniforms.color
+      const path = getWithPath(target, parts);
+      if (path) {
+        // this only works for boolean, string, color and an array of one element
+        path[prop] = Array.isArray(value) && value.length === 1 ? value[0] : value;
+      } else {
+        console.warn(`unknown path for setProperty() '${prop}'`);
+      }
+    }   
+    
+  })();
+
   /**
    * @typedef {{x: number, y: number, z: number}} VecXYZ
    * @typedef {{min: VecXYZ, max: VecXYZ}} Extent
@@ -1292,23 +1344,36 @@
    * 
    */
 
-   /** @type {(rootObject3D: object, canvas: object) => void} */
+  function verifyMaterialNeedsUpdate(material, canvas) {
+    for (let map of ["map", "alphaMap", "aoMap", "bumpMap", "displacementMap", "emissiveMap", "envMap", "lighMap", "metalnessMap", "normalMap", "roughnessMap"]) {
+      if (material[map] && material[map].image === canvas) {
+        material[map].needsUpdate = true;
+      }
+    }
+  }
+
+  function verifyUniformNeedsUpdate(material, canvas) {
+    if (material.uniforms && 
+        material.uniforms.map && 
+        material.uniforms.map.value && 
+        typeof material.uniforms.map.value === "object" && 
+        material.uniforms.map.value.image === canvas) {
+      material.uniforms.map.value.needsUpdate = true;
+    }
+  }
+
+  /** @type {(rootObject3D: object, canvas: object) => void} */
   function updateMaterialsUsingThisCanvas(rootObject3D, canvas) {
     rootObject3D.traverse((node) => {
       if (node.material) {
-        for (let map of ["map", "alphaMap", "aoMap", "bumpMap", "displacementMap", "emissiveMap", "envMap", "lighMap", "metalnessMap", "normalMap", "roughnessMap"]) {
-          if (node.material[map] && node.material[map].image === canvas) {
-            node.material[map].needsUpdate = true;
+        if (Array.isArray(node.material)) {
+          for (let mat of node.material) {
+            verifyMaterialNeedsUpdate(mat, canvas);
+            verifyUniformNeedsUpdate(mat, canvas);
           }
-        }
-
-        if (node.material.uniforms) {
-          for (let key in node.material.uniforms) {
-            const uniform = node.material.uniforms[key];
-            if (uniform.value && typeof uniform.value === "object" && uniform.value.image === canvas) {
-              uniform.value.needsUpdate = true;
-            }
-          }
+        } else {
+          verifyMaterialNeedsUpdate(node.material, canvas);
+          verifyUniformNeedsUpdate(node.material, canvas);
         }
       }
     });
@@ -1361,75 +1426,6 @@
   })();
 
   // Copyright 2018-2019 harlyq
-  // MIT license
-
-  // stringifies an object, specifically sets colors as hexstrings and coordinates as space separated numbers
-  function convertToString(thing) {
-    if (typeof thing == "object") {
-      if (Array.isArray(thing)) {
-        return thing.map(convertToString)
-      }
-
-      if ("r" in thing && "g" in thing && "b" in thing) {
-        return toString(thing)
-      }
-
-      if ("x" in thing && "y" in thing || "z" in thing || "w" in thing) {
-        return AFRAME.utils.coordinates.stringify(thing)
-      }
-    }
-
-    return thing.toString()
-  }
-
-
-  // *value* can be boolean, string, color or array of numbers
-  const setProperty = (() => {
-    const trim = x => x.trim();
-    const OBJECT3D_FAST_SET = {
-      "rotation": x => isNaN(x) ? 0 : THREE.Math.degToRad(x),
-      "position": x => isNaN(x) ? 0 : x,
-      "scale": x => isNaN(x) ? 1 : x,
-    };
-    
-    return function setProperty(target, prop, value) {
-      let fn = OBJECT3D_FAST_SET[prop];
-      if (fn) {
-        if (Array.isArray(value)) ; else if (typeof value === "object") {
-          value = [value.x, value.y, value.z];
-        } else {
-          value = value.split(" ").map(trim);
-        }
-        value.length = 3;
-        target.object3D[prop].set(...value.map(fn));
-        return
-      }
-    
-      const parts = prop.split(".");
-      if (parts.length <= 2) {
-        // component or component.property
-        parts[0] = parts[0].replace(/[A-Z]/g, x => "-" + x.toLowerCase()); // convert component names from camelCase to kebab-case
-        if (value) {
-          AFRAME.utils.entity.setComponentProperty(target, parts.join("."), convertToString(value)); // does this work for vectors??
-        } else {
-          target.removeAttribute(parts.join("."));
-        }
-        return
-      }
-    
-      // e.g. object3dmap.mesh.material.uniforms.color
-      const path = getWithPath(target, parts);
-      if (path) {
-        // this only works for boolean, string, color and an array of one element
-        path[prop] = Array.isArray(value) && value.length === 1 ? value[0] : value;
-      } else {
-        console.warn(`unknown path for setProperty() '${prop}'`);
-      }
-    }   
-    
-  })();
-
-  // Copyright 2018-2019 harlyq
 
   const MAX_FRAME_TIME_MS = 100;
 
@@ -1472,13 +1468,13 @@
   function getPropertyAsString(target, prop) {
     const parts = prop.split(".");
     if (parts.length <= 2) {
-      return convertToString(AFRAME.utils.entity.getComponentProperty(target, prop))
+      return stringify(AFRAME.utils.entity.getComponentProperty(target, prop))
     }
 
     // e.g. object3dmap.mesh.material.uniforms.color
     const path = getWithPath(target, parts);
     if (path) {
-      return convertToString(path[prop])
+      return stringify(path[prop])
     } else {
       console.warn(`unknown path for getProperty() '${prop}'`);
     }
@@ -1999,12 +1995,6 @@
 
   })();
 
-  var proceduralVertexShader = "\n#define GLSLIFY 1\nvarying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}";
-
-  var proceduralFragmentShader = "precision highp float;\n#define GLSLIFY 1\nconst mat2 myt=mat2(.12121212,.13131313,-.13131313,.12121212);const vec2 mys=vec2(1e4,1e6);vec2 rhash(vec2 uv){uv*=myt;uv*=mys;return fract(fract(uv/mys)*uv);}vec3 hash(vec3 p){return fract(sin(vec3(dot(p,vec3(1.0,57.0,113.0)),dot(p,vec3(57.0,113.0,1.0)),dot(p,vec3(113.0,1.0,57.0))))*43758.5453);}float voronoi2d(const in vec2 point){vec2 p=floor(point);vec2 f=fract(point);float res=0.0;for(int j=-1;j<=1;j++){for(int i=-1;i<=1;i++){vec2 b=vec2(i,j);vec2 r=vec2(b)-f+rhash(p+b);res+=1./pow(dot(r,r),8.);}}return pow(1./res,0.0625);}float remap(float v,float amin,float amax,float bmin,float bmax){return (v-amin)*(bmax-bmin)/(amax-amin)+bmin;}float rand(const vec2 n){return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);}float noise(const vec2 n){const vec2 d=vec2(0.0,1.0);vec2 b=floor(n),f=smoothstep(vec2(0.0),vec2(1.0),fract(n));return mix(mix(rand(b),rand(b+d.yx),f.x),mix(rand(b+d.xy),rand(b+d.yy),f.x),f.y);}float fbm(vec2 n){float total=0.0,amplitude=1.0;for(int i=0;i<4;i++){total+=noise(n)*amplitude;n+=n;amplitude*=0.5;}return total;}float turbulence(const vec2 P){float val=0.0;float freq=1.0;for(int i=0;i<4;i++){val+=abs(noise(P*freq)/freq);freq*=2.07;}return val;}float roundF(const float number){return sign(number)*floor(abs(number)+0.5);}vec2 uvBrick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);}float brick(const vec2 uv,const float numberOfBricksWidth,const float numberOfBricksHeight,const float jointWidthPercentage,const float jointHeightPercentage){float yi=uv.y*numberOfBricksHeight;float nyi=roundF(yi);float xi=uv.x*numberOfBricksWidth;if(mod(floor(yi),2.0)==0.0){xi=xi-0.5;}float nxi=roundF(xi);xi=abs(xi-nxi);yi=abs(yi-nyi);return 1.-clamp(min(yi/jointHeightPercentage,xi/jointWidthPercentage)+0.2,0.,1.);}float marble(const vec2 uv,float amplitude,float k){k=6.28*uv.x/k;k+=amplitude*turbulence(uv.xy);k=sin(k);k=.5*(k+1.);k=sqrt(sqrt(sqrt(k)));return .2+.75*k;}float checkerboard(const vec2 uv,const float numCheckers){float cx=floor(numCheckers*uv.x);float cy=floor(numCheckers*uv.y);return sign(mod(cx+cy,2.));}float gaussian(const vec2 uv){vec2 xy=(mod(uv,vec2(1.,1.))-.5)*2.;float exponent=dot(xy,xy)/0.31831;return exp(-exponent);}vec2 uvTransform(const vec2 uv,const vec2 center,const vec2 scale,const float rad,const vec2 translate){float c=cos(-rad);float s=sin(-rad);float x=(uv.x-translate.x-center.x);float y=(uv.y-translate.y-center.y);float x2=(x*c+y*s)/scale.x+center.x;float y2=(-x*s+y*c)/scale.y+center.y;return vec2(x2,y2);}vec2 uvCrop(const vec2 uv,const vec2 uvMin,const vec2 uvMax){vec2 scale=1./(uvMax-uvMin);return uvTransform(uv,vec2(0.),scale,0.,-uvMin*scale);}float normpdf(const float x,const float sigma){return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;}vec4 blur13(const sampler2D image,const vec2 uv,const vec2 resolution,const float sigma){const int kernelWidth=13;const int kSize=(kernelWidth)/2-1;float kernel[kernelWidth];float Z=0.;for(int j=0;j<=kSize;j++){kernel[kSize+j]=kernel[kSize-j]=normpdf(float(j),sigma);}for(int j=0;j<kernelWidth;j++){Z+=kernel[j];}vec4 color=vec4(0.);for(int i=-kSize;i<=kSize;i++){for(int j=-kSize;j<=kSize;j++){color+=kernel[kSize+j]*kernel[kSize+i]*texture2D(image,uv+vec2(float(i),float(j))/resolution);}}return color/(Z*Z);}";
-
-  // uses @shotamatsuda/rollup-plugin-glslify
-
   AFRAME.registerSystem("procedural-texture", {
     init() {
       this.renderer = new THREE.WebGLRenderer({alpha: true});
@@ -2314,6 +2304,201 @@
       }
     }, 
   });
+
+  const proceduralVertexShader = `
+varying vec2 vUv;
+void main()
+{
+  vUv = uv;
+  gl_Position = vec4( position, 1.0 );
+}`;
+
+  const proceduralFragmentShader = `
+precision highp float;
+
+// could use levels low, high, mid, black, white (mid maps to (black + white)/2)
+float remap(float v, float amin, float amax, float bmin, float bmax)
+{
+  return (v - amin)*(bmax - bmin)/(amax - amin) + bmin;
+}
+
+float rand(const vec2 n)
+{
+  return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);
+}
+
+float noise(const vec2 n)
+{
+  const vec2 d=vec2(0.0,1.0);
+  vec2 b=floor(n), f=smoothstep(vec2(0.0), vec2(1.0), fract(n));
+  return mix( mix( rand(b), rand(b+d.yx), f.x ), mix( rand(b+d.xy), rand(b+d.yy), f.x ), f.y );
+}
+
+float fbm(vec2 n) {
+  float total=0.0,amplitude=1.0;
+
+  for (int i=0; i<4; i++)
+  {
+    total+=noise(n)*amplitude;
+    n+=n;
+    amplitude*=0.5;
+  }
+
+  return total;
+}
+
+float turbulence(const vec2 P)
+{
+  float val=0.0;
+  float freq=1.0;
+
+  for (int i=0; i<4; i++)
+  {
+    val+=abs(noise(P*freq)/freq);
+    freq*=2.07;
+  }
+
+  return val;
+}
+
+float roundF(const float number)
+{
+  return sign(number)*floor(abs(number)+0.5);
+}
+
+vec2 uvBrick(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight)
+{
+  float yi=uv.y*numberOfBricksHeight;
+  float nyi=roundF(yi);
+  float xi=uv.x*numberOfBricksWidth;
+  if (mod(floor(yi),2.0) == 0.0)
+  {
+    xi=xi-0.5;
+  }
+  float nxi=roundF(xi);
+
+  return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);
+}
+
+float brick(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight, const float jointWidthPercentage, const float jointHeightPercentage)
+{
+  float yi=uv.y*numberOfBricksHeight;
+  float nyi=roundF(yi);
+  float xi=uv.x*numberOfBricksWidth;
+  if (mod(floor(yi),2.0) == 0.0) { xi = xi - 0.5; } // offset every second brick
+  float nxi=roundF(xi);
+  xi = abs(xi - nxi);
+  yi = abs(yi - nyi);
+
+  return 1. - clamp( min(yi/jointHeightPercentage, xi/jointWidthPercentage) + 0.2, 0., 1. );
+}
+
+float marble(const vec2 uv, float amplitude, float k)
+{
+  k = 6.28*uv.x/k;
+  k += amplitude*turbulence(uv.xy);
+  k = sin(k);
+  k = .5*(k + 1.);
+  k = sqrt( sqrt( sqrt(k) ) ); 
+  return .2 + .75*k;
+}
+
+float checkerboard(const vec2 uv, const float numCheckers)
+{
+  float cx = floor(numCheckers * uv.x);
+  float cy = floor(numCheckers * uv.y);
+  return sign( mod(cx + cy, 2.) );
+}
+
+float gaussian(const vec2 uv)
+{
+  vec2 xy = (mod(uv, vec2(1.,1.)) - .5)*2.;
+  float exponent = dot(xy,xy)/0.31831;
+  return exp(-exponent);
+}
+
+vec2 uvTransform(const vec2 uv, const vec2 center, const vec2 scale, const float rad, const vec2 translate) 
+{
+  float c = cos(-rad);
+  float s = sin(-rad);
+  float x = (uv.x - translate.x - center.x);
+  float y = (uv.y - translate.y - center.y);
+  float x2 = (x*c + y*s)/scale.x + center.x;
+  float y2 = (-x*s + y*c)/scale.y + center.y;
+  return vec2(x2, y2);
+}
+
+vec2 uvCrop(const vec2 uv, const vec2 uvMin, const vec2 uvMax) 
+{
+  vec2 scale = 1./(uvMax - uvMin);
+  return uvTransform(uv, vec2(0.), scale, 0., -uvMin*scale);
+}
+
+float normpdf(const float x, const float sigma)
+{
+  return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;
+}
+
+vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
+{
+  const int kernelWidth = 13;
+  const int kSize = (kernelWidth)/2 - 1;
+  float kernel[kernelWidth];
+
+  float Z = 0.;
+
+  for (int j = 0; j <= kSize; j++)
+  {
+    kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j), sigma);
+  }
+  for (int j = 0; j < kernelWidth; j++)
+  {
+    Z += kernel[j];
+  }
+
+  vec4 color = vec4(0.);
+  for (int i = -kSize; i <= kSize; i++)
+  {
+    for (int j = -kSize; j <= kSize; j++)
+    {
+      color += kernel[kSize + j]*kernel[kSize + i]*texture2D( image, uv + vec2(float(i), float(j))/resolution );
+    }
+  }
+
+  return color/(Z*Z);
+}
+
+// from glsl-voronoi-noise
+const mat2 myt = mat2(.12121212, .13131313, -.13131313, .12121212);
+const vec2 mys = vec2(1e4, 1e6);
+
+vec2 rhash(vec2 uv) {
+  uv *= myt;
+  uv *= mys;
+  return fract(fract(uv / mys) * uv);
+}
+
+vec3 hash(vec3 p) {
+  return fract(sin(vec3(dot(p, vec3(1.0, 57.0, 113.0)),
+    dot(p, vec3(57.0, 113.0, 1.0)),
+    dot(p, vec3(113.0, 1.0, 57.0)))) *
+  43758.5453);
+}
+
+float voronoi2d(const in vec2 point) {
+  vec2 p = floor(point);
+  vec2 f = fract(point);
+  float res = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 b = vec2(i, j);
+      vec2 r = vec2(b) - f + rhash(p + b);
+      res += 1. / pow(dot(r, r), 8.);
+    }
+  }
+  return pow(1. / res, 0.0625);
+}
+`;
 
   // Copyright 2019 harlyq
 

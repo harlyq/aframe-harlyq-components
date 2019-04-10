@@ -1,7 +1,6 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import { convertToString, setProperty } from "./aframe-utils.js"
-import { utils, attribute, interpolation, pseudorandom } from "harlyq-helpers"
+import { utils, attribute, interpolation, pseudorandom, aframeHelper } from "harlyq-helpers"
 
 const MAX_FRAME_TIME_MS = 100
 
@@ -44,13 +43,13 @@ function lerpKeys(type, keys, r, easingFn = interpolation.Linear) {
 function getPropertyAsString(target, prop) {
   const parts = prop.split(".")
   if (parts.length <= 2) {
-    return convertToString(AFRAME.utils.entity.getComponentProperty(target, prop))
+    return attribute.stringify(AFRAME.utils.entity.getComponentProperty(target, prop))
   }
 
   // e.g. object3dmap.mesh.material.uniforms.color
   const path = utils.getWithPath(target, parts)
   if (path) {
-    return convertToString(path[prop])
+    return attribute.stringify(path[prop])
   } else {
     console.warn(`unknown path for getProperty() '${prop}'`)
   }
@@ -169,7 +168,7 @@ AFRAME.registerComponent("keyframe", {
       for (let prop in this.keys) {
         let r = THREE.Math.clamp(this.loopTime/data.duration, 0, 1)
         const value = lerpKeys(this.keyTypes[prop], this.keys[prop], r, easingFn)
-        setProperty(this.el, prop, value)
+        aframeHelper.setProperty(this.el, prop, value)
       }
     }
   },

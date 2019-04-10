@@ -32,11 +32,9 @@
     "aframe": "^0.9.0"
   },
   "devDependencies": {
-    "@shotamatsuda/rollup-plugin-glslify": "^1.0.0",
     "rollup-plugin-node-resolve": "^4.2.1"
   },
   "dependencies": {
-    "glsl-voronoi-noise": "^1.2.2",
     "harlyq-helpers": "git+https://git@github.com/harlyq/harlyq-helpers.git"
   }
 }
