@@ -1,7 +1,6 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import BasicTimer from "./basic-timer.js"
-import ScopedListener from "./scoped-listener.js"
+import { aframeHelper } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-emit" component for emitting events on this or other elements after a delay or event
@@ -24,8 +23,8 @@ AFRAME.registerComponent("wait-emit", {
     this.onEvent = this.onEvent.bind(this)
     this.sources = []
 
-    this.waitTimer = BasicTimer()
-    this.waitListener = ScopedListener()
+    this.waitTimer = aframeHelper.basicTimer()
+    this.waitListener = aframeHelper.scopedListener()
   },
 
   remove() {

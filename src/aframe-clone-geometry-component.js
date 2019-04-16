@@ -30,11 +30,33 @@ AFRAME.registerComponent("clone-geometry", {
   },
 
   cloneObject3D(from) {
+    const object3D = this.el.object3D
     for (let k in this.el.object3DMap) {
       this.el.removeObject3D(k)
     }
-    for (let k in from.object3DMap) {
-      this.el.setObject3D(k, from.getObject3D(k).clone())
+    while (object3D.children.length > 0) {
+      object3D.remove(object3D.children[0])
+    }
+
+    function getObjectName(obj3D) {
+      for (let k in from.object3DMap) {
+        if (obj3D === from.object3DMap[k]) {
+          return k
+        }
+      }
+      return undefined
+    }
+
+    for (let i = 0; i < from.object3D.children.length; i++) {
+      const child = from.object3D.children[i]
+      const name = getObjectName(child)
+      if (name) {
+        // if the object is in the aframe object map then add it via aframe
+        this.el.setObject3D(name, child.clone())
+      } else {
+        // otherwise add it via threejs
+        object3D.add(child.clone())
+      }
     }
   },
 })

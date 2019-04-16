@@ -1,7 +1,5 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import ScopedListener from "./scoped-listener.js"
-import BasicTimer from "./basic-timer.js"
 import { aframeHelper, attribute, pseudorandom } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
@@ -27,8 +25,8 @@ AFRAME.registerComponent("wait-set", {
     this.rules = {}
     this.sources = []
 
-    this.waitListener = ScopedListener()
-    this.waitTimer = BasicTimer()
+    this.waitListener = aframeHelper.scopedListener()
+    this.waitTimer = aframeHelper.basicTimer()
     this.lcg = pseudorandom.lcg()
   },
 

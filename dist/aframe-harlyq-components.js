@@ -224,11 +224,33 @@
     },
 
     cloneObject3D(from) {
+      const object3D = this.el.object3D;
       for (let k in this.el.object3DMap) {
         this.el.removeObject3D(k);
       }
-      for (let k in from.object3DMap) {
-        this.el.setObject3D(k, from.getObject3D(k).clone());
+      while (object3D.children.length > 0) {
+        object3D.remove(object3D.children[0]);
+      }
+
+      function getObjectName(obj3D) {
+        for (let k in from.object3DMap) {
+          if (obj3D === from.object3DMap[k]) {
+            return k
+          }
+        }
+        return undefined
+      }
+
+      for (let i = 0; i < from.object3D.children.length; i++) {
+        const child = from.object3D.children[i];
+        const name = getObjectName(child);
+        if (name) {
+          // if the object is in the aframe object map then add it via aframe
+          this.el.setObject3D(name, child.clone());
+        } else {
+          // otherwise add it via threejs
+          object3D.add(child.clone());
+        }
       }
     },
   });
@@ -874,10 +896,12 @@
     return /** @type { SetPropertyFn } */function setProperty(target, prop, value) {
       let fn = OBJECT3D_FAST_SET[prop];
       if (fn) {
-        if (Array.isArray(value)) ; else if (typeof value === "object") {
-          value = [value.x, value.y, value.z];
-        } else {
-          value = value.split(" ").map(trim);
+        if (!Array.isArray(value)) {
+          if (typeof value === "object") {
+            value = [value.x, value.y, value.z];
+          } else {
+            value = value.split(" ").map(trim);
+          }        
         }
         value.length = 3;
         target.object3D[prop].set(...value.map(fn));
@@ -908,6 +932,110 @@
     }   
     
   })();
+
+  /** @type {() => {start: (delay: number, callback: () => void) => void, stop: () => void, pause: () => void, resume: () => void }} */
+  function basicTimer() {
+    let sendEventTimer;
+    let timeOfStart;
+    let timeoutCallback;
+    let timeRemaining;
+
+    function start(delay, callback) {
+      stop();
+      
+      if (delay > 0) {
+        sendEventTimer = setTimeout(callback, delay*1000);
+        timeOfStart = Date.now();
+        timeoutCallback = callback;
+      } else {
+        callback();
+      }
+    }
+
+    function stop() {
+      clearTimeout(sendEventTimer);
+      sendEventTimer = undefined;
+      timeOfStart = undefined;
+      timeRemaining = undefined;
+      timeoutCallback = undefined;
+    }
+
+    function pause() {
+      if (sendEventTimer) {
+        let remaining = Date.now() - timeOfStart;
+        stop();
+        timeRemaining = remaining;
+      }
+    }
+
+    function resume() {
+      if (timeRemaining) {
+        start(timeRemaining, timeoutCallback);
+        timeRemaining = undefined;
+      }
+    }
+
+    return {
+      start,
+      stop,
+      pause,
+      resume
+    }
+  }
+
+
+  /** @type { () => {set: (el: HTMLElement, selector: string, scope: string, eventName: string, callbackFn: (e: any) => boolean) => void, add: () => void, remove: () => void, getElementsInScope: (el: HTMLElement, selector: string, scope: string, eventEl: HTMLElement) => void }} */
+  function scopedListener() {
+    let elements = [];
+    let event;
+    let callback;
+
+    function set(el, selector, scope, eventName, callbackFn) {
+      remove();
+      elements = getElementsInScope(el, selector, scope);
+      event = eventName;
+      callback = callbackFn;
+    }
+
+    function add() {
+      if (event && callback) {
+        for (let el of elements) {
+          // console.log("scopedListener:add", el.id, event)
+          el.addEventListener(event, callback);
+        }
+      }
+    }
+
+    function remove() {
+      if (event && callback) {
+        for (let el of elements) {
+          // console.log("scopedListener:remove", el.id, event)
+          el.removeEventListener(event, callback);
+        }
+      }
+    }
+
+    function getElementsInScope(el, selector, scope, eventEl) {
+      switch (scope) {
+        case "self": return selector === "" ? [el] : el.querySelectorAll(selector) || [el]
+        case "parent": return selector === "" ? [el] : el.parentNode.querySelectorAll(selector) || [el]
+        case "event": {
+          const bestEl = eventEl ? eventEl : el;
+          return selector === "" ? [bestEl] : bestEl.querySelectorAll(selector) || [bestEl]
+        }
+        case "document": 
+        default:
+          return selector === "" ? [el] : document.querySelectorAll(selector) || [el]
+      }
+    }
+
+    return {
+      set,
+      add,
+      remove,
+      getElementsInScope,
+    }
+  }
 
   /**
    * @typedef {{x: number, y: number, z: number}} VecXYZ
@@ -5069,113 +5197,6 @@ void main() {
   });
 
   // Copyright 2018-2019 harlyq
-  // MIT license
-
-  function ScopedListener() {
-    let elements = [];
-    let event;
-    let callback;
-
-    function set(el, selector, scope, eventName, callbackFn) {
-      remove();
-      elements = getElementsInScope(el, selector, scope);
-      event = eventName;
-      callback = callbackFn;
-    }
-
-    function add() {
-      if (event && callback) {
-        for (let el of elements) {
-          // console.log("scopedListener:add", el.id, event)
-          el.addEventListener(event, callback);
-        }
-      }
-    }
-
-    function remove() {
-      if (event && callback) {
-        for (let el of elements) {
-          // console.log("scopedListener:remove", el.id, event)
-          el.removeEventListener(event, callback);
-        }
-      }
-    }
-
-    function getElementsInScope(el, selector, scope, eventEl) {
-      switch (scope) {
-        case "self": return selector === "" ? [el] : el.querySelectorAll(selector) || [el]
-        case "parent": return selector === "" ? [el] : el.parentNode.querySelectorAll(selector) || [el]
-        case "event": {
-          const bestEl = eventEl ? eventEl : el;
-          return selector === "" ? [bestEl] : bestEl.querySelectorAll(selector) || [bestEl]
-        }
-        case "document": 
-        default:
-          return selector === "" ? [el] : document.querySelectorAll(selector) || [el]
-      }
-    }
-
-    return {
-      set,
-      add,
-      remove,
-      getElementsInScope,
-    }
-  }
-
-  // Copyright 2018-2019 harlyq
-  // MIT license
-
-  function BasicTimer() {
-    let sendEventTimer;
-    let timeOfStart;
-    let timeoutCallback;
-    let timeRemaining;
-
-    function start(delay, callback) {
-      stop();
-      
-      if (delay > 0) {
-        sendEventTimer = setTimeout(callback, delay*1000);
-        timeOfStart = Date.now();
-        timeoutCallback = callback;
-      } else {
-        callback();
-      }
-    }
-
-    function stop() {
-      clearTimeout(sendEventTimer);
-      sendEventTimer = undefined;
-      timeOfStart = undefined;
-      timeRemaining = undefined;
-      timeoutCallback = undefined;
-    }
-
-    function pause() {
-      if (sendEventTimer) {
-        let remaining = Date.now() - timeOfStart;
-        stop();
-        timeRemaining = remaining;
-      }
-    }
-
-    function resume() {
-      if (timeRemaining) {
-        start(timeRemaining, timeoutCallback);
-        timeRemaining = undefined;
-      }
-    }
-
-    return {
-      start,
-      stop,
-      pause,
-      resume
-    }
-  }
-
-  // Copyright 2018-2019 harlyq
 
   /**
    * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
@@ -5236,8 +5257,8 @@ void main() {
       this.addRemoveEntities = this.addRemoveEntities.bind(this);
       this.startDelay = this.startDelay.bind(this);
 
-      this.waitTimer = BasicTimer();
-      this.waitListener = ScopedListener();
+      this.waitTimer = basicTimer();
+      this.waitListener = scopedListener();
     },
 
     update(oldData) {
@@ -5306,8 +5327,8 @@ void main() {
       this.onEvent = this.onEvent.bind(this);
       this.sources = [];
 
-      this.waitTimer = BasicTimer();
-      this.waitListener = ScopedListener();
+      this.waitTimer = basicTimer();
+      this.waitListener = scopedListener();
     },
 
     remove() {
@@ -5379,8 +5400,8 @@ void main() {
       this.rules = {};
       this.sources = [];
 
-      this.waitListener = ScopedListener();
-      this.waitTimer = BasicTimer();
+      this.waitListener = scopedListener();
+      this.waitTimer = basicTimer();
       this.lcg = lcg();
     },
 

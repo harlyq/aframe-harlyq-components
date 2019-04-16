@@ -1,9 +1,7 @@
 // Copyright 2018-2019 harlyq
 // MIT license
 
-import ScopedListener from "./scoped-listener.js"
-import BasicTimer from "./basic-timer.js"
-import { selector } from "harlyq-helpers"
+import { selector, aframeHelper } from "harlyq-helpers"
 
 /**
  * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
@@ -64,8 +62,8 @@ AFRAME.registerComponent("wait-add-remove", {
     this.addRemoveEntities = this.addRemoveEntities.bind(this)
     this.startDelay = this.startDelay.bind(this)
 
-    this.waitTimer = BasicTimer()
-    this.waitListener = ScopedListener()
+    this.waitTimer = aframeHelper.basicTimer()
+    this.waitListener = aframeHelper.scopedListener()
   },
 
   update(oldData) {
