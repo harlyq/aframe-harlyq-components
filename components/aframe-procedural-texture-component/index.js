@@ -4,9 +4,10 @@ import { threeHelper } from "harlyq-helpers"
 
 AFRAME.registerSystem("procedural-texture", {
   init() {
-    this.renderer = new THREE.WebGLRenderer({alpha: true});
-    this.renderer.setPixelRatio( window.devicePixelRatio );
-    this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
+    this.renderer = new THREE.WebGLRenderer({alpha: true, premultipliedAlpha: false})
+    this.renderer.setPixelRatio( window.devicePixelRatio )
+    this.renderer.autoClear = true; // when a shader fails we will see pink, rather than the last shader output
+    this.renderer.setClearColor(new THREE.Color("pink"), 1.)
 
     this.proceduralTextureComponents = []
   },
@@ -113,6 +114,7 @@ AFRAME.registerComponent("procedural-texture", {
 
       threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.dest)
       this.system.updateProceduralTexturesUsingThisCanvas(this.dest)
+      this.dest.dispatchEvent(new CustomEvent("loaded", {bubbles: false}));
     }
   },
 
@@ -133,26 +135,21 @@ AFRAME.registerComponent("procedural-texture", {
     const mesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), shaderMaterial );
     this.scene.add( mesh );
   
-    // this.renderer = new THREE.WebGLRenderer({canvas, alpha: true});
-    // this.renderer.setPixelRatio( window.devicePixelRatio );
-    // this.renderer.setSize( canvas.width, canvas.height );
-    // this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
-
     this.ctx = canvas.getContext("2d")
   },
   
   renderScene(data) {
     this.updateUniforms(this.uniforms, data)
 
-    // this.renderer.render( this.scene, this.camera );
-
     const canvas = this.ctx.canvas
     const width = canvas.width
     const height = canvas.height
+    const renderer = this.system.renderer
 
-    this.system.renderer.setSize( width, height );
-    this.system.renderer.render( this.scene, this.camera );
+    renderer.setSize( width, height )
+    renderer.render( this.scene, this.camera )
 
+    this.ctx.clearRect(0, 0, width, height)
     this.ctx.drawImage(this.system.renderer.domElement, 0, 0)
   },
 
