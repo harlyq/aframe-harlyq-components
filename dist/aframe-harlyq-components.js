@@ -5187,9 +5187,9 @@ void main() {
         }
 
         const start = Math.max(0, data.start);
-        const end = Math.max(start, data.end < 0 ? colors.count + 1 + data.end : data.end);
+        const end = Math.max( Math.min(start, positions.count - 1), data.end < 0 ? colors.count + data.end : data.end);
         const col = new THREE.Color(data.color);
-        for (let i = start; i < end; i++) {
+        for (let i = start; i <= end; i++) {
           colors.setXYZ(i, col.r, col.g, col.b);
         }
       }
