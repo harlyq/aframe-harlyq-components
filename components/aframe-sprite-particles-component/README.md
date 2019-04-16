@@ -8,7 +8,7 @@ The component also supports trails of particles or ribbons
 
 This component can appear multiple times on a single entity
 
-![Screenshot](aframe-sprite-particles-component-screenshot.jpg)
+![Screenshot](screenshot.jpg)
 
 ## Examples
 ```html

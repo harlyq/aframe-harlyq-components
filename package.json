@@ -1,12 +1,12 @@
 {
   "name": "aframe-harlyq-components",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "various useful aframe components",
   "main": "dist/aframe-harlyq-components.js",
-  "module": "src/index.js",
+  "module": "index.js",
   "files": [
     "dist",
-    "src"
+    "components"
   ],
   "scripts": {
     "build": "rollup --config && uglifyjs dist/aframe-harlyq-components.js --compress --mangle -o dist/aframe-harlyq-components.min.js",

@@ -14,7 +14,7 @@ By default this component applies the material to the object returned by `getObj
 
 Note: the characters `*` and `?` may be used multiple times, but cannot be matched in a name, use `?` to skip them
 
-![Screenshot](aframe-materialx-component-screenshot.jpg)
+![Screenshot](screenshot.jpg)
 
 This component can appear multiple times on a single entity
 

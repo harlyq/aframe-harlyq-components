@@ -2,7 +2,7 @@
 import resolve from 'rollup-plugin-node-resolve'
 
 export default {
-  input: 'src/index.js',
+  input: 'index.js',
   output: {
     file: 'dist/aframe-harlyq-components.js',
     format: 'umd'
