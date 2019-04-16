@@ -130,6 +130,20 @@ AFRAME.registerComponent("keyframe", {
     }
 
     this.generateKeys(true)
+
+    // it is safe to repeatedly add/remove the same behavior
+    if (this.isComplete()) {
+      this.el.sceneEl.removeBehavior(this) // deactivate tick
+    } else {
+      this.el.sceneEl.addBehavior(this)
+    }
+
+    // when there is no duration, set the properties to the first key
+    if (data.duration <= 0) {
+      for (let prop in this.keys) {
+        aframeHelper.setProperty(this.el, prop, this.keys[prop][0])
+      }
+    }
   },
 
   tick(time, timeDelta) {
@@ -141,7 +155,7 @@ AFRAME.registerComponent("keyframe", {
   step(dt) {
     const data = this.data
 
-    if ((data.loops < 0 || this.loops < data.loops) && data.duration > 0) {
+    if (!this.isComplete()) {
       let looped = false
       this.loopTime = this.loopTime + (this.forward ? dt : -dt)
     
@@ -170,7 +184,14 @@ AFRAME.registerComponent("keyframe", {
         const value = lerpKeys(this.keyTypes[prop], this.keys[prop], r, easingFn)
         aframeHelper.setProperty(this.el, prop, value)
       }
+    } else {
+      this.el.sceneEl.removeBehavior(this) // deactivate tick
     }
+  },
+
+  isComplete() {
+    const data = this.data
+    return data.duration <= 0 || (data.loops > 0 && this.loops > data.loops)
   },
 
   generateKeys(resolveMissingRules) {

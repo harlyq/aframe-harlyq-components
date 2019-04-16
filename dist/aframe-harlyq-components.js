@@ -801,33 +801,26 @@
     return { options }
   }
 
-  /** @typedef {(att: Attribute, randFn: () => number) => AttributePart} RandomizeFn */
-  /** @type {RandomizeFn} */
-  const randomize = (function() {
-    let col = {r: 0, g: 0, b: 0};
-    let vec = [];
+  /** @type {(att: Attribute, randFn: () => number) => AttributePart} */
+  function randomize(attr, randFn = Math.random) {
+    if (attr.range) {
+      const min = attr.range[0];
+      const max = attr.range[1];
 
-    return /** @type {RandomizeFn} */ function randomize(attr, randFn = Math.random) {
-      if (attr.range) {
-        const min = attr.range[0];
-        const max = attr.range[1];
-
-        if (isColor(min)) {
-          return color(col, /** @type {RGBColor} */ (min), /** @type {RGBColor} */ (max))
-        } else if (Array.isArray(min) && min.length > 0 && typeof min[0] === "number") {
-          return vector(vec, /** @type {number[]} */ (min), /** @type {number[]} */ (max))
-        // } else if (typeof min === "number") {
-        //   return pseudorandom.float(min, max) // not needed all numbers should be in a float array
-        } else {
-          return min
-        }
-        
-      } else if (attr.options) {
-        return entry(attr.options, randFn)
+      if (isColor(min)) {
+        return color({r:0, g:0, b:0}, /** @type {RGBColor} */ (min), /** @type {RGBColor} */ (max))
+      } else if (Array.isArray(min) && min.length > 0 && typeof min[0] === "number") {
+        return vector([], /** @type {number[]} */ (min), /** @type {number[]} */ (max))
+      // } else if (typeof min === "number") {
+      //   return pseudorandom.float(min, max) // not needed all numbers should be in a float array
+      } else {
+        return min
       }
+      
+    } else if (attr.options) {
+      return entry(attr.options, randFn)
     }
-
-  })();
+  }
 
   /** @type {(attr: any) => string} */
   function stringify(attr) {
@@ -1908,12 +1901,6 @@
       // TODO what if the canvas size changes?
       if (!this.mesh) {
         const geometry = new THREE.PlaneBufferGeometry(1, 1, width - 1, height - 1);
-        // const geometry = new THREE.BufferGeometry()
-
-        // geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3))
-        // geometry.addAttribute('normal', new THREE.BufferAttribute(normals, 3))
-        // geometry.addAttribute('uv', new THREE.BufferAttribute(uvs, 2))
-
         this.mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
       }
 
@@ -2066,6 +2053,20 @@
       }
 
       this.generateKeys(true);
+
+      // it is safe to repeatedly add/remove the same behavior
+      if (this.isComplete()) {
+        this.el.sceneEl.removeBehavior(this); // deactivate tick
+      } else {
+        this.el.sceneEl.addBehavior(this);
+      }
+
+      // when there is no duration, set the properties to the first key
+      if (data.duration <= 0) {
+        for (let prop in this.keys) {
+          setProperty(this.el, prop, this.keys[prop][0]);
+        }
+      }
     },
 
     tick(time, timeDelta) {
@@ -2077,7 +2078,7 @@
     step(dt) {
       const data = this.data;
 
-      if ((data.loops < 0 || this.loops < data.loops) && data.duration > 0) {
+      if (!this.isComplete()) {
         let looped = false;
         this.loopTime = this.loopTime + (this.forward ? dt : -dt);
       
@@ -2106,7 +2107,14 @@
           const value = lerpKeys(this.keyTypes[prop], this.keys[prop], r, easingFn);
           setProperty(this.el, prop, value);
         }
+      } else {
+        this.el.sceneEl.removeBehavior(this); // deactivate tick
       }
+    },
+
+    isComplete() {
+      const data = this.data;
+      return data.duration <= 0 || (data.loops > 0 && this.loops > data.loops)
     },
 
     generateKeys(resolveMissingRules) {
@@ -2690,18 +2698,11 @@
       const mesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), shaderMaterial );
       this.scene.add( mesh );
     
-      // this.renderer = new THREE.WebGLRenderer({canvas, alpha: true});
-      // this.renderer.setPixelRatio( window.devicePixelRatio );
-      // this.renderer.setSize( canvas.width, canvas.height );
-      // this.renderer.autoClear = true; // when a shader fails we will see black, rather than the last shader output
-
       this.ctx = canvas.getContext("2d");
     },
     
     renderScene(data) {
       this.updateUniforms(this.uniforms, data);
-
-      // this.renderer.render( this.scene, this.camera );
 
       const canvas = this.ctx.canvas;
       const width = canvas.width;
