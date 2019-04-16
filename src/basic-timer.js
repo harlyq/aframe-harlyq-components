@@ -20,8 +20,7 @@ export default function BasicTimer() {
   }
 
   function stop() {
-    // @ts-ignore
-    clearTimeout(self.sendEventTimer)
+    clearTimeout(sendEventTimer)
     sendEventTimer = undefined
     timeOfStart = undefined
     timeRemaining = undefined

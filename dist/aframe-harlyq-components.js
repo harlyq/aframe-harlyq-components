@@ -192,13 +192,12 @@
     }
   });
 
-  // @ts-nocheck Property 'object3D' does not exist on type 'HTMLElement'.ts(2339)
   // Copyright 2018-2019 harlyq
   // MIT license
 
-  AFRAME.registerComponent("clone-geo", {
+  AFRAME.registerComponent("clone-geometry", {
     schema: {
-      type: "selector",
+      src: { type: "selector" },
     },
 
     init() {
@@ -206,97 +205,32 @@
     },
 
     update(oldData) {
-      if (this.data !== oldData) {
+      if (this.data.src !== oldData.src) {
         if (oldData instanceof HTMLElement) { oldData.removeEventListener("object3dset", this.onObject3DSet); }
 
-        const template = this.data;
-        if (template instanceof HTMLElement && template.object3D) {
-          template.object3D.children.forEach(a => this.el.object3D.add(a.clone()));
-          this.el.object3DMap = template.object3DMap;
+        const template = this.data.src;
+        if (template instanceof HTMLElement && 'object3D' in template) {
+          this.cloneObject3D(template);
+          // @ts-ignore
           template.addEventListener("object3dset", this.onObject3DSet);
         }
       }
     },
 
-    // TODO this wont work, we need to clone, not set a reference
     onObject3DSet(evt) {
-      const template = this.data;
-      if (evt.target === template && evt.detail.type) {
-        this.el.setObject3D(evt.detail.type, template.getObject3D(evt.detail.type));
+      if (evt.target === this.data.src && evt.detail.type) {
+        this.cloneObject3D(this.data.src);
       }
-    }
-  });
-
-  // Copyright 2019 harlyq
-  // MIT license
-
-  // remix of https://github.com/supermedium/superframe/tree/master/components/gltf-part
-  var LOADING_MODELS = {};
-  var MODELS = {};
-
-  AFRAME.registerComponent("gltf-part", {
-    schema: {
-      part: {type: "string"},
-      src: {type: "asset"}
     },
 
-    update: function () {
-      var el = this.el;
-      if (!this.data.part && this.data.src) { return; }
-      this.getModel(function (modelPart) {
-        if (!modelPart) { return; }
-        el.setObject3D("mesh", modelPart);
-      });
+    cloneObject3D(from) {
+      for (let k in this.el.object3DMap) {
+        this.el.removeObject3D(k);
+      }
+      for (let k in from.object3DMap) {
+        this.el.setObject3D(k, from.getObject3D(k).clone());
+      }
     },
-
-    /**
-     * Fetch, cache, and select from GLTF.
-     *
-     * @param {function(object)} cb - Called when the model is loaded
-     * @returns {object} - Selected subset of model.
-     */
-    getModel: function (cb) {
-      var self = this;
-
-      // Already parsed, grab it.
-      if (MODELS[this.data.src]) {
-        cb(this.selectFromModel(MODELS[this.data.src]));
-        return;
-      }
-
-      // Currently loading, wait for it.
-      if (LOADING_MODELS[this.data.src]) {
-        return LOADING_MODELS[this.data.src].then(function (model) {
-          cb(self.selectFromModel(model));
-        });
-      }
-
-      // Not yet fetching, fetch it.
-      LOADING_MODELS[this.data.src] = new Promise(function (resolve) {
-        new THREE.GLTFLoader().load(self.data.src, function (gltfModel) {
-          var model = gltfModel.scene || gltfModel.scenes[0];
-          MODELS[self.data.src] = model;
-          delete LOADING_MODELS[self.data.src];
-          cb(self.selectFromModel(model));
-          resolve(model);
-        }, function () { }, console.error);
-      });
-    },
-
-    /**
-     * Search for the part name and look for a mesh.
-     */
-    selectFromModel: function (model) {
-      var part;
-
-      part = model.getObjectByName(this.data.part);
-      if (!part) {
-        console.error("[gltf-part] `" + this.data.part + "` not found in model.");
-        return;
-      }
-
-      return part.clone()
-    }
   });
 
   /**
@@ -1425,6 +1359,347 @@
     }
   })();
 
+  // adapted from d3-threeD.js
+  /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+   * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+   var DEGS_TO_RADS = Math.PI / 180;
+
+   var DIGIT_0 = 48, DIGIT_9 = 57, COMMA = 44, SPACE = 32, PERIOD = 46, MINUS = 45;
+   
+   function shapeFromPathString(pathStr) {
+       if (pathStr[0] === '"' || pathStr[0] === "'") {
+         pathStr = pathStr.substring(1, pathStr.length-1); // get rid of string delimiters
+       }
+   
+   
+       var path = new THREE.Shape();
+   
+       var idx = 1, len = pathStr.length, activeCmd,
+       x = 0, y = 0, nx = 0, ny = 0, firstX = null, firstY = null,
+       x1 = 0, x2 = 0, y1 = 0, y2 = 0,
+       rx = 0, ry = 0, xar = 0, laf = 0, sf = 0, cx, cy;
+   
+       function eatNum() {
+           var sidx, c, isFloat = false, s;
+           // eat delims
+           while (idx < len) {
+               c = pathStr.charCodeAt(idx);
+               if (c !== COMMA && c !== SPACE) break;
+               idx++;
+           }
+           if (c === MINUS) sidx = idx++;
+           else sidx = idx;
+           // eat number
+           while (idx < len) {
+               c = pathStr.charCodeAt(idx);
+               if (DIGIT_0 <= c && c <= DIGIT_9) {
+                   idx++;
+                   continue;
+               }
+               else if (c === PERIOD) {
+                   idx++;
+                   isFloat = true;
+                   continue;
+               }
+   
+               s = pathStr.substring(sidx, idx);
+               return isFloat ? parseFloat(s) : parseInt(s);
+           }
+   
+           s = pathStr.substring(sidx);
+           return isFloat ? parseFloat(s) : parseInt(s);
+       }
+   
+       function nextIsNum() {
+           var c;
+           // do permanently eat any delims...
+           while (idx < len) {
+               c = pathStr.charCodeAt(idx);
+               if (c !== COMMA && c !== SPACE) break;
+               idx++;
+           }
+           c = pathStr.charCodeAt(idx);
+           return (c === MINUS || (DIGIT_0 <= c && c <= DIGIT_9));
+       }
+   
+       var canRepeat;
+       activeCmd = pathStr[0];
+       while (idx <= len) {
+           canRepeat = true;
+           switch (activeCmd) {
+               // moveto commands, become lineto's if repeated
+               case 'M':
+                   x = eatNum();
+                   y = eatNum();
+                   path.moveTo(x, y);
+                   activeCmd = 'L';
+                   firstX = x;
+                   firstY = y;
+                   break;
+   
+               case 'm':
+                   x += eatNum();
+                   y += eatNum();
+                   path.moveTo(x, y);
+                   activeCmd = 'l';
+                   firstX = x;
+                   firstY = y;
+                   break;
+   
+               case 'Z':
+               case 'z':
+                   canRepeat = false;
+                   if (x !== firstX || y !== firstY)
+                   path.lineTo(firstX, firstY);
+                   break;
+   
+               // - lines!
+               case 'L':
+               case 'H':
+               case 'V':
+                   nx = (activeCmd === 'V') ? x : eatNum();
+                   ny = (activeCmd === 'H') ? y : eatNum();
+                   path.lineTo(nx, ny);
+                   x = nx;
+                   y = ny;
+                   break;
+   
+               case 'l':
+               case 'h':
+               case 'v':
+                   nx = (activeCmd === 'v') ? x : (x + eatNum());
+                   ny = (activeCmd === 'h') ? y : (y + eatNum());
+                   path.lineTo(nx, ny);
+                   x = nx;
+                   y = ny;
+                   break;
+   
+               // - cubic bezier
+               case 'C':
+                   x1 = eatNum(); y1 = eatNum();
+   
+               case 'S':
+                   if (activeCmd === 'S') {
+                       x1 = 2 * x - x2; y1 = 2 * y - y2;
+                   }
+                   x2 = eatNum();
+                   y2 = eatNum();
+                   nx = eatNum();
+                   ny = eatNum();
+                   path.bezierCurveTo(x1, y1, x2, y2, nx, ny);
+                   x = nx; y = ny;
+                   break;
+   
+               case 'c':
+                   x1 = x + eatNum();
+                   y1 = y + eatNum();
+   
+               case 's':
+                   if (activeCmd === 's') {
+                       x1 = 2 * x - x2;
+                       y1 = 2 * y - y2;
+                   }
+                   x2 = x + eatNum();
+                   y2 = y + eatNum();
+                   nx = x + eatNum();
+                   ny = y + eatNum();
+                   path.bezierCurveTo(x1, y1, x2, y2, nx, ny);
+                   x = nx; y = ny;
+                   break;
+   
+               // - quadratic bezier
+               case 'Q':
+                   x1 = eatNum(); y1 = eatNum();
+   
+               case 'T':
+                   if (activeCmd === 'T') {
+                       x1 = 2 * x - x1;
+                       y1 = 2 * y - y1;
+                   }
+                   nx = eatNum();
+                   ny = eatNum();
+                   path.quadraticCurveTo(x1, y1, nx, ny);
+                   x = nx;
+                   y = ny;
+                   break;
+   
+               case 'q':
+                   x1 = x + eatNum();
+                   y1 = y + eatNum();
+   
+               case 't':
+                   if (activeCmd === 't') {
+                       x1 = 2 * x - x1;
+                       y1 = 2 * y - y1;
+                   }
+                   nx = x + eatNum();
+                   ny = y + eatNum();
+                   path.quadraticCurveTo(x1, y1, nx, ny);
+                   x = nx; y = ny;
+                   break;
+   
+               // - elliptical arc
+               case 'A':
+                   rx = eatNum();
+                   ry = eatNum();
+                   xar = eatNum() * DEGS_TO_RADS;
+                   laf = eatNum();
+                   sf = eatNum();
+                   nx = eatNum();
+                   ny = eatNum();
+                   if (rx !== ry) {
+                       console.warn("Forcing elliptical arc to be a circular one :(",
+                       rx, ry);
+                   }
+   
+                   // SVG implementation notes does all the math for us! woo!
+                   // http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
+                   // step1, using x1 as x1'
+                   x1 = Math.cos(xar) * (x - nx) / 2 + Math.sin(xar) * (y - ny) / 2;
+                   y1 = -Math.sin(xar) * (x - nx) / 2 + Math.cos(xar) * (y - ny) / 2;
+                   // step 2, using x2 as cx'
+                   var norm = Math.sqrt(
+                       (rx*rx * ry*ry - rx*rx * y1*y1 - ry*ry * x1*x1) /
+                       (rx*rx * y1*y1 + ry*ry * x1*x1));
+   
+                   if (laf === sf) norm = -norm;
+                   x2 = norm * rx * y1 / ry;
+                   y2 = norm * -ry * x1 / rx;
+                   // step 3
+                   cx = Math.cos(xar) * x2 - Math.sin(xar) * y2 + (x + nx) / 2;
+                   cy = Math.sin(xar) * x2 + Math.cos(xar) * y2 + (y + ny) / 2;
+   
+                   var u = new THREE.Vector2(1, 0),
+                   v = new THREE.Vector2((x1 - x2) / rx,
+                   (y1 - y2) / ry);
+                   var startAng = Math.acos(u.dot(v) / u.length() / v.length());
+                   if (u.x * v.y - u.y * v.x < 0) startAng = -startAng;
+   
+                   // we can reuse 'v' from start angle as our 'u' for delta angle
+                   u.x = (-x1 - x2) / rx;
+                   u.y = (-y1 - y2) / ry;
+   
+                   var deltaAng = Math.acos(v.dot(u) / v.length() / u.length());
+                   // This normalization ends up making our curves fail to triangulate...
+                   if (v.x * u.y - v.y * u.x < 0) deltaAng = -deltaAng;
+                   if (!sf && deltaAng > 0) deltaAng -= Math.PI * 2;
+                   if (sf && deltaAng < 0) deltaAng += Math.PI * 2;
+   
+                   path.absarc(cx, cy, rx, startAng, startAng + deltaAng, sf);
+                   x = nx;
+                   y = ny;
+                   break;
+   
+               default:
+                   throw new Error("weird path command: " + activeCmd);
+           }
+   
+           // just reissue the command
+           if (canRepeat && nextIsNum()) continue;
+           activeCmd = pathStr[idx++];
+   
+       }
+   
+       return path;
+   }
+
+  AFRAME.registerComponent("extrude", {
+    schema: {
+      shape: { default: "" },
+      depth: { default: 100 },
+      curveSegments: { type: "int", default: 12 },
+      bevelEnabled: { default: true },
+      bevelThickness: { default: 6 },
+      bevelSize: { default: 2 },
+      bevelSegments: { type: "int", default: 3 },
+      extrudePath: { default: "" },
+      steps: { type: "int", default: 1 },
+    },
+
+    update() {
+      const data = this.data;
+      const shape = shapeFromPathString(data.shape);
+      const options = {...data, extrudePath: data.extrudePath ? shapeFromPathString(data.extrudePath) : undefined };
+      const geo = new THREE.ExtrudeBufferGeometry( shape, options );
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
+      this.el.setObject3D("mesh", mesh);
+    }
+  });
+
+  // Copyright 2019 harlyq
+  // MIT license
+
+  // remix of https://github.com/supermedium/superframe/tree/master/components/gltf-part
+  var LOADING_MODELS = {};
+  var MODELS = {};
+
+  AFRAME.registerComponent("gltf-part", {
+    schema: {
+      part: {type: "string"},
+      src: {type: "asset"}
+    },
+
+    update: function () {
+      var el = this.el;
+      if (!this.data.part && this.data.src) { return; }
+      this.getModel(function (modelPart) {
+        if (!modelPart) { return; }
+        el.setObject3D("mesh", modelPart);
+      });
+    },
+
+    /**
+     * Fetch, cache, and select from GLTF.
+     *
+     * @param {function(object)} cb - Called when the model is loaded
+     * @returns {object} - Selected subset of model.
+     */
+    getModel: function (cb) {
+      var self = this;
+
+      // Already parsed, grab it.
+      if (MODELS[this.data.src]) {
+        cb(this.selectFromModel(MODELS[this.data.src]));
+        return;
+      }
+
+      // Currently loading, wait for it.
+      if (LOADING_MODELS[this.data.src]) {
+        return LOADING_MODELS[this.data.src].then(function (model) {
+          cb(self.selectFromModel(model));
+        });
+      }
+
+      // Not yet fetching, fetch it.
+      LOADING_MODELS[this.data.src] = new Promise(function (resolve) {
+        new THREE.GLTFLoader().load(self.data.src, function (gltfModel) {
+          var model = gltfModel.scene || gltfModel.scenes[0];
+          MODELS[self.data.src] = model;
+          delete LOADING_MODELS[self.data.src];
+          cb(self.selectFromModel(model));
+          resolve(model);
+        }, function () { }, console.error);
+      });
+    },
+
+    /**
+     * Search for the part name and look for a mesh.
+     */
+    selectFromModel: function (model) {
+      var part;
+
+      part = model.getObjectByName(this.data.part);
+      if (!part) {
+        console.error("[gltf-part] `" + this.data.part + "` not found in model.");
+        return;
+      }
+
+      return part.clone()
+    }
+  });
+
   // Copyright 2018-2019 harlyq
 
   const MAX_FRAME_TIME_MS = 100;
@@ -1643,6 +1918,26 @@
         }
       }
     },
+  });
+
+  const degToRad = THREE.Math.degToRad;
+
+  AFRAME.registerComponent("lathe", {
+    schema: {
+      shape: { default: "" },
+      steps: { type: "int", default: 1 },
+      segments: { type: "int", default: 12 },
+      phiStart: { default: 0 },
+      phiEnd: { default: 360 },
+    },
+
+    update() {
+      const data = this.data;
+      const points = shapeFromPathString(data.shape).extractPoints(data.steps).shape;
+      const geo = new THREE.LatheBufferGeometry(points, data.segments, degToRad(data.phiStart), degToRad(data.phiEnd));
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
+      this.el.setObject3D("mesh", mesh);
+    }
   });
 
   // Copyright 2018-2019 harlyq
@@ -1994,6 +2289,37 @@
   }
 
   })();
+
+  // remix of https://github.com/supermedium/superframe/tree/master/components/geometry-merger
+  AFRAME.registerComponent('merge-geometry', {
+  	schema: {
+  		preserveOriginal: {default: false}
+  	},
+
+  	init: function () {
+  		var self = this;
+
+  		var geometry = new THREE.Geometry();
+
+  		this.el.object3D.traverse(function (mesh) {
+  			if (mesh.type !== 'Mesh') { return; }
+
+  			var meshGeometry = mesh.geometry.isBufferGeometry ? new THREE.Geometry().fromBufferGeometry(mesh.geometry) : mesh.geometry;
+
+  			// Merge. Use parent's matrix due to A-Frame's <a-entity>(Group-Mesh) hierarchy.
+  			mesh.parent.updateMatrix();
+  			geometry.merge(meshGeometry, mesh.parent.matrix);
+
+  			// Remove mesh if not preserving.
+  			if (!self.data.preserveOriginal) { 
+  				mesh.parent.remove(mesh); 
+  			}
+  		});
+
+  		const mesh = new THREE.Mesh(new THREE.BufferGeometry().fromGeometry(geometry));
+  		this.el.setObject3D('mesh', mesh);
+  	}
+  });
 
   AFRAME.registerSystem("procedural-texture", {
     init() {
@@ -2724,7 +3050,7 @@ float voronoi2d(const in vec2 point) {
 
   const RANDOM_REPEAT_COUNT = 131072; // random numbers will start repeating after this number of particles
 
-  const degToRad = THREE.Math.degToRad;
+  const degToRad$1 = THREE.Math.degToRad;
 
   const ATTR_TO_DEFINES = {
     acceleration: "USE_PARTICLE_ACCELERATION",
@@ -3297,7 +3623,7 @@ float voronoi2d(const in vec2 point) {
       // update i by 1 becase rotation is 1 numbers per vector, and k by 2 because rotationScaleOverTime is 2 numbers per vector
       let n = rotation.length;
       for (let i = 0, k = 2; i < n; i ++, k += 2) {
-        this.rotationScaleOverTime[k] = degToRad(rotation[i]); // glsl rotationScaleOverTime[1..].x
+        this.rotationScaleOverTime[k] = degToRad$1(rotation[i]); // glsl rotationScaleOverTime[1..].x
       }
 
       n = scale.length;
@@ -3320,17 +3646,17 @@ float voronoi2d(const in vec2 point) {
     updateAngularVec4XYZRange(vecData, uniformAttr) {
       const vecRange = parseVecRange(vecData, [0,0,0]);
       for (let i = 0, j = 0; i < vecRange.length; ) {
-        this[uniformAttr][j++] = degToRad(vecRange[i++]); // x
-        this[uniformAttr][j++] = degToRad(vecRange[i++]); // y
-        this[uniformAttr][j++] = degToRad(vecRange[i++]); // z
+        this[uniformAttr][j++] = degToRad$1(vecRange[i++]); // x
+        this[uniformAttr][j++] = degToRad$1(vecRange[i++]); // y
+        this[uniformAttr][j++] = degToRad$1(vecRange[i++]); // z
         j++; // skip the w
       }
     },
 
     updateAngularVec2PartRange(vecData, def, uniformAttr, part) {
       const vecRange = parseVecRange(vecData, def);
-      this[uniformAttr][part] = degToRad(vecRange[0]);
-      this[uniformAttr][part + 2] = degToRad(vecRange[1]);
+      this[uniformAttr][part] = degToRad$1(vecRange[0]);
+      this[uniformAttr][part + 2] = degToRad$1(vecRange[1]);
     },
 
     // update just the w component
@@ -4705,6 +5031,43 @@ void main() {
     }
   });
 
+  AFRAME.registerComponent("vertex-color", {
+    schema: {
+      color: { type: "color" },
+      start: { type: "int", default: 0 },
+      end: { type: "int", default: -1 },
+      meshName: { default: "mesh" }
+    },
+    multiple: true,
+
+    update() {
+      const data = this.data;
+      const mesh = this.el.getObject3D(data.meshName);
+      if (mesh) {
+        const geometry = mesh.geometry;
+        const material = mesh.material;
+        material.vertexColors = THREE.VertexColors;
+
+        console.assert(!geometry.isGeometry, "vertex-color does not support standard geometry");
+
+        let positions = geometry.getAttribute("position");
+        let colors = geometry.getAttribute("color");
+        if (positions.count > 0 && !colors) {
+          const whiteColors = new Float32Array(positions.count*3).fill(1);
+          geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, 3));
+          colors = geometry.getAttribute("color");
+        }
+
+        const start = Math.max(0, data.start);
+        const end = Math.max(start, data.end < 0 ? colors.count + 1 + data.end : data.end);
+        const col = new THREE.Color(data.color);
+        for (let i = start; i < end; i++) {
+          colors.setXYZ(i, col.r, col.g, col.b);
+        }
+      }
+    }
+  });
+
   // Copyright 2018-2019 harlyq
   // MIT license
 
@@ -4782,8 +5145,7 @@ void main() {
     }
 
     function stop() {
-      // @ts-ignore
-      clearTimeout(self.sendEventTimer);
+      clearTimeout(sendEventTimer);
       sendEventTimer = undefined;
       timeOfStart = undefined;
       timeRemaining = undefined;
