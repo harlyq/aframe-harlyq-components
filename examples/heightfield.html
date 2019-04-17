@@ -8,7 +8,7 @@
   <body>
     <a-scene>
       <a-assets>
-        <canvas id="thing" width="32" height="32">
+        <canvas id="thing" width="128" height="128">
       </a-assets>
       <a-entity procedural-texture="shader: #thingshader; dest: #thing; multiplier: 5" visible="false">
         <script id="thingshader" type="x-shader/x-fragment">
@@ -17,12 +17,12 @@
           void main() {
             //float v = smoothstep(.1, .5, length(vUv - .5));
             float v = fbm(vUv*multiplier + .5);
-            gl_FragColor = mix(vec4(0.), vec4(1.), v);
+            gl_FragColor = vec4(mix(vec3(0.), vec3(1.), v), 1.);
           }
         </script>
       </a-entity>
-      <a-entity heightfield="src: #thing; channels: a" material="color: green; flatShading: true; side: double" rotation="90 0 0" position="0 1.5 -2"></a-entity>
-      <a-box material="src: #thing; color: blue" scale=".1 .1 .1" position="0 1.2 -1"></a-box>
+      <a-entity heightfield="src: #thing; channels: r; numRows: 32; numCols: 35" material="color: grey; flatShading: true; side: double; vertexColors2: vertex" position="0 1 -2" vertex-color__1="color: blue; start: 100; end: 800" vertex-color__2="color: orange; start: 800; end: 2000"></a-entity>
+      <a-box material="src: #thing; color: grey; side: double;" scale=".1 .1 .1" position="0 1 -1"></a-box>
     </a-scene>
   </body>
 </html>

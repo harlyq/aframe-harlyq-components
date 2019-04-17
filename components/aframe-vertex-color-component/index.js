@@ -7,7 +7,26 @@ AFRAME.registerComponent("vertex-color", {
   },
   multiple: true,
 
+  init() {
+    this.onObject3DSet = this.onObject3DSet.bind(this)
+    this.el.addEventListener("object3dset", this.onObject3DSet)
+  },
+
+  remove() {
+    this.el.removeEventListener("object3dset", this.onObject3DSet)
+  },
+
   update() {
+    this.applyVertexColors()
+  },
+
+  onObject3DSet(e) {
+    if (e.target === this.el && e.detail.type === this.data.meshName) {
+      this.applyVertexColors()
+    }
+  },
+
+  applyVertexColors() {
     const data = this.data
     const mesh = this.el.getObject3D(data.meshName)
     if (mesh) {
@@ -32,5 +51,7 @@ AFRAME.registerComponent("vertex-color", {
         colors.setXYZ(i, col.r, col.g, col.b)
       }
     }
-  }
+  },
+
+
 })

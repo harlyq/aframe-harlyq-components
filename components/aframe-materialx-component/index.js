@@ -34,7 +34,7 @@ AFRAME.registerComponent('materialx', {
     shader: {default: 'standard', oneOf: Object.keys(AFRAME.shaders), schemaChange: true},
     side: {default: 'front', oneOf: ['front', 'back', 'double']},
     transparent: {default: false},
-    vertexColors: {type: 'string', default: 'none', oneOf: ['face', 'vertex']},
+    vertexColors: {type: 'string', default: 'none', oneOf: ['none', 'face', 'vertex']},
     visible: {default: true},
     blending: {default: 'normal', oneOf: ['none', 'normal', 'additive', 'subtractive', 'multiply']}
   },
