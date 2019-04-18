@@ -1,4 +1,4 @@
-const VERTS_PER_POINT = 6
+const VERTS_PER_CELL = 6
 
 const CHANNEL_MULTIPLIERS = {
   "rgb": [1/765, 1/765, 1/765, 0],
@@ -67,28 +67,26 @@ AFRAME.registerComponent("heightfield", {
 
     const numRows = this.data.numRows
     const numCols = this.data.numCols
-    const numRows_1 = numRows - 1
-    const numCols_1 = numCols - 1
 
     // const geometry = new THREE.PlaneBufferGeometry(1, 1, numCols - 1, numRows - 1)
-    const numPoints = numCols*numRows*VERTS_PER_POINT
+    const numCells = numCols*numRows
+    const numVerts = numCells*VERTS_PER_CELL
     const geometry = new THREE.BufferGeometry()
-    const vertices = new Float32Array(numPoints*3)
-    const normals = new Float32Array(numPoints*3)
-    const uvs = new Float32Array(numPoints*2)
+    const vertices = new Float32Array(numVerts*3)
+    const normals = new Float32Array(numVerts*3)
+    const uvs = new Float32Array(numVerts*2)
 
     // (x,y)a--b  triangles are *bad* and *cda*
     //      |\ |  vertices are *badcda*
     //      | \|  indices are 0-2=b, 3-5=a, 6-8=d, 9-11=c, 12-14=d, 15-17=a
     //      c--d  ax=3,15 az=5,17 bx=0 bz=2 cx=9 cz=11 dx=6,12 dz=8,14
 
-    // we go to (num... - 1) because the second to last row/column will generate vertices for the last row/column
-    for (let z = 0; z < numRows - 1; z++) {
-      for (let x = 0; x < numCols - 1; x++) {
-        const i = (z*numCols + x)*VERTS_PER_POINT*3
-        const j = (z*numCols + x)*VERTS_PER_POINT*2
-        const minU = x/numCols_1, maxU = (x+1)/numCols_1
-        const minV = z/numRows_1, maxV = (z+1)/numRows_1
+    for (let z = 0; z < numRows; z++) {
+      for (let x = 0; x < numCols; x++) {
+        const i = (z*numCols + x)*VERTS_PER_CELL*3
+        const j = (z*numCols + x)*VERTS_PER_CELL*2
+        const minU = x/numCols, maxU = (x+1)/numCols
+        const minV = z/numRows, maxV = (z+1)/numRows
 
         vertices[i+3] = vertices[i+9] = vertices[i+15] = minU - .5 // ax,cx
         vertices[i+2] = vertices[i+5] = vertices[i+17] = minV - .5 // az,bz
@@ -136,8 +134,6 @@ AFRAME.registerComponent("heightfield", {
     const pixels = canvas.getContext("2d").getImageData(0, 0, canvasWidth, canvasHeight).data
     const numRows = this.data.numRows
     const numCols = this.data.numCols
-    const numRows_1 = numRows - 1
-    const numCols_1 = numCols - 1
 
     const uvs = this.mesh.geometry.getAttribute("uv")
     const positions = this.mesh.geometry.getAttribute("position")
@@ -146,19 +142,24 @@ AFRAME.registerComponent("heightfield", {
 
     // sample the heights
     const RGBA_PER_POINT = 4
-    const dx = (canvasWidth-1)/numCols_1
-    const dz = (canvasHeight-1)/numRows_1
-    const heights = new Float32Array(numRows*numCols)
-    const midHeights = new Float32Array(numRows*numCols)
+    const numPoints = (numRows+1)*(numCols+1)
+    const numCells = numRows*numCols
+    const heights = new Float32Array(numPoints)
+    const midHeights = new Float32Array(numCells)
 
-    for (let z = 0; z < numRows; z++) {
-      for (let x = 0; x < numCols; x++) {
+    // these values are for points (#vertical points = #rows + 1 and #horizontal points = #cols + 1)
+    const dx = (canvasWidth-1)/numCols
+    const dz = (canvasHeight-1)/numRows
+
+    for (let z = 0; z <= numRows; z++) {
+      for (let x = 0; x <= numCols; x++) {
         const j = (Math.floor(x*dx) + Math.floor(z*dz)*canvasWidth)*RGBA_PER_POINT
-        heights[x + z*numCols] = (pixels[j]*multiplier[0] + pixels[j+1]*multiplier[1] + pixels[j+2]*multiplier[2] + pixels[j+3]*multiplier[3])*heightScale
+        heights[x + z*(numCols+1)] = (pixels[j]*multiplier[0] + pixels[j+1]*multiplier[1] + pixels[j+2]*multiplier[2] + pixels[j+3]*multiplier[3])*heightScale
       }
     }
 
-    // heights at the midpoints, use to tell which direction to angle the triangle patch
+    // heights at the midpoints are used to tell which direction to angle the triangle patch
+    // generate one midpoint per cell
     for (let z = 0; z < numRows; z++) {
       for (let x = 0; x < numCols; x++) {
         const j = (Math.floor((x + .5)*dx) + Math.floor((z + .5)*dz)*canvasWidth)*RGBA_PER_POINT
@@ -166,25 +167,27 @@ AFRAME.registerComponent("heightfield", {
       }
     }
 
-    for (let z = 0; z < numRows - 1; z++) {
-      for (let x = 0; x < numCols - 1; x++) {
-        const j = x + z*numCols
-        const k = j*VERTS_PER_POINT
-        const heightA = heights[j]
-        const heightB = heights[j+1]
-        const heightC = heights[j+numCols]
-        const heightD = heights[j+numCols+1]
+    // these values are for cells
+    for (let z = 0; z < numRows; z++) {
+      for (let x = 0; x < numCols; x++) {
+        const i = x + z*(numCols+1) // points
+        const j = x + z*numCols // cells
+        const k = j*VERTS_PER_CELL // verts
+        const heightA = heights[i]
+        const heightB = heights[i + 1]
+        const heightC = heights[i + numCols + 1]
+        const heightD = heights[i + numCols + 2]
         const midHeight = midHeights[j]
-        const minU = x/numCols_1
-        const maxU = (x+1)/numCols_1
+        const minU = x/numCols
+        const maxU = (x + 1)/numCols
 
         positions.setY(k, heightB)
         positions.setY(k+1, heightA)
         positions.setY(k+3, heightC)
         positions.setY(k+4, heightD)
 
-        // cut the square in the direction which is closest to the midpoint, this lessens the
-        // ridged values artefact
+        // cut the square in the direction which is closest to the image midpoint height, this lessens the
+        // ridged values artefact.  Just set the U because the V doesn't change
         if (Math.abs((heightA + heightD)*.5 - midHeight) > Math.abs((heightC + heightB)*.5 - midHeight)) {
           // switch to *baccdb*
           positions.setX(k+2, minU - .5)

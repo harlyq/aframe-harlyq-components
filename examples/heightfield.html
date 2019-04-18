@@ -31,9 +31,9 @@
         procedural-texture__ramp="shader: #rampshader; canvas: #ramp;"
       >
       </a-entity>
-      <a-entity heightfield="src: #thing; channels: r; numRows: 32; numCols: 32" material="color: grey; side: double;" position="0 1 -2" vertex-color__1="color: blue; start: 100; end: 800" vertex-color__2="color: orange; start: 800; end: 2000"></a-entity>
+      <a-entity heightfield="src: #thing; channels: r; numRows: 32; numCols: 32" material="color: grey; side: double;" position="0 1 -2" vertex-color__1="color: blue; minSlope: 10; maxSlope: 40" vertex-color__2="color: orange; maxVertex: 0 .3 0"></a-entity>
       <a-box material="src: #thing; color: grey;" scale=".1 .1 .1" position="0 1 -1"></a-box>
-      <a-entity heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32" material="side: double; src: #ramp" position="-1.5 1 -2"></a-entity>
+      <a-entity heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32" material="wireframe: true; side: double; src: #ramp" position="-1.5 1 -2"></a-entity>
       <a-box material="src: #ramp;" scale=".1 .1 .1" position="-1.5 1 -1"></a-box>
     </a-scene>
   </body>
