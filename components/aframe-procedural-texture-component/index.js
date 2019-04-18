@@ -7,7 +7,7 @@ AFRAME.registerSystem("procedural-texture", {
     this.renderer = new THREE.WebGLRenderer({alpha: true, premultipliedAlpha: false})
     this.renderer.setPixelRatio( window.devicePixelRatio )
     this.renderer.autoClear = true; // when a shader fails we will see pink, rather than the last shader output
-    this.renderer.setClearColor(new THREE.Color("pink"), 1.)
+    this.renderer.setClearColor(new THREE.Color("purple"), 1.)
 
     this.proceduralTextureComponents = []
   },
@@ -42,15 +42,15 @@ AFRAME.registerSystem("procedural-texture", {
 })
 
 AFRAME.registerComponent("procedural-texture", {
-  dependencies: ["geometry"], // this is for the case where 'dest' is not set
+  dependencies: ["geometry"], // this is for the case where 'canvas' is not set
   schema: {
     shader: { type: "string" },
-    dest: { type: "selector" }
+    canvas: { type: "selector" }
   },
   multiple: true,
 
   init() {
-    this.dest = undefined
+    this.canvas = undefined
     this.system.registerComponent(this)
   },
 
@@ -78,7 +78,7 @@ AFRAME.registerComponent("procedural-texture", {
 
     let newSchema = this.uniformsToSchema(this.uniforms)
 
-    if (!newData.dest) {
+    if (!newData.canvas) {
       newSchema.width = { type: "int", value: 256 }
       newSchema.height = { type: "int", value: 256 }
     }
@@ -91,30 +91,30 @@ AFRAME.registerComponent("procedural-texture", {
   update(oldData) {
     const data = this.data
 
-    if (data.dest !== oldData.dest) {
-      this.dest = (data.dest && data.dest instanceof HTMLCanvasElement) ? data.dest : undefined
+    if (data.canvas !== oldData.canvas) {
+      this.canvas = (data.canvas && data.canvas instanceof HTMLCanvasElement) ? data.canvas : undefined
     }
 
-    if (!data.dest && !this.dest) {
-      this.dest = document.createElement("canvas")
-      this.dest.width = data.width || 256
-      this.dest.height = data.height || 256
+    if (!data.canvas && !this.canvas) {
+      this.canvas = document.createElement("canvas")
+      this.canvas.width = data.width || 256
+      this.canvas.height = data.height || 256
 
       const mesh = this.el.getObject3D("mesh")
       if (mesh && mesh.material) {
-        mesh.material.map = new THREE.CanvasTexture(this.dest)
+        mesh.material.map = new THREE.CanvasTexture(this.canvas)
       }
     }
 
-    if (this.dest && this.shaderProgram) {
+    if (this.canvas && this.shaderProgram) {
       if (!this.scene) {
-        this.setupScene(this.dest, this.shaderProgram)
+        this.setupScene(this.canvas, this.shaderProgram)
       }
       this.renderScene(data)
 
-      threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.dest)
-      this.system.updateProceduralTexturesUsingThisCanvas(this.dest)
-      this.dest.dispatchEvent(new CustomEvent("loaded", {bubbles: false}));
+      threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.canvas)
+      this.system.updateProceduralTexturesUsingThisCanvas(this.canvas)
+      this.canvas.dispatchEvent(new CustomEvent("loaded", {bubbles: false}));
     }
   },
 
@@ -320,12 +320,92 @@ void main()
 const proceduralFragmentShader = `
 precision highp float;
 
+// FLOAT -> FLOAT
 // could use levels low, high, mid, black, white (mid maps to (black + white)/2)
 float remap(float v, float amin, float amax, float bmin, float bmax)
 {
   return (v - amin)*(bmax - bmin)/(amax - amin) + bmin;
 }
 
+float roundF(const float number)
+{
+  return sign(number)*floor(abs(number)+0.5);
+}
+
+float quantize(const float v, const float quanta) {
+  return floor(v/quanta)*quanta;
+}
+
+// VEC2 -> VEC2
+vec2 uvBrick(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight)
+{
+  float yi=uv.y*numberOfBricksHeight;
+  float nyi=roundF(yi);
+  float xi=uv.x*numberOfBricksWidth;
+  if (mod(floor(yi),2.0) == 0.0)
+  {
+    xi=xi-0.5;
+  }
+  float nxi=roundF(xi);
+
+  return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);
+}
+
+vec2 uvTransform(const vec2 uv, const vec2 center, const vec2 scale, const float rad, const vec2 translate) 
+{
+  float c = cos(-rad);
+  float s = sin(-rad);
+  float x = (uv.x - translate.x - center.x);
+  float y = (uv.y - translate.y - center.y);
+  float x2 = (x*c + y*s)/scale.x + center.x;
+  float y2 = (-x*s + y*c)/scale.y + center.y;
+  return vec2(x2, y2);
+}
+
+vec2 uvCrop(const vec2 uv, const vec2 uvMin, const vec2 uvMax) 
+{
+  vec2 scale = 1./(uvMax - uvMin);
+  return uvTransform(uv, vec2(0.), scale, 0., -uvMin*scale);
+}
+
+
+// SAMPLER2D -> VEC4
+float normpdf(const float x, const float sigma)
+{
+  return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;
+}
+
+vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
+{
+  const int kernelWidth = 13;
+  const int kSize = (kernelWidth)/2 - 1;
+  float kernel[kernelWidth];
+
+  float Z = 0.;
+
+  for (int j = 0; j <= kSize; j++)
+  {
+    kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j), sigma);
+  }
+  for (int j = 0; j < kernelWidth; j++)
+  {
+    Z += kernel[j];
+  }
+
+  vec4 color = vec4(0.);
+  for (int i = -kSize; i <= kSize; i++)
+  {
+    for (int j = -kSize; j <= kSize; j++)
+    {
+      color += kernel[kSize + j]*kernel[kSize + i]*texture2D( image, uv + vec2(float(i), float(j))/resolution );
+    }
+  }
+
+  return color/(Z*Z);
+}
+
+
+// VEC2 -> FLOAT
 float rand(const vec2 n)
 {
   return fract(cos(dot(n,vec2(12.9898,4.1414)))*43758.5453);
@@ -365,25 +445,6 @@ float turbulence(const vec2 P)
   return val;
 }
 
-float roundF(const float number)
-{
-  return sign(number)*floor(abs(number)+0.5);
-}
-
-vec2 uvBrick(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight)
-{
-  float yi=uv.y*numberOfBricksHeight;
-  float nyi=roundF(yi);
-  float xi=uv.x*numberOfBricksWidth;
-  if (mod(floor(yi),2.0) == 0.0)
-  {
-    xi=xi-0.5;
-  }
-  float nxi=roundF(xi);
-
-  return vec2((xi-floor(xi))*numberOfBricksHeight,(yi-floor(yi))*numberOfBricksWidth);
-}
-
 float brick(const vec2 uv, const float numberOfBricksWidth, const float numberOfBricksHeight, const float jointWidthPercentage, const float jointHeightPercentage)
 {
   float yi=uv.y*numberOfBricksHeight;
@@ -421,57 +482,6 @@ float gaussian(const vec2 uv)
   return exp(-exponent);
 }
 
-vec2 uvTransform(const vec2 uv, const vec2 center, const vec2 scale, const float rad, const vec2 translate) 
-{
-  float c = cos(-rad);
-  float s = sin(-rad);
-  float x = (uv.x - translate.x - center.x);
-  float y = (uv.y - translate.y - center.y);
-  float x2 = (x*c + y*s)/scale.x + center.x;
-  float y2 = (-x*s + y*c)/scale.y + center.y;
-  return vec2(x2, y2);
-}
-
-vec2 uvCrop(const vec2 uv, const vec2 uvMin, const vec2 uvMax) 
-{
-  vec2 scale = 1./(uvMax - uvMin);
-  return uvTransform(uv, vec2(0.), scale, 0., -uvMin*scale);
-}
-
-float normpdf(const float x, const float sigma)
-{
-  return .39894*exp(-.5*x*x/(sigma*sigma))/sigma;
-}
-
-vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
-{
-  const int kernelWidth = 13;
-  const int kSize = (kernelWidth)/2 - 1;
-  float kernel[kernelWidth];
-
-  float Z = 0.;
-
-  for (int j = 0; j <= kSize; j++)
-  {
-    kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j), sigma);
-  }
-  for (int j = 0; j < kernelWidth; j++)
-  {
-    Z += kernel[j];
-  }
-
-  vec4 color = vec4(0.);
-  for (int i = -kSize; i <= kSize; i++)
-  {
-    for (int j = -kSize; j <= kSize; j++)
-    {
-      color += kernel[kSize + j]*kernel[kSize + i]*texture2D( image, uv + vec2(float(i), float(j))/resolution );
-    }
-  }
-
-  return color/(Z*Z);
-}
-
 // from glsl-voronoi-noise
 const mat2 myt = mat2(.12121212, .13131313, -.13131313, .12121212);
 const vec2 mys = vec2(1e4, 1e6);
@@ -482,7 +492,7 @@ vec2 rhash(vec2 uv) {
   return fract(fract(uv / mys) * uv);
 }
 
-vec3 hash(vec3 p) {
+vec3 hash(const vec3 p) {
   return fract(sin(vec3(dot(p, vec3(1.0, 57.0, 113.0)),
     dot(p, vec3(57.0, 113.0, 1.0)),
     dot(p, vec3(113.0, 1.0, 57.0)))) *
@@ -501,5 +511,56 @@ float voronoi2d(const in vec2 point) {
     }
   }
   return pow(1. / res, 0.0625);
+}
+
+// from glsl-worley
+// Permutation polynomial: (34x^2 + x) mod 289
+vec3 permute(const vec3 x) {
+  return mod((34.0 * x + 1.0) * x, 289.0);
+}
+
+vec3 dist(const vec3 x, const vec3 y) {
+  return (x * x + y * y);
+}
+
+vec2 worley(const vec2 P, const float jitter) {
+  float K= 0.142857142857; // 1/7
+  float Ko= 0.428571428571 ;// 3/7
+  vec2 Pi = mod(floor(P), 289.0);
+  vec2 Pf = fract(P);
+  vec3 oi = vec3(-1.0, 0.0, 1.0);
+  vec3 of = vec3(-0.5, 0.5, 1.5);
+  vec3 px = permute(Pi.x + oi);
+  vec3 p = permute(px.x + Pi.y + oi); // p11, p12, p13
+  vec3 ox = fract(p*K) - Ko;
+  vec3 oy = mod(floor(p*K),7.0)*K - Ko;
+  vec3 dx = Pf.x + 0.5 + jitter*ox;
+  vec3 dy = Pf.y - of + jitter*oy;
+  vec3 d1 = dist(dx,dy); // squared
+  p = permute(px.y + Pi.y + oi); // p21, p22, p23
+  ox = fract(p*K) - Ko;
+  oy = mod(floor(p*K),7.0)*K - Ko;
+  dx = Pf.x - 0.5 + jitter*ox;
+  dy = Pf.y - of + jitter*oy;
+  vec3 d2 = dist(dx,dy); // squared
+  p = permute(px.z + Pi.y + oi); // p31, p32, p33
+  ox = fract(p*K) - Ko;
+  oy = mod(floor(p*K),7.0)*K - Ko;
+  dx = Pf.x - 1.5 + jitter*ox;
+  dy = Pf.y - of + jitter*oy;
+  vec3 d3 = dist(dx,dy); // squared
+
+  // Sort out the two smallest distances (F1, F2)
+  vec3 d1a = min(d1, d2);
+  d2 = max(d1, d2); // Swap to keep candidates for F2
+  d2 = min(d2, d3); // neither F1 nor F2 are now in d3
+  d1 = min(d1a, d2); // F1 is now in d1
+  d2 = max(d1a, d2); // Swap to keep candidates for F2
+  d1.xy = (d1.x < d1.y) ? d1.xy : d1.yx; // Swap if smaller
+  d1.xz = (d1.x < d1.z) ? d1.xz : d1.zx; // F1 is in d1.x
+  d1.yz = min(d1.yz, d2.yz); // F2 is now not in d2.yz
+  d1.y = min(d1.y, d1.z); // nor in  d1.z
+  d1.y = min(d1.y, d2.x); // F2 is in d1.y, we're done.
+  return sqrt(d1.xy);
 }
 `

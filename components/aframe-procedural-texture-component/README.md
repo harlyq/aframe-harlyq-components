@@ -1,6 +1,6 @@
 ## procedural-texture
 
-A component for generating texture images from a fragment shader.  uniform values in the shader can be set via attributes on the component, and the output (**dest**) can be set to a canvas, or will modify the diffuse map of the current entity.  A number of helpful procedural image functions are also provided to the shader.
+A component for generating texture images from a fragment shader.  uniform values in the shader can be set via attributes on the component, and the output (**canvas**) can be set to a canvas, or will modify the diffuse map of the current entity.  A number of helpful procedural image functions are also provided to the shader.
 
 In the fragment shader `varying vec2 vUv` is forwarded from the vertex shader. (0,0) represents the bottom left of the texture and (1,1) the top right.
 
@@ -24,7 +24,7 @@ e.g.
     <canvas id="guassianCanvas" width="1024" height="1024">
   <a-assets>
   <a-entity id="writesToCanvas"
-    procedural-texture__gaussian="shader: #gaussianshader; dest: #gaussian; backgroundColor: blue; fillColor: white"></a-entity>
+    procedural-texture__gaussian="shader: #gaussianshader; canvas: #gaussian; backgroundColor: blue; fillColor: white"></a-entity>
   <a-box id="usesCanvas" position="-2 0 -2" material="src:#gaussianCanvas"></a-box>
   <a-box id="doesNotUseCanvas" position="2 0 -2" 
     procedural-texture="shader: #gaussianshader; backgroundColor: orange; fillColor: black"></a-box>
@@ -45,24 +45,24 @@ e.g.
 
 ## Properties
 
+**canvas** : string = ""
+
+specifies a canvas to write to.  If not defined, then the procedural texture is applied to the component's entity's "mesh" material
+
+---
+**height** : number = 256
+
+defines the hieght of the internal canvas. Ignored if **canvas** is set
+
+---
 **shader** : string = ""
 
 css selector for the shader to use
 
 ---
-**dest** : string = ""
-
-specifies a canvas to write to.  If not defined, then the procedural texture is applied to the component's entity's "mesh" material
-
----
 **width** : number = 256
 
-used to define the width of the internal canvas.  Ignored if **dest** is set
-
----
-**height** : number = 256
-
-defines the hieght of the internal canvas. Ignored if **dest** is set
+used to define the width of the internal canvas.  Ignored if **canvas** is set
 
 ---
 **\<uniform\>** : value

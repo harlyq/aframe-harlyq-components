@@ -163,6 +163,20 @@
         gl_FragColor = blur13(image, vUv, size, sigma);
       }
     </script>
+    <script id="worleyshader" type="x-shader/x-fragment">
+      uniform vec4 innerColor;
+      uniform vec4 outerColor;
+      uniform float jitter;
+      uniform float scale;
+
+      varying vec2 vUv;
+
+      void main()
+      {
+        vec2 v2 = worley(vUv*scale, jitter);
+        gl_FragColor = mix(innerColor, outerColor, v2.x);
+      }
+    </script>
     <script id="testshader" type="x-shader/x-fragment">
       uniform float rotation;
       uniform vec2 center;
@@ -175,7 +189,7 @@
       {
         vec2 uv = uvTransform(vUv, vec2(0.,0.), vec2(5.,1.), 0., vec2(0.,0.));
         //vec2 uv = uvCrop(vUv, vec2(0.,0.), vec2(.51,.51));
-        float val = fbm(uv*2.);
+        float val = quantize(fbm(uv*2.), .2);
         vec3 color = mix(vec3(0.), vec3(1.), val);
         gl_FragColor = vec4(color, 1.);
       }
@@ -194,21 +208,24 @@
         <canvas id="altbrick" width="128" height="128"></canvas>        
         <canvas id="gaussian" width="512" height="512"></canvas>
         <canvas id="blur" width="128" height="128"></canvas>
+        <canvas id="worley" width="128" height="128"></canvas>
         <canvas id="test" width="512" height="512"></canvas>
       </a-assets>
       <a-entity id="procedural" visible="false"
-        procedural-texture__voronoi="shader: #voronoishader; dest: #voronoi; amplitude: 5; phase: 1; innerColor: rgba(0,0,0,0); outerColor: black"
-        procedural-texture__cloud="shader: #cloudshader; dest: #cloud; skyColor: rgba(0,0,255,1); cloudColor: white; resolution: 0; threshold: 0"
-        procedural-texture__wood="shader: #woodshader; dest: #wood; ampScale: 10.5; woodColor: #4B2513"
-        procedural-texture__fire="shader: #fireshader; dest: #fire; shift: .8; alphaThreshold: 0; time: 0; speed: .5 .3; colors: rgb(127,0,255), rgb(230,0,255), rgb(51,0,255), rgb(255,230,255), rgb(25,25,255), rgb(230,230,255)"
-        procedural-texture__brick="shader: #brickshader; dest: #brick; numberOfBricksHeight: 5; numberOfBricksWidth: 4; brickColor: black; jointColor: white"
-        procedural-texture__marble="shader: #marbleshader; dest: #marble; numberOfTilesHeight: 2; numberOfTilesWidth: 2; amplitude: 5; detailA: 0.5; detailB: 6; marbleColor: lightgray; jointColor: black"
-        procedural-texture__checkerboard="shader: #checkerboardshader; dest: #checkerboard; numberOfCheckers: 4; colorA: teal; colorB: brown"
-        procedural-texture__altbrick="shader: #altbrickshader; dest: #altbrick; numberOfBricksHeight: 6; numberOfBricksWidth: 4; brickColor: brown; jointColor: white"
-        procedural-texture__gaussian="shader: #gaussianshader; dest: #gaussian; backgroundColor: black; fillColor: yellow"
-        procedural-texture__blur="shader: #blurshader; dest: #blur; image: #altbrick; size: 128 128; sigma: 2"
-        procedural-texture__test="shader: #testshader; dest: #test;"
-      ></a-entity>
+        procedural-texture__voronoi="shader: #voronoishader; canvas: #voronoi; amplitude: 5; phase: 1; innerColor: rgba(0,0,0,0); outerColor: black"
+        procedural-texture__cloud="shader: #cloudshader; canvas: #cloud; skyColor: rgba(0,0,255,1); cloudColor: white; resolution: 0; threshold: 0"
+        procedural-texture__wood="shader: #woodshader; canvas: #wood; ampScale: 10.5; woodColor: #4B2513"
+        procedural-texture__fire="shader: #fireshader; canvas: #fire; shift: .8; alphaThreshold: 0; time: 0; speed: .5 .3; colors: rgb(127,0,255), rgb(230,0,255), rgb(51,0,255), rgb(255,230,255), rgb(25,25,255), rgb(230,230,255)"
+        procedural-texture__brick="shader: #brickshader; canvas: #brick; numberOfBricksHeight: 5; numberOfBricksWidth: 4; brickColor: black; jointColor: white"
+        procedural-texture__marble="shader: #marbleshader; canvas: #marble; numberOfTilesHeight: 2; numberOfTilesWidth: 2; amplitude: 5; detailA: 0.5; detailB: 6; marbleColor: lightgray; jointColor: black"
+        procedural-texture__checkerboard="shader: #checkerboardshader; canvas: #checkerboard; numberOfCheckers: 4; colorA: teal; colorB: brown"
+        procedural-texture__altbrick="shader: #altbrickshader; canvas: #altbrick; numberOfBricksHeight: 6; numberOfBricksWidth: 4; brickColor: brown; jointColor: white"
+        procedural-texture__gaussian="shader: #gaussianshader; canvas: #gaussian; backgroundColor: black; fillColor: yellow"
+        procedural-texture__blur="shader: #blurshader; canvas: #blur; image: #altbrick; size: 128 128; sigma: 2"
+        procedural-texture__worley="shader: #worleyshader; canvas: #worley; innerColor: white; outerColor: red; scale: 5; jitter: .7"
+        procedural-texture__test="shader: #testshader; canvas: #test;"
+      >
+      </a-entity>
 
       <a-box position="-6 0 -5" material="src:#voronoi"></a-box>
       <a-box position="-4 0 -5" material="src:#cloud"></a-box>
@@ -220,6 +237,7 @@
       <a-box position="0 4 -5" material="src:#altbrick"></a-box>
       <a-box position="2 4 -5" material="src:#gaussian;"></a-box>
       <a-box position="4 4 -5" material="src:#blur;"></a-box>
+      <a-box position="-4 4 -5" material="src:#worley;"></a-box>
       <a-box position="0 2 -5" material="src:#test;"></a-box>
       <a-box position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
 
