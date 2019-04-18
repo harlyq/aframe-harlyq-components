@@ -10,7 +10,7 @@
       <a-assets>
         <canvas id="thing" width="128" height="128">
       </a-assets>
-      <a-entity procedural-texture="shader: #thingshader; dest: #thing; multiplier: 5" visible="false">
+      <a-entity procedural-texture="shader: #thingshader; canvas: #thing; multiplier: 5" visible="false">
         <script id="thingshader" type="x-shader/x-fragment">
           uniform float multiplier;
           varying vec2 vUv;
