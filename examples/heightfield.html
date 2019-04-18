@@ -8,7 +8,7 @@
   <body>
     <a-scene>
       <a-assets>
-        <canvas id="thing" width="128" height="128">
+        <canvas id="thing" width="64" height="64">
       </a-assets>
       <a-entity procedural-texture="shader: #thingshader; canvas: #thing; multiplier: 5" visible="false">
         <script id="thingshader" type="x-shader/x-fragment">
@@ -21,7 +21,7 @@
           }
         </script>
       </a-entity>
-      <a-entity heightfield="src: #thing; channels: r; numRows: 32; numCols: 35" material="color: grey; flatShading: true; side: double; vertexColors2: vertex" position="0 1 -2" vertex-color__1="color: blue; start: 100; end: 800" vertex-color__2="color: orange; start: 800; end: 2000"></a-entity>
+      <a-entity heightfield="src: #thing; channels: r; numRows: 32; numCols: 32" material="color: grey; flatShading: true; side: double; vertexColors2: vertex" position="0 1 -2" vertex-color__1="color: blue; start: 100; end: 800" vertex-color__2="color: orange; start: 800; end: 2000"></a-entity>
       <a-box material="src: #thing; color: grey; side: double;" scale=".1 .1 .1" position="0 1 -1"></a-box>
     </a-scene>
   </body>

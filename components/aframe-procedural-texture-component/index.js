@@ -378,7 +378,7 @@ float normpdf(const float x, const float sigma)
 vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const float sigma)
 {
   const int kernelWidth = 13;
-  const int kSize = (kernelWidth)/2 - 1;
+  const int kSize = kernelWidth/2 - 1;
   float kernel[kernelWidth];
 
   float Z = 0.;
@@ -404,6 +404,56 @@ vec4 blur13(const sampler2D image, const vec2 uv, const vec2 resolution, const f
   return color/(Z*Z);
 }
 
+vec4 terrase13(const sampler2D image, const vec2 uv, const vec2 resolution)
+{
+  const int kernelWidth = 13; // this must be const for webgl1
+  const int kSize = kernelWidth/2 - 1;
+
+  vec4 color = vec4(0.);
+  for (int i = -kSize; i <= kSize; i++)
+  {
+    for (int j = -kSize; j <= kSize; j++)
+    {
+      color = max( color, texture2D( image, uv + vec2(float(i), float(j))/resolution ) );
+    }
+  }
+
+  return color;
+}
+
+vec4 terrase5(const sampler2D image, const vec2 uv, const vec2 resolution)
+{
+  const int kernelWidth = 5; // this must be const for webgl1
+  const int kSize = kernelWidth/2 - 1;
+
+  vec4 color = vec4(0.);
+  for (int i = -kSize; i <= kSize; i++)
+  {
+    for (int j = -kSize; j <= kSize; j++)
+    {
+      color = max( color, texture2D( image, uv + vec2(float(i), float(j))/resolution ) );
+    }
+  }
+
+  return color;
+}
+
+vec4 terrase27(const sampler2D image, const vec2 uv, const vec2 resolution)
+{
+  const int kernelWidth = 27; // this must be const for webgl1
+  const int kSize = kernelWidth/2 - 1;
+
+  vec4 color = vec4(0.);
+  for (int i = -kSize; i <= kSize; i++)
+  {
+    for (int j = -kSize; j <= kSize; j++)
+    {
+      color = max( color, texture2D( image, uv + vec2(float(i), float(j))/resolution ) );
+    }
+  }
+
+  return color;
+}
 
 // VEC2 -> FLOAT
 float rand(const vec2 n)

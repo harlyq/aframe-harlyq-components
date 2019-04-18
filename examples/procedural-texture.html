@@ -153,14 +153,14 @@
     </script>
     <script id="blurshader" type="x-shader/x-fragment">
       uniform sampler2D image;
-      uniform vec2 size;
+      uniform vec2 resolution;
       uniform float sigma;
 
       varying vec2 vUv;
 
       void main()
       {
-        gl_FragColor = blur13(image, vUv, size, sigma);
+        gl_FragColor = blur13(image, vUv, resolution, sigma);
       }
     </script>
     <script id="worleyshader" type="x-shader/x-fragment">
@@ -175,6 +175,17 @@
       {
         vec2 v2 = worley(vUv*scale, jitter);
         gl_FragColor = mix(innerColor, outerColor, v2.x);
+      }
+    </script>
+    <script id="terraseshader" type="x-shader/x-fragment">
+      uniform sampler2D image;
+      uniform vec2 resolution;
+
+      varying vec2 vUv;
+
+      void main()
+      {
+        gl_FragColor = terrase13(image, vUv, resolution);
       }
     </script>
     <script id="testshader" type="x-shader/x-fragment">
@@ -209,6 +220,7 @@
         <canvas id="gaussian" width="512" height="512"></canvas>
         <canvas id="blur" width="128" height="128"></canvas>
         <canvas id="worley" width="128" height="128"></canvas>
+        <canvas id="terrase" width="128" height="128"></canvas>
         <canvas id="test" width="512" height="512"></canvas>
       </a-assets>
       <a-entity id="procedural" visible="false"
@@ -221,8 +233,9 @@
         procedural-texture__checkerboard="shader: #checkerboardshader; canvas: #checkerboard; numberOfCheckers: 4; colorA: teal; colorB: brown"
         procedural-texture__altbrick="shader: #altbrickshader; canvas: #altbrick; numberOfBricksHeight: 6; numberOfBricksWidth: 4; brickColor: brown; jointColor: white"
         procedural-texture__gaussian="shader: #gaussianshader; canvas: #gaussian; backgroundColor: black; fillColor: yellow"
-        procedural-texture__blur="shader: #blurshader; canvas: #blur; image: #altbrick; size: 128 128; sigma: 2"
+        procedural-texture__blur="shader: #blurshader; canvas: #blur; image: #altbrick; resolution: 128 128; sigma: 2"
         procedural-texture__worley="shader: #worleyshader; canvas: #worley; innerColor: white; outerColor: red; scale: 5; jitter: .7"
+        procedural-texture__terrase="shader: #terraseshader; canvas: #terrase; image: #fire; resolution: 128 128; kernel: 9"
         procedural-texture__test="shader: #testshader; canvas: #test;"
       >
       </a-entity>
@@ -238,6 +251,7 @@
       <a-box position="2 4 -5" material="src:#gaussian;"></a-box>
       <a-box position="4 4 -5" material="src:#blur;"></a-box>
       <a-box position="-4 4 -5" material="src:#worley;"></a-box>
+      <a-box position="-6 4 -5" material="src:#terrase;"></a-box>
       <a-box position="0 2 -5" material="src:#test;"></a-box>
       <a-box position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
 
