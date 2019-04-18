@@ -240,28 +240,28 @@
       >
       </a-entity>
 
-      <a-box position="-6 0 -5" material="src:#voronoi"></a-box>
-      <a-box position="-4 0 -5" material="src:#cloud"></a-box>
-      <a-box position="-2 0 -5" material="src:#wood"></a-box>
-      <a-box position="0 0 -5" material="src:#fire"></a-box>
-      <a-box position="2 0 -5" material="src:#brick"></a-box>
-      <a-box position="4 0 -5" material="src:#marble"></a-box>
-      <a-box position="6 0 -5" material="src:#checkerboard"></a-box>
-      <a-box position="0 4 -5" material="src:#altbrick"></a-box>
-      <a-box position="2 4 -5" material="src:#gaussian;"></a-box>
-      <a-box position="4 4 -5" material="src:#blur;"></a-box>
-      <a-box position="-4 4 -5" material="src:#worley;"></a-box>
-      <a-box position="-6 4 -5" material="src:#terrase;"></a-box>
-      <a-box position="0 2 -5" material="src:#test;"></a-box>
-      <a-box position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
+      <a-box id="voronoibox" position="-6 0 -5" material="src:#voronoi"></a-box>
+      <a-box id="cloudbox" position="-4 0 -5" material="src:#cloud"></a-box>
+      <a-box id="woodbox" position="-2 0 -5" material="src:#wood"></a-box>
+      <a-box id="firbox" position="0 0 -5" material="src:#fire"></a-box>
+      <a-box id="brickbox" position="2 0 -5" material="src:#brick"></a-box>
+      <a-box id="marblebox" position="4 0 -5" material="src:#marble"></a-box>
+      <a-box id="checkerboardbox" position="6 0 -5" material="src:#checkerboard"></a-box>
+      <a-box id="altbrickbox" position="0 4 -5" material="src:#altbrick"></a-box>
+      <a-box id="gaussianbox" position="2 4 -5" material="src:#gaussian;"></a-box>
+      <a-box id="blurbox" position="4 4 -5" material="src:#blur;"></a-box>
+      <a-box id="worleybox" position="-4 4 -5" material="src:#worley;"></a-box>
+      <a-box id="terrasebox" position="-6 4 -5" material="src:#terrase;"></a-box>
+      <a-box id="testbox" position="0 2 -5" material="src:#test;"></a-box>
+      <a-box id="gaussianshaderbox" position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
 
-      <a-sphere scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
-      <a-sphere scale="0.5 0.5 0.5" position="-4 2 -5" material="src:#cloud;"></a-sphere>
-      <a-sphere scale="0.5 0.5 0.5" position="-2 2 -5" material="src:#wood"></a-sphere>
-      <!--a-sphere scale="0.5 0.5 0.5" position="0 2 -5" material="src:#fire"></a-sphere-->
-      <a-sphere scale="0.5 0.5 0.5" position="2 2 -5" material="src:#brick"></a-sphere>
-      <a-sphere scale="0.5 0.5 0.5" position="4 2 -5" material="src:#marble"></a-sphere>
-      <a-sphere scale="0.5 0.5 0.5" position="6 2 -5" material="src:#checkerboard"></a-sphere>
+      <a-sphere id="voronoisphere" scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
+      <a-sphere id="cloudsphere" scale="0.5 0.5 0.5" position="-4 2 -5" material="src:#cloud;"></a-sphere>
+      <a-sphere id="sphere" scale="0.5 0.5 0.5" position="-2 2 -5" material="src:#wood"></a-sphere>
+      <!--a-sphere id="firesphere" scale="0.5 0.5 0.5" position="0 2 -5" material="src:#fire"></a-sphere-->
+      <a-sphere id="bricksphere" scale="0.5 0.5 0.5" position="2 2 -5" material="src:#brick"></a-sphere>
+      <a-sphere id="marblesphere" scale="0.5 0.5 0.5" position="4 2 -5" material="src:#marble"></a-sphere>
+      <a-sphere id="checkerboardsphere" scale="0.5 0.5 0.5" position="6 2 -5" material="src:#checkerboard"></a-sphere>
     </a-scene>
   </body>
 </html>

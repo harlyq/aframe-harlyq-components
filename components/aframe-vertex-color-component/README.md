@@ -2,11 +2,9 @@
 
 Defines vertex colors for the current geometry.  This is useful when merging geometry as the vertex colors are preserved.
 
-The vertex colours only appear if the **vertexColor** property of the associated material is set to **vertex**
-
 e.g.
 ```html
-<a-box material="vertexColor: vertex" vertex-color="color: blue"></a-box>
+<a-box vertex-color="color: blue"></a-box>
 ```
 
 This component can appear multiple times on a single entity

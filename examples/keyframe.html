@@ -10,7 +10,7 @@
         <canvas id="blob" width="64" height="64"></canvas>
       </a-assets>
       <audio id="music" src="../../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay></audio>
-      <a-entity procedural-texture="dest: #blob; shader: #blobshader" visible="false">
+      <a-entity procedural-texture="canvas: #blob; shader: #blobshader" visible="false">
         <script id="blobshader" type="x-shader/x-fragment">
           varying vec2 vUv;
           void main() {

@@ -1890,6 +1890,8 @@
 
       const numRows = this.data.numRows;
       const numCols = this.data.numCols;
+      const numRows_1 = numRows - 1;
+      const numCols_1 = numCols - 1;
 
       // const geometry = new THREE.PlaneBufferGeometry(1, 1, numCols - 1, numRows - 1)
       const numPoints = numCols*numRows*VERTS_PER_POINT;
@@ -1907,24 +1909,19 @@
       for (let z = 0; z < numRows - 1; z++) {
         for (let x = 0; x < numCols - 1; x++) {
           const i = (z*numCols + x)*VERTS_PER_POINT*3;
-          const minU = x/numCols, maxU = (x+1)/numCols;
-          const minV = z/numRows, maxV = (z+1)/numRows;
+          const j = (z*numCols + x)*VERTS_PER_POINT*2;
+          const minU = x/numCols_1, maxU = (x+1)/numCols_1;
+          const minV = z/numRows_1, maxV = (z+1)/numRows_1;
 
           vertices[i+3] = vertices[i+9] = vertices[i+15] = minU - .5; // ax,cx
           vertices[i+2] = vertices[i+5] = vertices[i+17] = minV - .5; // az,bz
           vertices[i+0] = vertices[i+6] = vertices[i+12] = maxU - .5; // bx,dx
           vertices[i+8] = vertices[i+11] = vertices[i+14] = maxV - .5; // cz,dz
 
-          uvs[i+2] = uvs[i+6] = uvs[i+10] = minU;
-          uvs[i+1] = uvs[i+3] = uvs[i+11] = minV;
-          uvs[i+0] = uvs[i+4] = uvs[i+8] = maxU;
-          uvs[i+5] = uvs[i+7] = uvs[i+9] = maxV;
-
-          // if ((x + z) % 3 === 0) {
-          //   // switch to *baccdb*
-          //   vertices[i+6] = minU - .5
-          //   vertices[i+15] = maxU - .5
-          // }
+          uvs[j+2] = uvs[j+6] = uvs[j+10] = minU;
+          uvs[j+1] = uvs[j+3] = uvs[j+11] = 1 - minV;
+          uvs[j+0] = uvs[j+4] = uvs[j+8] = maxU;
+          uvs[j+5] = uvs[j+7] = uvs[j+9] = 1 - maxV;
         }
       }
 
@@ -1962,15 +1959,18 @@
       const pixels = canvas.getContext("2d").getImageData(0, 0, canvasWidth, canvasHeight).data;
       const numRows = this.data.numRows;
       const numCols = this.data.numCols;
+      const numRows_1 = numRows - 1;
+      const numCols_1 = numCols - 1;
 
+      const uvs = this.mesh.geometry.getAttribute("uv");
       const positions = this.mesh.geometry.getAttribute("position");
       const multiplier = CHANNEL_MULTIPLIERS[this.data.channels] || CHANNEL_MULTIPLIERS["rgb"];
       const heightScale = this.data.heightScale;
 
       // sample the heights
       const RGBA_PER_POINT = 4;
-      const dx = (canvasWidth-1)/(numCols-1);
-      const dz = (canvasHeight-1)/(numRows-1);
+      const dx = (canvasWidth-1)/numCols_1;
+      const dz = (canvasHeight-1)/numRows_1;
       const heights = new Float32Array(numRows*numCols);
       const midHeights = new Float32Array(numRows*numCols);
 
@@ -1998,8 +1998,8 @@
           const heightC = heights[j+numCols];
           const heightD = heights[j+numCols+1];
           const midHeight = midHeights[j];
-          const minU = x/numCols;
-          const maxU = (x+1)/numCols;
+          const minU = x/numCols_1;
+          const maxU = (x+1)/numCols_1;
 
           positions.setY(k, heightB);
           positions.setY(k+1, heightA);
@@ -2014,12 +2014,16 @@
             positions.setY(k+2, heightC);
             positions.setX(k+5, maxU - .5);
             positions.setY(k+5, heightB);
+            uvs.setX(k+2, minU);
+            uvs.setX(k+5, maxU);
           } else {
             // output as *badcda*
             positions.setX(k+2, maxU - .5);
             positions.setY(k+2, heightD);
             positions.setX(k+5, minU - .5);
             positions.setY(k+5, heightA);
+            uvs.setX(k+2, maxU);
+            uvs.setX(k+5, minU);
           }
         }
       }
