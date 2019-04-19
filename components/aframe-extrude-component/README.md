@@ -1,6 +1,6 @@
 # extrude
 
-A wrapper around ![THREE.ExtrudeBufferGeometry](https://threejs.org/docs/#api/en/geometries/ExtrudeBufferGeometry). Takes a 2D ![svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) and generates a geometry extruded perpendicular to this path, or along another extruded svg path.  The extruded geometry can be beveled at the ends.
+A wrapper around [THREE.ExtrudeBufferGeometry](https://threejs.org/docs/#api/en/geometries/ExtrudeBufferGeometry). Takes a 2D [svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) and generates a geometry extruded perpendicular to this path, or along another extruded svg path.  The extruded geometry can be beveled at the ends.
 
 e.g.
 ```html
@@ -41,12 +41,12 @@ the distance to extrude the shape
 ---
 **extrudePath**: string = ''
 
-an optional ![svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) to extrude along
+an optional [svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) to extrude along
 
 ---
 **shape**: string = ''
 
-an ![svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) defining the shape of the path
+an [svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) defining the shape of the path
 
 ---
 **steps**: int = 1

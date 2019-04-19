@@ -1,6 +1,6 @@
 # aframe-lathe-component
 
-Wrapper around ![THREE.LatheBufferGeometry](https://threejs.org/docs/#api/en/geometries/LatheBufferGeometry).  Given a 2D ![svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths), wraps that path around the Y-axis.
+Wrapper around [THREE.LatheBufferGeometry](https://threejs.org/docs/#api/en/geometries/LatheBufferGeometry).  Given a 2D [svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths), wraps that path around the Y-axis.
 
 e.g.
 ```html
@@ -22,7 +22,7 @@ ending angle (degrees) for wrapping about the Y-axis. This may be negative
 ---
 **shape**: string = ""
 
-a 2D ![svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) which forms the edge of the lathed object
+a 2D [svg path](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths) which forms the edge of the lathed object
 
 ---
 **steps**: int = 1
