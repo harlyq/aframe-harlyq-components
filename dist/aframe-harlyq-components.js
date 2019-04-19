@@ -2809,7 +2809,7 @@
       this.uniforms = this.parseShaderUniforms(shader);
       const fullFragmentShader = proceduralFragmentShader + shader;
 
-      var shaderMaterial = new THREE.ShaderMaterial( {
+      var shaderMaterial = new THREE.RawShaderMaterial( {
         uniforms: this.uniforms,
         vertexShader: proceduralVertexShader,
         fragmentShader: fullFragmentShader,
@@ -2993,6 +2993,11 @@
   });
 
   const proceduralVertexShader = `
+precision highp float;
+
+attribute vec3 position;
+attribute vec2 uv;
+
 varying vec2 vUv;
 void main()
 {
@@ -3002,6 +3007,7 @@ void main()
 
   const proceduralFragmentShader = `
 precision highp float;
+precision highp int;
 
 // FLOAT -> FLOAT
 // could use levels low, high, mid, black, white (mid maps to (black + white)/2)
