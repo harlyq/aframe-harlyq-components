@@ -2,13 +2,15 @@
 <html>
   <head>
     <title>Heightfield examples</title>
+    <!--script src="https://aframe.io/releases/0.9.0/aframe.js"></script-->
     <script src="../../aframe/aframe-0.9.0.js"></script>
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="thingshader" type="x-shader/x-fragment">
       uniform float multiplier;
+      uniform float offset;
       varying vec2 vUv;
       void main() {
-        float v = fbm(vUv*multiplier + .5);
+        float v = fbm(vUv*multiplier + offset)*(1. - smoothstep(.2, .5, length(vUv - .5)));
         gl_FragColor = vec4(mix(vec3(0.), vec3(1.), v), 1.);
       }
     </script>
@@ -26,14 +28,20 @@
         <canvas id="thing" width="64" height="64">
         <canvas id="ramp" width="64" height="64">
       </a-assets>
-      <a-entity visible="false"
-        procedural-texture__thing="shader: #thingshader; canvas: #thing; multiplier: 5"
-        procedural-texture__ramp="shader: #rampshader; canvas: #ramp;"
-      >
-      </a-entity>
-      <a-entity heightfield="src: #thing; channels: r; numRows: 32; numCols: 32" material="color: grey; side: double;" position="0 1 -2" vertex-color__1="color: blue; minSlope: 10; maxSlope: 40" vertex-color__2="color: orange; maxVertex: 0 .3 0"></a-entity>
+      <a-entity id="island"
+        procedural-texture__thing="shader: #thingshader; canvas: #thing; multiplier: 3; offset: .1"
+        heightfield="src: #thing; channels: r; numRows: 32; numCols: 32; heightScale: .4" material="color: white; side: double;" position="0 1 -2"
+        vertex-color__land="color: brown"
+        vertex-color__snow="color: grey; maxSlope: 70; minVertex: 0 .3 0"
+        vertex-color__tree="color: green; maxVertex: 1 .1 1; maxSlope: 40"
+        vertex-color__sea="color: blue; maxVertex: 1 0 1"></a-entity>
       <a-box material="src: #thing; color: grey;" scale=".1 .1 .1" position="0 1 -1"></a-box>
-      <a-entity heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32" material="wireframe: true; side: double; src: #ramp" position="-1.5 1 -2"></a-entity>
+
+      <a-entity id="test"
+        procedural-texture__ramp="shader: #rampshader; canvas: #ramp;"
+        heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32"
+        material="wireframe: true; side: double; src: #ramp"
+        position="-1.5 1 -2"></a-entity>
       <a-box material="src: #ramp;" scale=".1 .1 .1" position="-1.5 1 -1"></a-box>
     </a-scene>
   </body>

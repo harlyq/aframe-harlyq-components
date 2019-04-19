@@ -33,7 +33,10 @@ AFRAME.registerComponent("heightfield", {
     } else if (oldData.numRows !== data.numRows || oldData.numCols !== data.numCols) {
       this.createHeightfield(this.image)
     } else if (oldData.heightScale !== data.heightScale || oldData.channels !== data.channels) {
-      this.updateHeightfield(this.image)
+      // check the object3D mesh to ensure we still control it
+      if (this.el.getObject3D("mesh") === this.mesh) {
+        this.updateHeightfield(this.image)
+      }  
     }
   },
 
@@ -106,16 +109,15 @@ AFRAME.registerComponent("heightfield", {
 
     const oldMesh = this.el.getObject3D("mesh")
     this.mesh = new THREE.Mesh(geometry, oldMesh ? oldMesh.material : new THREE.MeshBasicMaterial())
-    this.el.setObject3D("mesh", this.mesh)
 
-    this.updateHeightField(this.image)
+    this.updateHeightfield(this.image)
+
+    // must be set after the heightfield update, so that other components that receive the 
+    // object3dset notification get a mesh with the completed heightfield
+    this.el.setObject3D("mesh", this.mesh)
   },
 
-  updateHeightField(image) {
-    if (this.el.getObject3D("mesh") !== this.mesh) {
-      return // another component replaced the mesh
-    }
-
+  updateHeightfield(image) {
     /** @type { HTMLCanvasElement } */
     let canvas
 
