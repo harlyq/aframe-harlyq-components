@@ -2043,6 +2043,187 @@
     },
   });
 
+  AFRAME.registerComponent("instance", {
+    schema: {
+      size: { default: 1000 },
+      maxCount: { default: 1 },
+      patchShader: { default: true },
+    },
+
+    init() {
+      this.oldMesh = undefined;
+      this.positions = undefined;
+      this.colors = undefined;
+      this.quaternions = undefined;
+      this.scales = undefined;
+
+      this.onSetObject3D = this.onSetObject3D.bind(this);
+      this.patchInstancesIntoShader = this.patchInstancesIntoShader.bind(this);
+
+      this.el.addEventListener("setobject3d", this.onSetObject3D);
+    },
+
+    remove() {
+      this.el.removeEventListener("setobject3d", this.setobject3d);
+      this.destroyInstances();
+    },
+
+    update() {
+      this.createInstances();
+    },
+
+    onSetObject3D(e) {
+      if (e.target === this.el && e.detail.type === "mesh") {
+        this.destroyInstances();
+        this.createInstances();
+      }
+    },
+
+    createInstances() {
+      const mesh = this.el.getObject3D("mesh");
+      if (!mesh || !mesh.geometry || !mesh.material) {
+        return
+      }
+
+      this.oldMesh = mesh;
+
+      const data = this.data;
+      const instancedGeometry = new THREE.InstancedBufferGeometry().copy(mesh.geometry);
+
+      const numInstances = data.size;
+      instancedGeometry.maxInstancedCount = Math.min(data.maxCount, numInstances);
+      const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*3);
+      const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*3).fill(1);
+      const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*3).fill(1);
+      const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*4).map((x,i) => (i-3)%4 ? 0 : 1);
+
+      this.instancePosition = new THREE.InstancedBufferAttribute(positions, 3);
+      this.instanceQuaternion = new THREE.InstancedBufferAttribute(quaternions, 4);
+      this.instanceScale = new THREE.InstancedBufferAttribute(scales, 3);
+      this.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
+
+      instancedGeometry.addAttribute("instancePosition", this.instancePosition);
+      instancedGeometry.addAttribute("instanceQuaternion", this.instanceQuaternion);
+      instancedGeometry.addAttribute("instanceScale", this.instanceScale);
+      instancedGeometry.addAttribute("instanceColor", this.instanceColor);
+
+      let instancedMaterial = mesh.material;
+
+      if (data.patchShader) {
+        // insert the instance logic into whatever standard shader the user has provided
+        if (Array.isArray(mesh.material)) {
+          instancedMaterial = mesh.material.map(x => x.clone());
+          instancedMaterial.forEach(x => x.onBeforeCompile = this.patchInstancesIntoShader);
+        } else {
+          instancedMaterial = mesh.material.clone();
+          instancedMaterial.onBeforeCompile = this.patchInstancesIntoShader;
+        }
+      }
+
+      const instancedMesh = new THREE.Mesh(instancedGeometry, instancedMaterial);
+      instancedMesh.frustumCulled = false;
+
+      this.el.setObject3D("mesh", instancedMesh);
+
+      this.positions = positions;
+      this.quaternions = quaternions;
+      this.scales = scales;
+      this.colors = colors;
+    },
+
+    destroyInstances() {
+      if (this.oldMesh) {
+        this.el.setObject3D("mesh", this.oldMesh);
+        this.oldMesh = undefined;
+      }
+    },
+
+    patchInstancesIntoShader(shader) {
+      let vertexShader = shader.vertexShader;
+      let fragmentShader = shader.fragmentShader;
+
+      vertexShader = vertexShader.replace('void main()', `
+    attribute vec3 instancePosition;
+    attribute vec4 instanceQuaternion;
+    attribute vec3 instanceColor;
+    attribute vec3 instanceScale;
+
+    varying vec3 vInstanceColor;
+
+    vec3 applyQuaternion( const vec3 v, const vec4 q ) 
+    {
+      return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
+    }
+
+    void main()`);
+
+      vertexShader = vertexShader.replace('#include <color_vertex>', `
+    #include <color_vertex>
+    vInstanceColor = instanceColor;`);
+
+      vertexShader = vertexShader.replace('#include <begin_vertex>', `
+    vec3 transformed = applyQuaternion( position*instanceScale, instanceQuaternion ) + instancePosition;`);
+
+      vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
+    vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal/instanceScale, -instanceQuaternion );
+    
+    #ifdef FLIP_SIDED
+      transformedNormal = - transformedNormal;
+    #endif
+
+    #ifdef USE_TANGENT
+      vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent/instanceScale, -instanceQuaternion );
+      #ifdef FLIP_SIDED
+        transformedTangent = - transformedTangent;
+      #endif
+    #endif`);
+
+      fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
+    #include <color_pars_fragment>
+    varying vec3 vInstanceColor;`);
+
+      fragmentShader = fragmentShader.replace('#include <color_fragment>', `
+    #include <color_fragment>
+    diffuseColor.rgb *= vInstanceColor;`);
+
+      shader.vertexShader = vertexShader;
+      shader.fragmentShader = fragmentShader;
+    },
+
+    setColorAt(i, r, g, b) {
+      const j = i*3;
+      this.colors[j] = r;
+      this.colors[j+1] = g;
+      this.colors[j+2] = b;
+      this.instanceColor.needsUpdate = true;
+    },
+
+    setPositionAt(i, x, y, z) {
+      const j = i*3;
+      this.positions[j] = x;
+      this.positions[j+1] = y;
+      this.positions[j+2] = z;
+      this.instancePosition.needsUpdate = true;
+    },
+
+    setScaleAt(i, x, y, z) {
+      const j = i*3;
+      this.scales[j] = x;
+      this.scales[j+1] = typeof y !== "undefined" ? y : x;
+      this.scales[j+2] = typeof z !== "undefined" ? z : x;
+      this.instanceScale.needsUpdate = true;
+    },
+
+    setQuaternionAt(i, x, y, z, w) {
+      const j = i*4;
+      this.quaternions[j] = x;
+      this.quaternions[j+1] = y;
+      this.quaternions[j+2] = z;
+      this.quaternions[j+3] = w;
+      this.instanceQuaternion.needsUpdate = true;
+    },
+  });
+
   // Copyright 2018-2019 harlyq
 
   const MAX_FRAME_TIME_MS = 100;
@@ -2683,6 +2864,158 @@
   		const mesh = new THREE.Mesh(new THREE.BufferGeometry().fromGeometry(geometry));
   		this.el.setObject3D('mesh', mesh);
   	}
+  });
+
+  const toLowerCase = x => x.toLowerCase();
+  const warn = msg => console.warn("mesh-particles", msg);
+
+  const OVER_TIME_PROPERTIES = ["position", "velocity", "acceleration", "radialPosition", "radialVelocity", "radialAcceleration", "angularVelocity", "angularAcceleration", "orbitalVelocity", "orbitalAcceleration", "scale", "color", "rotation", "opacity", "drag"];
+
+  AFRAME.registerComponent("mesh-particles", {
+    schema: {
+      duration: { default: -1 },
+      instances: { default: "" },
+      spawnRate: { default: "10" },
+      lifeTime: { default: "1" },
+      position: { default: "0 0 0" },
+      velocity: { default: "0 0 0" },
+      acceleration: { default: "0 0 0" },
+      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circleyz", "circlexz"], parse: toLowerCase },
+      radialPosition: { default: "0" },
+      radialVelocity: { default: "0" },
+      radialAcceleration: { default: "0" },
+      angularVelocity: { default: "0 0 0" },
+      angularAcceleration: { default: "0 0 0" },
+      orbitalVelocity: { default: "0" },
+      orbitalAcceleration: { default: "0" },
+      scale: { default: "1" },
+      color: { default: "white", parse: toLowerCase },
+      rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
+      opacity: { default: "1" },
+      drag: { default: "0" },
+      source: { type: "selector" },
+      destination: { type: "selector" },
+      destinationOffset: { default: "0 0 0" },
+      destinationWeight: { default: "0" },
+      seed: { type: "int", default: 1287151 }
+    },
+
+    multiple: true,
+
+    init() {
+      this.particleIndices = [];
+      this.overTimes = [];
+      this.lcg = lcg();
+    },
+
+    remove() {
+
+    },
+
+    update(oldData) {
+      const data = this.data;
+      this.lcg.setSeed(data.seed);
+
+      for (let prop in data) {
+        if (OVER_TIME_PROPERTIES.includes(prop)) {
+          if (!(prop in this.overTimes) || data[prop] !== oldData[prop]) {
+            // @ts-ignore
+            this.overTimes[prop] = nestedSplit(data[prop]).map(str => parse$1(str)).flat();
+          }
+        }
+      }
+
+      this.duration = data.duration;
+      this.spawnRate = Number(data.spawnRate);
+
+      // if (data.position !== oldData.position) {
+      //   this.position = attribute.parse(data.position)
+      // }
+
+      if (data.radialPosition !== oldData.radialPosition) {
+        this.radialPosition = parse$1(data.radialPosition);
+      }
+
+      if (data.lifeTime !== oldData.lifeTime) {
+        this.lifeTime = parse$1(data.lifeTime);
+        this.maxLifeTime = this.lifeTime.options ? Math.max(...this.lifeTime.options) : Math.max(...this.lifeTime.range);
+      }
+
+      if (data.delay !== oldData.delay) {
+        this.startTime = data.delay; // this will not work if we restart the spawner
+      }
+
+      this.maxParticles = this.spawnRate*this.maxLifeTime;
+
+      if (data.instances !== oldData.instances) {
+        this.particleIndices = [];
+        this.instances = data.instances ? 
+          [].slice.call(document.querySelectorAll(data.instances)).map(el => el.components ? el.components["instance"] : undefined).filter(x => x) :
+          this.el.components["instance"] ? [this.el.components["instance"]] : [];
+
+        if (this.instances.length === 0) {
+          if (data.instances) {
+            warn(`no instances specified with: '${data.instances}'`);
+          } else {
+            warn(`no 'instance' component on this element`);
+          }
+        } else {
+          // this.instanceBlocks = this.instances.map(inst => inst.requestBlock(this.maxParticles))
+          // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
+          this.particleIndices = new Int32Array(this.instances.length);
+        }
+      }
+
+    },
+
+    tick(time, deltaTime) {
+      if ((this.duration < 0 || time - this.startTime < this.duration) && this.instances.length > 0) {
+        this.spawn(deltaTime*0.001);
+      }
+      this.move(deltaTime*0.001);
+    },
+
+    spawn(dt) {
+      const data = this.data;
+      const random = this.lcg.random;
+      const degToRad = THREE.Math.degToRad;
+      const instanceIndex = index(this.instances.length, random);
+      const particleInstance = this.instances[instanceIndex];
+      const particlePosition = new THREE.Vector3(0,0,0);
+      const particleEuler = new THREE.Euler(0,0,0,"YXZ");
+      const particleQuaternion = new THREE.Quaternion(0,0,0,1);
+      const particleScale = new THREE.Vector3(1,1,1);
+      const particleColor = new THREE.Color();
+
+      particlePosition.fromArray( randomize(this.overTimes["position"][0], random) );
+
+      const theta = data.radialType !== "circlexz" ? random()*2*Math.PI : 0;
+      const phi = data.radialType === "circleyz" ? 0.5*Math.PI : (data.radialType !== "circle" && data.radialType !== "circlexy") ? random()*2*Math.PI : 0;
+      const cTheta = Math.cos(theta), sTheta = Math.sin(theta);
+      const cPhi = Math.cos(phi), sPhi = Math.sin(phi);
+      const r = /** @type {number} */(randomize(this.overTimes["radialPosition"][0], random)[0]); // HACK
+      const rc = r*cTheta;
+
+      particlePosition.add(new THREE.Vector3(rc*cPhi, r*sTheta, rc*sPhi));
+
+      particleEuler.fromArray( /** @type {number[]} */ (randomize(this.overTimes["rotation"][0], random)).map(deg => degToRad(deg)) );
+      particleScale.fromArray( randomize(this.overTimes["scale"][0], random) );
+      
+      const col = /** @type {{r: number,g: number,b: number}} */(randomize(this.overTimes["color"][0], random));
+      particleColor.setRGB(col.r, col.b, col.g);
+
+      particleQuaternion.setFromEuler(particleEuler);
+
+      const i = (this.particleIndices[instanceIndex] + 1) % Math.ceil(this.maxParticles/this.instances.length);
+      particleInstance.setColorAt(i, particleColor.r, particleColor.g, particleColor.b);
+      particleInstance.setScaleAt(i, particleScale.x, particleScale.y, particleScale.z);
+      particleInstance.setPositionAt(i, particlePosition.x, particlePosition.y, particlePosition.z);
+      particleInstance.setQuaternionAt(i, particleQuaternion.x, particleQuaternion.y, particleQuaternion.z, particleQuaternion.w);
+      this.particleIndices[instanceIndex] = i;
+    },
+
+    move(dt) {
+    },
   });
 
   AFRAME.registerSystem("procedural-texture", {
@@ -3587,7 +3920,7 @@ vec2 worley(const vec2 P, const float jitter) {
     }) )
   };
 
-  const toLowerCase = x => x.toLowerCase();
+  const toLowerCase$1 = x => x.toLowerCase();
 
   // console.assert(AFRAME.utils.deepEqual(parseVecRange("", [1,2,3]), [1,2,3,1,2,3]))
   // console.assert(AFRAME.utils.deepEqual(parseVecRange("5", [1,2,3]), [5,2,3,5,2,3]))
@@ -3625,7 +3958,7 @@ vec2 worley(const vec2 P, const float jitter) {
       texture: { type: "map" },
       delay: { default: 0 },
       duration: { default: -1 },
-      spawnType: { default: "continuous", oneOf: ["continuous", "burst"], parse: toLowerCase },
+      spawnType: { default: "continuous", oneOf: ["continuous", "burst"], parse: toLowerCase$1 },
       spawnRate: { default: 10 },
       source: { type: "selector" },
       textureFrame: { type: "vec2", default: {x: 1, y: 1} },
@@ -3636,15 +3969,15 @@ vec2 worley(const vec2 P, const float jitter) {
       trailLifeTime: { default: "0" },
       trailType: { default: "particle", oneOf: ["particle", "ribbon", "ribbon3d"] },
       ribbonWidth: { default: 1, },
-      ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase },
-      ribbonUVType: { default: "overtime", oneOf: UV_TYPE_STRINGS, parse: toLowerCase },
+      ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase$1 },
+      ribbonUVType: { default: "overtime", oneOf: UV_TYPE_STRINGS, parse: toLowerCase$1 },
       emitterColor: { type: "color" },
 
       lifeTime: { default: "1" },
       position: { default: "0 0 0" },
       velocity: { default: "0 0 0" },
       acceleration: { default: "0 0 0" },
-      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circlexz"], parse: toLowerCase },
+      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circlexz"], parse: toLowerCase$1 },
       radialPosition: { default: "0" },
       radialVelocity: { default: "0" },
       radialAcceleration: { default: "0" },
@@ -3653,7 +3986,7 @@ vec2 worley(const vec2 P, const float jitter) {
       orbitalVelocity: { default: "0" },
       orbitalAcceleration: { default: "0" },
       scale: { default: "1" },
-      color: { default: "white", parse: toLowerCase },
+      color: { default: "white", parse: toLowerCase$1 },
       rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
       opacity: { default: "1" },
       velocityScale: { default: 0 },
@@ -3666,17 +3999,17 @@ vec2 worley(const vec2 P, const float jitter) {
       enable: { default: true },
       emitterTime: { default: 0 },
       model: { type: "selector" },
-      modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase },
-      direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
+      modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase$1 },
+      direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase$1 },
       particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
       ribbonUVMultiplier: { default: 1 },
-      materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase },
+      materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase$1 },
       screenDepthOffset: { default: 0 },
       alphaTest: { default: 0 },
       fog: { default: true },
       depthWrite: { default: false },
       depthTest: { default: true },
-      blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase },
+      blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase$1 },
       transparent: { default: true },
       particleSize: { default: 100 },
       usePerspective: { default: true },

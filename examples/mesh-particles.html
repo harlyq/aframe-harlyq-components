@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Examples of Mesh Particles</title>
+    <!--script src="https://aframe.io/releases/0.9.0/aframe.min.js"></script-->
+    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+  </head>
+  <body>
+    <a-scene background="color: grey" stats>
+      <a-assets>
+
+      </a-assets>
+      <a-box id="box" position="0 0 -15" instance="size: 1000; maxCount: 1000" mesh-particles="radialPosition: 5; radialType: circle; position2: -10 -10 -10..10 10 10; rotation: 0 0 0..360 360 360; scale: .1..1; color: red|green|blue; lifeTime: 100"></a-box>
+    </a-scene>
+  </body>
+</html>
