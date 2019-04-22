@@ -7,17 +7,8 @@ const MAX_FRAME_TIME_MS = 100
 // Takes a set of keys (from randomRules()), and provides an interpolated value, where r is 0 (first key) to 1 (last key)
 // e.g. [[1,2,3],[5,6],[7.5]] @ r = 0.25 becomes [3,4,3]
 function lerpKeys(type, keys, r, easingFn = interpolation.Linear) {
-  const n = keys.length
+  const [i,t] = interpolation.lerpKeys(keys, r, easingFn)
 
-  if (r <= 0 || n <= 1) {
-    return keys[0]
-  } else if (r >= 1) {
-    return keys[n - 1]
-  }
-
-  const k = r*(n - 1)
-  const i = ~~k
-  const t = easingFn(k - i)
   switch (type) {
     case "object": return interpolation.lerpObject(keys[i], keys[i+1], t)
     case "vector": return interpolation.lerpArray(keys[i], keys[i+1], t)

@@ -177,4 +177,38 @@ AFRAME.registerComponent("instance", {
     this.quaternions[j+3] = w
     this.instanceQuaternion.needsUpdate = true
   },
+
+  getPositionAt(i, out) {
+    const j = i*3
+    out.x = this.positions[j]
+    out.y = this.positions[j+1]
+    out.z = this.positions[j+2]
+    return out
+  },
+
+  getColorAt(i, out) {
+    const j = i*3
+    out.r = this.colors[j]
+    out.g = this.colors[j+1]
+    out.b = this.colors[j+2]
+    return out
+  },
+
+  getScaleAt(i, out) {
+    const j = i*3
+    out.x = this.scales[j]
+    out.y = this.scales[j+1]
+    out.z = this.scales[j+2]
+    return out
+  },
+
+  getQuaternionAt(i, out) {
+    const j = i*4
+    out.x = this.quaternions[j]
+    out.y = this.quaternions[j+1]
+    out.z = this.quaternions[j+2]
+    out.w = this.quaternions[j+3]
+    return out
+  },
+
 })

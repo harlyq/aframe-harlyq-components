@@ -11,7 +11,8 @@
       <a-assets>
 
       </a-assets>
-      <a-box id="box" position="0 0 -15" instance="size: 1000; maxCount: 1000" mesh-particles="radialPosition: 5; radialType: circle; position2: -10 -10 -10..10 10 10; rotation: 0 0 0..360 360 360; scale: .1..1; color: red|green|blue; lifeTime: 100"></a-box>
+      <a-torus-knot id="box" position="0 0 -15" instance="size: 1000; maxCount: 1000" 
+        mesh-particles="spawnRate: 60; radialPosition2: 5,0,-5; radialPosition: 5; radialType: sphere; position2: -10 -10 -10..10 10 10; acceleration: 0 -2 0; rotation: 0 0 0..360 360 360, 0 0 0; scale: .1..1,.1; color: red|green|blue,orange; lifeTime: 10"></a-torus-knot>
     </a-scene>
   </body>
 </html>
