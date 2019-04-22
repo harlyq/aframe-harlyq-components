@@ -2916,6 +2916,8 @@
 
   const OVER_TIME_PROPERTIES = ["position", "velocity", "acceleration", "radialPosition", "radialVelocity", "radialAcceleration", "angularVelocity", "angularAcceleration", "orbitalVelocity", "orbitalAcceleration", "scale", "color", "rotation", "opacity", "drag"];
 
+  const getMaxRangeOptions = rule => rule.options ? Math.max(...rule.options) : Math.max(...rule.range);
+
   AFRAME.registerComponent("mesh-particles", {
     schema: {
       duration: { default: -1 },
@@ -2949,6 +2951,7 @@
 
     init() {
       this.spawnID = 0;
+      this.spawnCount = 0;
       this.instanceIndices = [];
       this.instanceIndices = [];
       this.overTimes = [];
@@ -2974,11 +2977,10 @@
       }
 
       this.duration = data.duration;
-      this.spawnRate = Number(data.spawnRate);
 
       if (data.lifeTime !== oldData.lifeTime) {
-        this.lifeTime = parse$1(data.lifeTime);
-        this.maxLifeTime = this.lifeTime.options ? Math.max(...this.lifeTime.options) : Math.max(...this.lifeTime.range);
+        this.lifeTimeRule = parse$1(data.lifeTime);
+        this.maxLifeTime = getMaxRangeOptions(this.lifeTimeRule);
         this.particles = [];
       }
 
@@ -2987,7 +2989,33 @@
       }
 
       if (data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
-        this.maxParticles = this.spawnRate*this.maxLifeTime;
+        this.spawnRateRule = parse$1(data.spawnRate);
+        this.maxParticles = getMaxRangeOptions(this.spawnRateRule)*this.maxLifeTime;
+        this.spawnRate = randomize(this.spawnRateRule, this.lcg.random); // How do we keep this in-sync?
+      }
+
+      if (data.source !== oldData.source) {
+        this.source = this.el.object3D;
+        if (data.source) {
+          const sourceEl = document.querySelector(data.source);
+          if (sourceEl && sourceEl.object3D) { 
+            this.source = sourceEl.object3D;
+          } else {
+            warn(`unable to find object3D on source '${data.source}'`); 
+          }
+        }
+      }
+
+      if (data.target !== oldData.target) {
+        this.target = undefined;
+        if (data.target) {
+          const targetEl = document.querySelector(data.target);
+          if (targetEl && targetEl.object3D) { 
+            this.target = targetEl.object3D;
+          } else {
+            warn(`unable to find object3D on target '${data.target}'`); 
+          }
+        }
       }
 
       if (data.instances !== oldData.instances) {
@@ -3012,10 +3040,21 @@
     },
 
     tick(time, deltaTime) {
+      const dt = Math.min(0.1, deltaTime*0.001); // cap the dt to help when we are debugging
+
       if ((this.duration < 0 || time - this.startTime < this.duration) && this.instances.length > 0) {
-        this.spawn(time*0.001);
+        this.spawnCount += this.spawnRate*dt;
+
+        if (this.spawnCount > 1) {
+          this.spawnRate = randomize(this.spawnRateRule, this.lcg.random); // How do we keep this in-sync?
+        }
+
+        while (this.spawnCount > 1) {
+          this.spawn();
+          this.spawnCount--;
+        }
       }
-      this.move(time*0.001, deltaTime*0.001);
+      this.move(dt);
     },
 
     configureRandomizer(id) {
@@ -3034,25 +3073,19 @@
       return [particleInstance, i, localID]
     },
 
-    spawn(time) {
+    spawn() {
       const data = this.data;
 
       const random = this.lcg.random;
       const degToRad = THREE.Math.degToRad;
-      // const instanceIndex = pseudorandom.index(this.instances.length, random)
-      const tempPosition = new THREE.Vector3(0,0,0);
-      const tempEuler = new THREE.Euler(0,0,0,"YXZ");
-      const tempQuaternion = new THREE.Quaternion(0,0,0,1);
-      const tempScale = new THREE.Vector3(1,1,1);
-      const tempColor = new THREE.Color();
 
       this.configureRandomizer(this.spawnID);
 
       const newParticle = {
-        startTime: time,
+        age: 0,
         velocity: new THREE.Vector3(0,0,0),
         acceleration: new THREE.Vector3(0,0,0),
-        lifeTime: randomize(this.lifeTime, random),
+        lifeTime: randomize(this.lifeTimeRule, random),
         positions: this.overTimes["position"].map(part => randomize(part, random)),
         radialPositions: this.overTimes["radialPosition"].map(part => randomize(part, random)),
         // @ts-ignore
@@ -3077,8 +3110,7 @@
       this.spawnID++;
     },
 
-    move(time, dt) {
-      const data = this.data;
+    move(dt) {
       const tempPosition = new THREE.Vector3(0,0,0);
       const tempEuler = new THREE.Euler(0,0,0,"YXZ");
       const tempQuaternion = new THREE.Quaternion(0,0,0,1);
@@ -3091,18 +3123,27 @@
       for (let id = Math.max(0, this.spawnID - this.maxParticles); id < this.spawnID; id++) {
         const [particleInstance, i, localID] = this.instanceFromID(id);
         const particle = this.particles[localID];
-        const t = (time - particle.startTime)/particle.lifeTime;
+        const t = particle.age/particle.lifeTime;
+
+        if (t > 1) {
+          particleInstance.setScaleAt(i, {x:0,y:0,z:0});
+          continue // particle has expired
+        }
+
+        particle.age += dt;
 
         particleInstance.getPositionAt(i, tempPosition);
-        particleInstance.getColorAt(i, tempColor);
-        particleInstance.getQuaternionAt(i, tempQuaternion);
-        particleInstance.getScaleAt(i, tempScale);
+        // particleInstance.getColorAt(i, tempColor)
+        // particleInstance.getQuaternionAt(i, tempQuaternion)
+        // particleInstance.getScaleAt(i, tempScale)
 
         if (t === 0 || particle.positions.length > 1) {
-          tempPosition.fromArray( this.lerpNumbers(particle.positions, t) );
+          tempPosition.copy( this.source.position );
+          tempPosition.add( tempVec3.fromArray( this.lerpNumbers(particle.positions, t) ) );
         }
 
         if (t === 0 || particle.radialPositions.length > 1) {
+          tempPosition.copy( this.source.position );
           tempPosition.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialPositions, t)[0], particle.radialTheta, particle.radialPhi ) );
         }
 
@@ -3127,6 +3168,7 @@
         particleInstance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z);
 
         if (t === 0 || particle.colors.length > 1) {
+          // colour is independent of the entity color
           tempColor.copy( this.lerpColors(particle.colors, t) );
           particleInstance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b);
         }
@@ -3134,11 +3176,18 @@
         if (t === 0 || particle.rotations.length > 1) {
           tempEuler.fromArray( this.lerpNumbers(particle.rotations, t) );
           tempQuaternion.setFromEuler(tempEuler);
+          tempQuaternion.premultiply(this.source.quaternion);
           particleInstance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w);
         }
 
         if (t === 0 || particle.scales.length > 1) {
-          tempScale.fromArray( this.lerpNumbers(particle.scales, t) );
+          tempScale.copy(this.source.scale);
+          const newScale = this.lerpNumbers(particle.scales, t);
+          if (newScale.length < 3) {
+            tempScale.multiplyScalar( newScale[0] );
+          } else {
+            tempScale.multiple( tempVec3.fromArray( newScale ) );
+          }
           particleInstance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z);
         }
 
