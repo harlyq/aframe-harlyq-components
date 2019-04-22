@@ -4,16 +4,16 @@ import { threeHelper } from "harlyq-helpers"
 
 AFRAME.registerSystem("procedural-texture", {
   init() {
-    this.renderer = new THREE.WebGLRenderer({alpha: true, premultipliedAlpha: false})
-    this.renderer.setPixelRatio( window.devicePixelRatio )
-    this.renderer.autoClear = true; // when a shader fails we will see pink, rather than the last shader output
-    this.renderer.setClearColor(new THREE.Color("purple"), 1.)
-
+    this.renderer = undefined
     this.proceduralTextureComponents = []
   },
 
   registerComponent(component) {
     this.proceduralTextureComponents.push(component)
+    
+    if (!this.renderer) {
+      this.createRenderer()
+    }
   },
 
   unregisterComponent(component) {
@@ -38,6 +38,13 @@ AFRAME.registerSystem("procedural-texture", {
         component.update(component.data)
       }
     }
+  },
+
+  createRenderer() {
+    this.renderer = new THREE.WebGLRenderer({alpha: true, premultipliedAlpha: false})
+    this.renderer.setPixelRatio( window.devicePixelRatio )
+    this.renderer.autoClear = true; // when a shader fails we will see pink, rather than the last shader output
+    this.renderer.setClearColor(new THREE.Color("purple"), 1.)
   },
 })
 
