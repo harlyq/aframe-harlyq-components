@@ -5983,8 +5983,8 @@ void main() {
   AFRAME.registerComponent("vertex-color", {
     schema: {
       color: { type: "color" },
-      minVertex: { type: "vec3", default: {x:-1000, y:-1000, z:-1000} }, // top left
-      maxVertex: { type: "vec3", default: {x:1000, y:1000, z:1000} }, // bottom right
+      minVertex: { type: "vec3", default: {x:-1e10, y:-1e10, z:-1e10} }, // top left
+      maxVertex: { type: "vec3", default: {x:1e10, y:1e10, z:1e10} }, // bottom right
       minSlope: { type: "int", default: 0 }, // absolute slope
       maxSlope: { type: "int", default: 90 }, // absolute slope
       meshName: { default: "mesh" },
