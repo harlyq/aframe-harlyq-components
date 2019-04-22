@@ -11,9 +11,13 @@
       <a-assets>
 
       </a-assets>
-      <a-box id="box" instance="size: 10000; maxCount: 10000"></a-box>
-      <a-entity id="box" position="0 0 -15" 
-        mesh-particles="instances: #box; spawnRate: 1..60; radialPosition2: 5,0,-5; radialPosition: 5; radialType: sphere; position2: -10 -10 -10..10 10 10; acceleration: 0 -2 0; rotation: 0 0 0..360 360 360, 0 0 0; scale: .1..1,.1; color: red|green|blue,orange; lifeTime: 10"></a-entity>
+      <a-box id="box" instance="size: 10000"></a-box>
+      <a-entity id="radial" position="0 0 -15" 
+        mesh-particles="instances: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1; radialAcceleration: -1; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
+      <a-entity id="cartesian" position="-5 0 -15" 
+        mesh-particles="instances: #box; spawnRate: 5; velocity: -.3 4 -.3.. .3 3 .3; acceleration: 0 -3 0; scale: .1; color: blue..green,black; lifeTime: 2"></a-entity>
+      <a-entity id="cube" position="5 0 -15" 
+        mesh-particles="instances: #box; spawnRate: 50; position: -1 -1 -1..1 1 1; scale: .3; color: red..orange,black; lifeTime: 5"></a-entity>
     </a-scene>
   </body>
 </html>

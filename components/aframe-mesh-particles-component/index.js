@@ -4,31 +4,34 @@ const toLowerCase = x => x.toLowerCase()
 const warn = msg => console.warn("mesh-particles", msg)
 
 const OVER_TIME_PROPERTIES = ["position", "velocity", "acceleration", "radialPosition", "radialVelocity", "radialAcceleration", "angularVelocity", "angularAcceleration", "orbitalVelocity", "orbitalAcceleration", "scale", "color", "rotation", "opacity", "drag"]
+const TWO_PI = 2*Math.PI
+const PI_2 = .5*Math.PI
 
 const getMaxRangeOptions = rule => rule.options ? Math.max(...rule.options) : Math.max(...rule.range)
 
 AFRAME.registerComponent("mesh-particles", {
   schema: {
+    // TODO validate the input types
     duration: { default: -1 },
     instances: { default: "" },
     spawnRate: { default: "10" },
     lifeTime: { default: "1" },
-    position: { default: "0 0 0" },
-    velocity: { default: "0 0 0" },
-    acceleration: { default: "0 0 0" },
+    position: { default: "" },
+    velocity: { default: "" },
+    acceleration: { default: "" },
     radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circleyz", "circlexz"], parse: toLowerCase },
-    radialPosition: { default: "0" },
-    radialVelocity: { default: "0" },
-    radialAcceleration: { default: "0" },
-    angularVelocity: { default: "0 0 0" },
-    angularAcceleration: { default: "0 0 0" },
-    orbitalVelocity: { default: "0" },
-    orbitalAcceleration: { default: "0" },
-    scale: { default: "1" },
-    color: { default: "white", parse: toLowerCase },
-    rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
-    opacity: { default: "1" },
-    drag: { default: "0" },
+    radialPosition: { default: "" },
+    radialVelocity: { default: "" },
+    radialAcceleration: { default: "" },
+    angularVelocity: { default: "" },
+    angularAcceleration: { default: "" },
+    orbitalVelocity: { default: "" },
+    orbitalAcceleration: { default: "" },
+    scale: { default: "" },
+    color: { default: "", parse: toLowerCase },
+    rotation: { default: "" },
+    opacity: { default: "" },
+    drag: { default: "" },
     source: { type: "selector" },
     destination: { type: "selector" },
     destinationOffset: { default: "0 0 0" },
@@ -60,7 +63,7 @@ AFRAME.registerComponent("mesh-particles", {
       if (OVER_TIME_PROPERTIES.includes(prop)) {
         if (!(prop in this.overTimes) || data[prop] !== oldData[prop]) {
           // @ts-ignore
-          this.overTimes[prop] = attribute.nestedSplit(data[prop]).map(str => attribute.parse(str)).flat()
+          this.overTimes[prop] = data[prop] ? attribute.nestedSplit(data[prop]).map(str => attribute.parse(str)).flat() : undefined
         }
       }
     }
@@ -122,7 +125,8 @@ AFRAME.registerComponent("mesh-particles", {
       } else {
         // this.instanceBlocks = this.instances.map(inst => inst.requestBlock(this.maxParticles))
         // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
-        this.instanceIndices = new Int32Array(this.instances.length) // all set to 0
+        this.instanceIndices = this.instances.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instances.length)) )
+        this.instanceIndices.forEach((index,i) => { if (index === -1) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
       }
     }
 
@@ -154,12 +158,12 @@ AFRAME.registerComponent("mesh-particles", {
     }
   },
 
-  instanceFromID(id) {
-    const localID = (id % this.maxParticles)
-    const instanceIndex = id % this.instances.length
-    const particleInstance = this.instances[instanceIndex]
-    const i = this.instanceIndices[instanceIndex] + localID/this.instances.length
-    return [particleInstance, i, localID]
+  instanceFromID(spawnID) {
+    const particleID = (spawnID % this.maxParticles)
+    const instanceIndex = spawnID % this.instances.length
+    const instance = this.instances[instanceIndex]
+    const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instances.length
+    return [instance, instanceID, particleID]
   },
 
   spawn() {
@@ -170,36 +174,37 @@ AFRAME.registerComponent("mesh-particles", {
 
     this.configureRandomizer(this.spawnID)
 
-    const newParticle = {
-      age: 0,
-      velocity: new THREE.Vector3(0,0,0),
-      acceleration: new THREE.Vector3(0,0,0),
-      lifeTime: attribute.randomize(this.lifeTimeRule, random),
-      positions: this.overTimes["position"].map(part => attribute.randomize(part, random)),
-      radialPositions: this.overTimes["radialPosition"].map(part => attribute.randomize(part, random)),
-      // @ts-ignore
-      rotations: this.overTimes["rotation"].map(part => attribute.randomize(part, random).map(deg => degToRad(deg))),
-      scales: this.overTimes["scale"].map(part => attribute.randomize(part, random)),
-      colors: this.overTimes["color"].map(part => attribute.randomize(part, random)),
-      radialTheta: data.radialType !== "circlexz" ? random()*2*Math.PI : 0,
-      radialPhi: data.radialType === "circleyz" ? 0.5*Math.PI : (data.radialType !== "circle" && data.radialType !== "circlexy") ? random()*2*Math.PI : 0,
-      velocities: this.overTimes["velocity"].map(part => attribute.randomize(part, random)),
-      accelerations: this.overTimes["acceleration"].map(part => attribute.randomize(part, random)),
-      radialVelocities: this.overTimes["radialVelocity"].map(part => attribute.randomize(part, random)),
-      radialAccelerations: this.overTimes["radialAcceleration"].map(part => attribute.randomize(part, random)),
-      angularVelocities: this.overTimes["angularVelocity"].map(part => attribute.randomize(part, random)),
-      angularAccelerations: this.overTimes["angularAcceleration"].map(part => attribute.randomize(part, random)),
-      orbitalVelocities: this.overTimes["orbitalVelocity"].map(part => attribute.randomize(part, random)),
-      orbitalAccelerations: this.overTimes["orbitalAcceleration"].map(part => attribute.randomize(part, random)),
-      orbitalAxis: new THREE.Vector3(random(), random(), random()).normalize()
-    }
+    const overTimes = this.overTimes
 
-    const localID = (this.spawnID % this.maxParticles)
-    this.particles[localID] = newParticle
+    const newParticle = {}
+    newParticle.age = 0
+    newParticle.vel = new THREE.Vector3(0,0,0)
+    newParticle.acc = new THREE.Vector3(0,0,0)
+    newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)
+    newParticle.positions = overTimes["position"] ? overTimes["position"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.radialPositions = overTimes["radialPosition"] ? overTimes["radialPosition"].map(part => attribute.randomize(part, random)) : undefined
+    // @ts-ignore
+    newParticle.rotations = overTimes["rotation"] ? overTimes["rotation"].map(part => attribute.randomize(part, random).map(deg => degToRad(deg))) : undefined
+    newParticle.scales = overTimes["scale"] ? overTimes["scale"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.colors = overTimes["color"] ? overTimes["color"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2
+    newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI
+    newParticle.velocities = overTimes["velocity"] ? overTimes["velocity"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.accelerations = overTimes["acceleration"] ? overTimes["acceleration"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.radialVelocities = overTimes["radialVelocity"] ? overTimes["radialVelocity"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.radialAccelerations = overTimes["radialAcceleration"] ? overTimes["radialAcceleration"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.angularVelocities = overTimes["angularVelocity"] ? overTimes["angularVelocity"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.angularAccelerations = overTimes["angularAcceleration"] ? overTimes["angularAcceleration"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.orbitalVelocities = overTimes["orbitalVelocity"] ? overTimes["orbitalVelocity"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.orbitalAccelerations = overTimes["orbitalAcceleration"] ? overTimes["orbitalAcceleration"].map(part => attribute.randomize(part, random)) : undefined
+    newParticle.orbitalAxis = new THREE.Vector3(random(), random(), random()).normalize()
+
+    const particleID = (this.spawnID % this.maxParticles)
+    this.particles[particleID] = newParticle
     this.spawnID++
   },
 
-  move(dt) {
+  move: (function() {
     const tempPosition = new THREE.Vector3(0,0,0)
     const tempEuler = new THREE.Euler(0,0,0,"YXZ")
     const tempQuaternion = new THREE.Quaternion(0,0,0,1)
@@ -209,79 +214,83 @@ AFRAME.registerComponent("mesh-particles", {
     const tempVelocity = new THREE.Vector3(0,0,0)
     const tempAcceleration = new THREE.Vector3(0,0,0)
 
-    for (let id = Math.max(0, this.spawnID - this.maxParticles); id < this.spawnID; id++) {
-      const [particleInstance, i, localID] = this.instanceFromID(id)
-      const particle = this.particles[localID]
-      const t = particle.age/particle.lifeTime
+    return function move(dt) {
 
-      if (t > 1) {
-        particleInstance.setScaleAt(i, {x:0,y:0,z:0})
-        continue // particle has expired
-      }
-
-      particle.age += dt
-
-      particleInstance.getPositionAt(i, tempPosition)
-      // particleInstance.getColorAt(i, tempColor)
-      // particleInstance.getQuaternionAt(i, tempQuaternion)
-      // particleInstance.getScaleAt(i, tempScale)
-
-      if (t === 0 || particle.positions.length > 1) {
-        tempPosition.copy( this.source.position )
-        tempPosition.add( tempVec3.fromArray( this.lerpNumbers(particle.positions, t) ) )
-      }
-
-      if (t === 0 || particle.radialPositions.length > 1) {
-        tempPosition.copy( this.source.position )
-        tempPosition.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialPositions, t)[0], particle.radialTheta, particle.radialPhi ) )
-      }
-
-      if (t === 0 || particle.accelerations.length > 1) {
-        particle.acceleration.fromArray( this.lerpNumbers(particle.accelerations) )
-      }
-
-      if (t === 0 || particle.radialAccelerations.length > 1) {
-        particle.acceleration.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialAccelerations, t)[0], particle.radialTheta, particle.radialPhi ) )
-      }
-
-      if (t === 0 || particle.velocities.length > 1) {
-        particle.velocity.fromArray( this.lerpNumbers(particle.velocities) )
-      }
-
-      if (t === 0 || particle.radialVelocities.length > 1) {
-        particle.velocity.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialVelocities, t)[0], particle.radialTheta, particle.radialPhi ) )
-      }
-
-      particle.velocity.add( tempAcceleration.copy(particle.acceleration).multiplyScalar(dt) )
-      tempPosition.add( tempVelocity.copy(particle.velocity).multiplyScalar(dt) )
-      particleInstance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z)
-
-      if (t === 0 || particle.colors.length > 1) {
-        // colour is independent of the entity color
-        tempColor.copy( this.lerpColors(particle.colors, t) )
-        particleInstance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b)
-      }
-
-      if (t === 0 || particle.rotations.length > 1) {
-        tempEuler.fromArray( this.lerpNumbers(particle.rotations, t) )
-        tempQuaternion.setFromEuler(tempEuler)
-        tempQuaternion.premultiply(this.source.quaternion)
-        particleInstance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w)
-      }
-
-      if (t === 0 || particle.scales.length > 1) {
-        tempScale.copy(this.source.scale)
-        const newScale = this.lerpNumbers(particle.scales, t)
-        if (newScale.length < 3) {
-          tempScale.multiplyScalar( newScale[0] )
-        } else {
-          tempScale.multiple( tempVec3.fromArray( newScale ) )
+      for (let id = Math.max(0, this.spawnID - this.maxParticles); id < this.spawnID; id++) {
+        const [instance, i, particleID] = this.instanceFromID(id)
+        const particle = this.particles[particleID]
+        const t = particle.age/particle.lifeTime
+  
+        if (t > 1) {
+          instance.setScaleAt(i, {x:0,y:0,z:0})
+          continue // particle has expired
         }
-        particleInstance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z)
+  
+        particle.age += dt
+  
+        if (t === 0) {
+          tempPosition.copy( this.source.position )
+        } else {
+          instance.getPositionAt(i, tempPosition)
+        }
+  
+        if (particle.positions && (t === 0 || particle.positions.length > 1)) {
+          tempPosition.copy( this.source.position )
+          tempPosition.add( tempVec3.fromArray( this.lerpNumbers(particle.positions, t) ) )
+        }
+  
+        if (particle.radialPositions && (t === 0 || particle.radialPositions.length > 1)) {
+          tempPosition.copy( this.source.position )
+          tempPosition.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialPositions, t)[0], particle.radialPhi, particle.radialTheta ) )
+        }
+  
+        if (particle.accelerations && (t === 0 || particle.accelerations.length > 1)) {
+          particle.acc.fromArray( this.lerpNumbers(particle.accelerations) )
+        }
+  
+        if (particle.radialAccelerations && (t === 0 || particle.radialAccelerations.length > 1)) {
+          particle.acc.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialAccelerations, t)[0], particle.radialPhi, particle.radialTheta ) )
+        }
+  
+        if (particle.velocities && (t === 0 || particle.velocities.length > 1)) {
+          particle.vel.fromArray( this.lerpNumbers(particle.velocities) )
+        }
+  
+        if (particle.radialVelocities && (t === 0 || particle.radialVelocities.length > 1)) {
+          particle.vel.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialVelocities, t)[0], particle.radialPhi, particle.radialTheta ) )
+        }
+  
+        particle.vel.add( tempAcceleration.copy(particle.acc).multiplyScalar(dt) )
+        tempPosition.add( tempVelocity.copy(particle.vel).multiplyScalar(dt) )
+        instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z)
+  
+        if (particle.colors && (t === 0 || particle.colors.length > 1)) {
+          // colour is independent of the entity color
+          tempColor.copy( this.lerpColors(particle.colors, t) )
+          instance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b)
+        }
+  
+        if (particle.rotations && (t === 0 || particle.rotations.length > 1)) {
+          tempEuler.fromArray( this.lerpNumbers(particle.rotations, t) )
+          tempQuaternion.setFromEuler(tempEuler)
+          tempQuaternion.premultiply(this.source.quaternion)
+          instance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w)
+        }
+  
+        if (particle.scales && (t === 0 || particle.scales.length > 1)) {
+          tempScale.copy(this.source.scale)
+          const newScale = this.lerpNumbers(particle.scales, t)
+          if (newScale.length < 3) {
+            tempScale.multiplyScalar( newScale[0] )
+          } else {
+            tempScale.multiple( tempVec3.fromArray( newScale ) )
+          }
+          instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z)
+        }
+  
       }
-
     }
-  },
+  })(),
 
   lerpNumbers(numbers, t) {
     const [i,r] = interpolation.lerpKeys(numbers, t)

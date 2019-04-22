@@ -1,7 +1,6 @@
 AFRAME.registerComponent("instance", {
   schema: {
     size: { default: 1000 },
-    maxCount: { default: 1 },
     patchShader: { default: true },
   },
 
@@ -11,6 +10,8 @@ AFRAME.registerComponent("instance", {
     this.colors = undefined
     this.quaternions = undefined
     this.scales = undefined
+    this.instancedGeoemtry = undefined
+    this.reservedCount = 0
 
     this.onSetObject3D = this.onSetObject3D.bind(this)
     this.patchInstancesIntoShader = this.patchInstancesIntoShader.bind(this)
@@ -46,7 +47,8 @@ AFRAME.registerComponent("instance", {
     const instancedGeometry = new THREE.InstancedBufferGeometry().copy(mesh.geometry)
 
     const numInstances = data.size
-    instancedGeometry.maxInstancedCount = Math.min(data.maxCount, numInstances)
+    instancedGeometry.maxInstancedCount = 0
+
     const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*3)
     const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*3).fill(1)
     const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*3).fill(1)
@@ -80,10 +82,12 @@ AFRAME.registerComponent("instance", {
 
     this.el.setObject3D("mesh", instancedMesh)
 
+    this.instancedGeoemtry = instancedGeometry
     this.positions = positions
     this.quaternions = quaternions
     this.scales = scales
     this.colors = colors
+    this.reservedCount = 0
   },
 
   destroyInstances() {
@@ -143,6 +147,21 @@ AFRAME.registerComponent("instance", {
 
     shader.vertexShader = vertexShader
     shader.fragmentShader = fragmentShader
+  },
+
+  reserveBlock(requested) {
+    const total = this.data.size
+    const reserved = this.reservedCount
+    if (reserved + requested < total) {
+      this.reservedCount += requested
+      this.instancedGeoemtry.maxInstancedCount = this.reservedCount
+      return reserved
+    }
+    return -1
+  },
+
+  releaseBlock(index) {
+    console.warn("releaseBlock not supported")
   },
 
   setColorAt(i, r, g, b) {
