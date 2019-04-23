@@ -115,7 +115,7 @@ AFRAME.registerComponent("mesh-particles", {
     // TODO validate the input types
     duration: { default: -1 },
     instances: { default: "" },
-    spawnRate: { default: "10" },
+    spawnRate: { default: "1" },
     lifeTime: { default: "1" },
     position: { default: "" },
     velocity: { default: "" },
@@ -226,7 +226,7 @@ AFRAME.registerComponent("mesh-particles", {
         // this.instanceBlocks = this.instances.map(inst => inst.requestBlock(this.maxParticles))
         // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
         this.instanceIndices = this.instances.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instances.length)) )
-        this.instanceIndices.forEach((index,i) => { if (index === -1) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
+        this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
       }
     }
 
@@ -268,6 +268,10 @@ AFRAME.registerComponent("mesh-particles", {
     const particleID = (spawnID % this.maxParticles)
     const instanceIndex = spawnID % this.instances.length
     const instance = this.instances[instanceIndex]
+    if (this.instanceIndices[instanceIndex] === undefined) {
+      return [undefined, undefined, undefined]
+    }
+
     const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instances.length
     return [instance, instanceID, particleID]
   },
@@ -291,9 +295,11 @@ AFRAME.registerComponent("mesh-particles", {
     newParticle.angularAcc = new THREE.Vector3(0,0,0)
     newParticle.orbitalVel = 0
     newParticle.orbitalAcc = 0
+
     newParticle.sourcePosition = new THREE.Vector3().copy(this.source.position)
     newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion)
     newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale)
+
     newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)
     newParticle.positions = cData.position ? cData.position.map(part => attribute.randomize(part, random)) : undefined
     newParticle.rotations = cData.rotation ? cData.rotation.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
@@ -331,6 +337,10 @@ AFRAME.registerComponent("mesh-particles", {
 
       for (let id = Math.max(0, this.spawnID - this.maxParticles); id < this.spawnID; id++) {
         const [instance, i, particleID] = this.instanceFromID(id)
+        if (instance === undefined) {
+          continue // no instance available
+        }
+
         const particle = this.particles[particleID]
         const t = particle.age/particle.lifeTime
         const isFirstFrame = t === 0
@@ -435,15 +445,21 @@ AFRAME.registerComponent("mesh-particles", {
         }
 
         if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
-          tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) )
-          tempQuaternion.setFromEuler(tempEuler)
-          tempQuaternion.premultiply(particle.sourceQuaternion)
+          if (particle.rotations.length > 0) {
+            tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) )
+            tempQuaternion.setFromEuler(tempEuler)
+            tempQuaternion.premultiply(particle.sourceQuaternion)
+          } else {
+            tempQuaternion.copy(particle.sourceQuaternion)
+          }
           instance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w)
         }
   
         if (particle.scales && (isFirstFrame || particle.scales.length > 1)) {
           tempScale.copy(particle.sourceScale)
-          tempScale.multiply( tempVec3.copy( this.lerpVector(particle.scales, t) ) )
+          if (particle.scales.length > 0) {
+            tempScale.multiply( tempVec3.copy( this.lerpVector(particle.scales, t) ) )
+          }
           instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z)
         }
   

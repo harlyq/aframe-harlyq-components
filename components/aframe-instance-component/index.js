@@ -3,6 +3,9 @@ const FLOATS_PER_POSITION = 3
 const FLOATS_PER_QUATERNION = 4
 const FLOATS_PER_SCALE = 3
 
+const BLOCK_INDEX = 0
+const BLOCK_SIZE = 1
+
 AFRAME.registerComponent("instance", {
   schema: {
     size: { default: 1000 },
@@ -17,6 +20,8 @@ AFRAME.registerComponent("instance", {
     this.scales = undefined
     this.instancedGeoemtry = undefined
     this.reservedCount = 0
+    this.occupiedBlocks = []
+    this.freeBlocks = []
 
     this.onSetObject3D = this.onSetObject3D.bind(this)
     this.patchInstancesIntoShader = this.patchInstancesIntoShader.bind(this)
@@ -55,7 +60,7 @@ AFRAME.registerComponent("instance", {
     instancedGeometry.maxInstancedCount = 0
 
     const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*FLOATS_PER_POSITION)
-    const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*FLOATS_PER_SCALE).fill(1)
+    const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*FLOATS_PER_SCALE).fill(0) // scale to 0 to hide
     const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*FLOATS_PER_COLOR).fill(1)
     const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*FLOATS_PER_QUATERNION).map((x,i) => (i-3) % FLOATS_PER_QUATERNION ? 0 : 1)
 
@@ -93,6 +98,8 @@ AFRAME.registerComponent("instance", {
     this.scales = scales
     this.colors = colors
     this.reservedCount = 0
+    this.freeBlocks = [[0, numInstances]] // blockIndex, number of instances
+    this.occupiedBlocks = []
   },
 
   destroyInstances() {
@@ -100,6 +107,13 @@ AFRAME.registerComponent("instance", {
       this.el.setObject3D("mesh", this.oldMesh)
       this.oldMesh = undefined
     }
+    this.instancedGeoemtry = undefined
+    this.positions = undefined
+    this.quaternions = undefined
+    this.scales = undefined
+    this.colors = undefined
+    this.freeBlocks = []
+    this.occupiedBlocks = []
   },
 
   patchInstancesIntoShader(shader) {
@@ -154,19 +168,75 @@ AFRAME.registerComponent("instance", {
     shader.fragmentShader = fragmentShader
   },
 
-  reserveBlock(requested) {
-    const total = this.data.size
-    const reserved = this.reservedCount
-    if (reserved + requested < total) {
-      this.reservedCount += requested
-      this.instancedGeoemtry.maxInstancedCount = this.reservedCount
-      return reserved
+  reserveBlock(requestedSize) {
+    // search in reverse, prefer to reuse released blocks
+    for (let j = this.freeBlocks.length - 1; j >= 0; j--) {
+      const block = this.freeBlocks[j]
+      const remainder = block[BLOCK_SIZE] - requestedSize
+
+      if (remainder >= 0) {
+        const newBlock = [block[BLOCK_INDEX], requestedSize]
+        this.occupiedBlocks.push(newBlock)
+
+        this.instancedGeoemtry.maxInstancedCount = Math.max(this.instancedGeoemtry.maxInstancedCount, newBlock[BLOCK_INDEX] + newBlock[BLOCK_SIZE])
+
+        if (remainder > 0) {
+          block[BLOCK_INDEX] += requestedSize
+          block[BLOCK_SIZE] = remainder
+        } else {
+          const i = this.freeBlocks
+          this.freeBlocks.splice(i, 1)
+        }
+
+        return newBlock[BLOCK_INDEX]
+      }
     }
-    return -1
-  },
+
+    return undefined
+  },  
 
   releaseBlock(index) {
-    console.warn("releaseBlock not supported")
+    for (let i = 0; i < this.occupiedBlocks.length; i++) {
+      const block = this.occupiedBlocks[i]
+      if (block[BLOCK_INDEX] === index) {
+        for (let j = index; j < index + block[BLOCK_SIZE]; j++) {
+          this.setScaleAt(j, 0, 0, 0) // scale to 0 to hide
+        }
+
+        this.occupiedBlocks.splice(i, 1)
+        this.freeBlocks.push(block)
+        this.repartionBlocks(block)
+
+        const lastOccupiedInstance = this.occupiedBlocks.reduce((highest, block) => Math.max(highest, block[BLOCK_INDEX] + block[BLOCK_SIZE]), 0)
+        this.instancedGeoemtry.maxInstancedCount = Math.max(this.instancedGeoemtry.maxInstancedCount, lastOccupiedInstance)
+
+        return true
+      }
+    }
+    return false
+  },
+
+  repartionBlocks() {
+    // go in reverse for simple removal, always removing the block with the largest index on a merge
+    for (let mergeIndex = this.freeBlocks.length - 1; mergeIndex >= 0; mergeIndex--) {
+      const mergeBlock = this.freeBlocks[mergeIndex]
+
+      for (let j = 0; j < mergeIndex; j++) {
+        const otherBlock = this.freeBlocks[j]
+        if (otherBlock[BLOCK_INDEX] == mergeBlock[BLOCK_INDEX] + mergeBlock[BLOCK_SIZE]) {
+          // otherBlock immediately after mergeBlock
+          otherBlock[BLOCK_INDEX] = mergeBlock[BLOCK_INDEX]
+          otherBlock[BLOCK_SIZE] += mergeBlock[BLOCK_SIZE]
+          this.freeBlocks.splice(mergeIndex, 1)
+          break
+        } else if (otherBlock[BLOCK_INDEX] + otherBlock[BLOCK_SIZE] === mergeBlock[BLOCK_INDEX]) {
+          // otherBlock immediately before mergeBlock
+          otherBlock[BLOCK_SIZE] += mergeBlock[BLOCK_SIZE]
+          this.freeBlocks.splice(mergeIndex, 1)
+          break
+        }
+      }
+    }
   },
 
   setColorAt(i, r, g, b, a) {
