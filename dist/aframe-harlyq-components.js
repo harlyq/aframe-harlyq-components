@@ -2932,12 +2932,87 @@
 
   const toLowerCase = x => x.toLowerCase();
   const warn = msg => console.warn("mesh-particles", msg);
-
-  const OVER_TIME_PROPERTIES = ["position", "velocity", "acceleration", "radialPosition", "radialVelocity", "radialAcceleration", "angularVelocity", "angularAcceleration", "orbitalVelocity", "orbitalAcceleration", "scale", "color", "rotation", "opacity", "drag"];
   const TWO_PI = 2*Math.PI;
   const PI_2 = .5*Math.PI;
+  const VECTOR3_UP = new THREE.Vector3(0,1,0);
 
-  const getMaxRangeOptions = rule => rule.options ? Math.max(...rule.options) : Math.max(...rule.range);
+  function getMaxRangeOptions(rule) {
+    return rule.options ? Math.max(...rule.options) : Math.max(...rule.range)
+  } 
+
+  function validateFloat(number) {
+    return Array.isArray(number) && typeof number[0] === "number"
+  }
+
+  function validateVec3(vec3) {
+    return Array.isArray(vec3) && typeof vec3[0] === "number" && typeof vec3[1] === "number" && typeof vec3[2] === "number"
+  }
+
+  function validateColor(color) {
+    return typeof color === "object" && "r" in color && "g" in color && "b" in color
+  }
+
+  function validateRangeOption(part, validateItemFn) {
+    if (part.range) { return part.range.every(validateItemFn) }
+    if (part.options) { return part.options.every(validateItemFn) }
+    return false
+  }
+
+  function parseVec3RangeOptionArray(str) {
+    if (!str) return undefined
+
+    // @ts-ignore
+    const result = nestedSplit(str).map( str => parse$1(str) ).flat();
+    if (!result.every(part => validateRangeOption(part, validateVec3))) {
+      console.warn(`unrecognized array of vec3 range options '${str}'`);
+      return undefined
+    }
+    return result
+  }
+
+  function parseFloatRangeOptionArray(str) {
+    if (!str) return undefined
+
+    // @ts-ignore
+    const result = nestedSplit(str).map( str => parse$1(str) ).flat();
+    if (!result.every(part => validateRangeOption(part, validateFloat))) {
+      console.warn(`unrecognized array of float range options '${str}'`);
+      return undefined
+    }
+    return result
+  }
+
+  function vec3OrFloatToVec3(numbers) {
+    return numbers.length === 1 ? [numbers[0], numbers[0], numbers[0]] : numbers
+  }
+
+  function parseScaleArray(str) {
+    if (!str) return undefined
+
+    // @ts-ignore
+    const result = nestedSplit(str).map( str => parse$1(str) ).flat();
+    if (!result.every(part => validateRangeOption(part, validateVec3) || validateRangeOption(part, validateFloat))) {
+      console.warn(`unrecognized array of vec3 range options '${str}'`);
+      return undefined
+    }
+    return result.map(rangeOption => {
+      if (rangeOption.range) return { range: rangeOption.range.map(vec3OrFloatToVec3) }
+      if (rangeOption.options) return { options: rangeOption.options.map(vec3OrFloatToVec3) }
+    })
+  }
+
+  function parseColorRangeOptionArray(str) {
+    if (!str) return undefined
+
+    // @ts-ignore
+    const result = nestedSplit(str.toLowerCase()).map( str => parse$1(str) ).flat();
+    if (!result.every(part => validateRangeOption(part, validateColor))) {
+      console.warn(`unrecognized array of color range options '${str}'`);
+      return undefined
+    }
+    return result
+  }
+
 
   AFRAME.registerComponent("mesh-particles", {
     schema: {
@@ -2946,26 +3021,26 @@
       instances: { default: "" },
       spawnRate: { default: "10" },
       lifeTime: { default: "1" },
-      position: { default: "" },
-      velocity: { default: "" },
-      acceleration: { default: "" },
+      position: { default: "", parse: parseVec3RangeOptionArray },
+      velocity: { default: "", parse: parseVec3RangeOptionArray },
+      acceleration: { default: "", parse: parseVec3RangeOptionArray },
       radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circleyz", "circlexz"], parse: toLowerCase },
-      radialPosition: { default: "" },
-      radialVelocity: { default: "" },
-      radialAcceleration: { default: "" },
-      angularVelocity: { default: "" },
-      angularAcceleration: { default: "" },
-      orbitalVelocity: { default: "" },
-      orbitalAcceleration: { default: "" },
-      scale: { default: "" },
-      color: { default: "", parse: toLowerCase },
-      rotation: { default: "" },
+      radialPosition: { default: "", parse: parseFloatRangeOptionArray },
+      radialVelocity: { default: "", parse: parseFloatRangeOptionArray },
+      radialAcceleration: { default: "", parse: parseFloatRangeOptionArray },
+      angularVelocity: { default: "", parse: parseVec3RangeOptionArray },
+      angularAcceleration: { default: "", parse: parseVec3RangeOptionArray },
+      orbitalVelocity: { default: "", parse: parseFloatRangeOptionArray },
+      orbitalAcceleration: { default: "", parse: parseFloatRangeOptionArray },
+      scale: { default: "", parse: parseScaleArray },
+      color: { default: "", parse: parseColorRangeOptionArray },
+      rotation: { default: "", parse: parseVec3RangeOptionArray },
       opacity: { default: "" },
       drag: { default: "" },
       source: { type: "selector" },
       destination: { type: "selector" },
-      destinationOffset: { default: "0 0 0" },
-      destinationWeight: { default: "0" },
+      destinationOffset: { type: "vec3" },
+      destinationWeight: { type: "number" },
       seed: { type: "int", default: -1 }
     },
 
@@ -2976,7 +3051,6 @@
       this.spawnCount = 0;
       this.instanceIndices = [];
       this.instanceIndices = [];
-      this.overTimes = [];
       this.particles = [];
       this.lcg = lcg();
     },
@@ -2988,15 +3062,6 @@
     update(oldData) {
       const data = this.data;
       this.lcg.setSeed(data.seed);
-
-      for (let prop in data) {
-        if (OVER_TIME_PROPERTIES.includes(prop)) {
-          if (!(prop in this.overTimes) || data[prop] !== oldData[prop]) {
-            // @ts-ignore
-            this.overTimes[prop] = data[prop] ? nestedSplit(data[prop]).map(str => parse$1(str)).flat() : undefined;
-          }
-        }
-      }
 
       this.duration = data.duration;
 
@@ -3104,30 +3169,39 @@
 
       this.configureRandomizer(this.spawnID);
 
-      const overTimes = this.overTimes;
-
       const newParticle = {};
       newParticle.age = 0;
+      newParticle.pos = new THREE.Vector3(0,0,0);
       newParticle.vel = new THREE.Vector3(0,0,0);
-      newParticle.acc = new THREE.Vector3(0,0,0);
-      newParticle.lifeTime = randomize(this.lifeTimeRule, random);
-      newParticle.positions = overTimes["position"] ? overTimes["position"].map(part => randomize(part, random)) : undefined;
-      newParticle.radialPositions = overTimes["radialPosition"] ? overTimes["radialPosition"].map(part => randomize(part, random)) : undefined;
+      newParticle.acc = new THREE.Vector3(0,0,0);    
+      newParticle.angularVel = new THREE.Vector3(0,0,0);
+      newParticle.angularAcc = new THREE.Vector3(0,0,0);
+      newParticle.orbitalVel = 0;
+      newParticle.orbitalAcc = 0;
+      newParticle.sourcePosition = new THREE.Vector3().copy(this.source.position);
+      newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion);
+      newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale);
+      newParticle.lifeTime = randomize(this.lifeTimeRule, random)[0];
+      newParticle.positions = data.position ? data.position.map(part => randomize(part, random)) : undefined;
       // @ts-ignore
-      newParticle.rotations = overTimes["rotation"] ? overTimes["rotation"].map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
-      newParticle.scales = overTimes["scale"] ? overTimes["scale"].map(part => randomize(part, random)) : undefined;
-      newParticle.colors = overTimes["color"] ? overTimes["color"].map(part => randomize(part, random)) : undefined;
+      newParticle.rotations = data.rotation ? data.rotation.map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
+      newParticle.scales = data.scale ? data.scale.map(part => randomize(part, random)) : undefined;
+      newParticle.colors = data.color ? data.color.map(part => randomize(part, random)) : undefined;
       newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2;
       newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI;
-      newParticle.velocities = overTimes["velocity"] ? overTimes["velocity"].map(part => randomize(part, random)) : undefined;
-      newParticle.accelerations = overTimes["acceleration"] ? overTimes["acceleration"].map(part => randomize(part, random)) : undefined;
-      newParticle.radialVelocities = overTimes["radialVelocity"] ? overTimes["radialVelocity"].map(part => randomize(part, random)) : undefined;
-      newParticle.radialAccelerations = overTimes["radialAcceleration"] ? overTimes["radialAcceleration"].map(part => randomize(part, random)) : undefined;
-      newParticle.angularVelocities = overTimes["angularVelocity"] ? overTimes["angularVelocity"].map(part => randomize(part, random)) : undefined;
-      newParticle.angularAccelerations = overTimes["angularAcceleration"] ? overTimes["angularAcceleration"].map(part => randomize(part, random)) : undefined;
-      newParticle.orbitalVelocities = overTimes["orbitalVelocity"] ? overTimes["orbitalVelocity"].map(part => randomize(part, random)) : undefined;
-      newParticle.orbitalAccelerations = overTimes["orbitalAcceleration"] ? overTimes["orbitalAcceleration"].map(part => randomize(part, random)) : undefined;
-      newParticle.orbitalAxis = new THREE.Vector3(random(), random(), random()).normalize();
+      newParticle.velocities = data.velocity ? data.velocity.map(part => randomize(part, random)) : undefined;
+      newParticle.accelerations = data.acceleration ? data.acceleration.map(part => randomize(part, random)) : undefined;
+      newParticle.radialPositions = data.radialPosition ? data.radialPosition.map(part => randomize(part, random)[0]) : undefined;
+      newParticle.radialVelocities = data.radialVelocity ? data.radialVelocity.map(part => randomize(part, random)[0]) : undefined;
+      newParticle.radialAccelerations = data.radialAcceleration ? data.radialAcceleration.map(part => randomize(part, random)[0]) : undefined;
+      // @ts-ignore
+      newParticle.angularVelocities = data.angularVelocity ? data.angularVelocity.map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
+      // @ts-ignore
+      newParticle.angularAccelerations = data.angularAcceleration ? data.angularAcceleration.map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
+      newParticle.orbitalVelocities = data.orbitalVelocity ? data.orbitalVelocity.map(part => degToRad( randomize(part, random)[0] )) : undefined;
+      newParticle.orbitalAccelerations = data.orbitalAcceleration ? data.orbitalAcceleration.map(part => degToRad( randomize(part, random)[0] )) : undefined;
+
+      newParticle.orbitalAxis = new THREE.Vector3();
 
       const particleID = (this.spawnID % this.maxParticles);
       this.particles[particleID] = newParticle;
@@ -3141,8 +3215,6 @@
       const tempScale = new THREE.Vector3(1,1,1);
       const tempColor = new THREE.Color(0,0,0);
       const tempVec3 = new THREE.Vector3(0,0,0);
-      const tempVelocity = new THREE.Vector3(0,0,0);
-      const tempAcceleration = new THREE.Vector3(0,0,0);
 
       return function move(dt) {
 
@@ -3150,77 +3222,117 @@
           const [instance, i, particleID] = this.instanceFromID(id);
           const particle = this.particles[particleID];
           const t = particle.age/particle.lifeTime;
-    
+          const isFirstFrame = t === 0;
+          let hasMovement = false;
+
+
           if (t > 1) {
             instance.setScaleAt(i, {x:0,y:0,z:0});
             continue // particle has expired
           }
     
+          const age = particle.age;  
           particle.age += dt;
+
+          if (particle.positions && (isFirstFrame || particle.positions.length > 1)) {
+            particle.pos.fromArray( this.lerpNumbers(particle.positions, t) );
+          }
     
-          if (t === 0) {
-            tempPosition.copy( this.source.position );
+          if (particle.radialPositions && (isFirstFrame || particle.radialPositions.length > 1)) {
+            particle.pos.setFromSphericalCoords( this.lerpFloat(particle.radialPositions, t), particle.radialPhi, particle.radialTheta );
+          }
+    
+          if (particle.accelerations && (isFirstFrame || particle.accelerations.length > 1)) {
+            particle.acc.fromArray( this.lerpNumbers(particle.accelerations, t) );
+          }
+    
+          if (particle.radialAccelerations && (isFirstFrame || particle.radialAccelerations.length > 1)) {
+            particle.acc.setFromSphericalCoords( this.lerpFloat(particle.radialAccelerations, t), particle.radialPhi, particle.radialTheta );
+          }
+    
+          if (particle.velocities && (isFirstFrame || particle.velocities.length > 1)) {
+            particle.vel.fromArray( this.lerpNumbers(particle.velocities, t) );
+          }
+    
+          if (particle.radialVelocities && (isFirstFrame || particle.radialVelocities.length > 1)) {
+            particle.vel.setFromSphericalCoords( this.lerpFloat(particle.radialVelocities, t), particle.radialPhi, particle.radialTheta );
+          }
+    
+          if (particle.accelerations || particle.radialAccelerations || particle.velocities || particle.radialVelocities) {
+            tempPosition.copy( particle.acc ).multiplyScalar( 0.5*age ).add( particle.vel ).multiplyScalar( age ).add( particle.pos );
+            hasMovement = true;
+          } else if (particle.positions|| particle.radialPositions) {
+            tempPosition.copy( particle.pos );
           } else {
-            instance.getPositionAt(i, tempPosition);
+            tempPosition.set(0,0,0);
+          }
+
+          if (particle.orbitalAccelerations && (isFirstFrame || particle.orbitalAccelerations.length > 1)) {
+            particle.orbitalAcc = this.lerpFloat(particle.orbitalAccelerations, t);
+          }
+
+          if (particle.orbitalVelocities && (isFirstFrame || particle.orbitalVelocities.length > 1)) {
+            particle.orbitalVel = this.lerpFloat(particle.orbitalVelocities, t);
+          }
+
+          if (particle.orbitalAccelerations || particle.orbitalVelocities) {
+            if (isFirstFrame) {
+              particle.orbitalAxis.copy( tempVec3.copy(particle.pos).normalize().cross(VECTOR3_UP).normalize() );
+            }
+            const orbitalAngle = ( particle.orbitalVel + 0.5*age*particle.orbitalAcc )*age;
+            tempQuaternion.setFromAxisAngle( particle.orbitalAxis, orbitalAngle );
+            tempPosition.applyQuaternion( tempQuaternion );
+            hasMovement = true;
+          }
+
+          if (particle.angularAccelerations && (isFirstFrame || particle.angularAccelerations.length > 1)) {
+            particle.angularAcc.fromArray( this.lerpNumbers(particle.angularAccelerations, t) );
+          }
+
+          if (particle.angularVelocities && (isFirstFrame || particle.angularVelocities.length > 1)) {
+            particle.angularVel.fromArray( this.lerpNumbers(particle.angularVelocities, t) );
+          }
+
+          if (particle.angularAccelerations || particle.angularVelocities) {
+            tempVec3.copy( particle.angularAcc ).multiplyScalar( 0.5*age ).add( particle.angularVel ).multiplyScalar( age );
+            tempEuler.set( tempVec3.x, tempVec3.y, tempVec3.z );
+            tempQuaternion.setFromEuler( tempEuler );
+            tempPosition.applyQuaternion( tempQuaternion );
+            hasMovement = true;
+          }
+
+          if (isFirstFrame || hasMovement) {
+            tempPosition.add( particle.sourcePosition );
+            instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z);
           }
     
-          if (particle.positions && (t === 0 || particle.positions.length > 1)) {
-            tempPosition.copy( this.source.position );
-            tempPosition.add( tempVec3.fromArray( this.lerpNumbers(particle.positions, t) ) );
-          }
-    
-          if (particle.radialPositions && (t === 0 || particle.radialPositions.length > 1)) {
-            tempPosition.copy( this.source.position );
-            tempPosition.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialPositions, t)[0], particle.radialPhi, particle.radialTheta ) );
-          }
-    
-          if (particle.accelerations && (t === 0 || particle.accelerations.length > 1)) {
-            particle.acc.fromArray( this.lerpNumbers(particle.accelerations) );
-          }
-    
-          if (particle.radialAccelerations && (t === 0 || particle.radialAccelerations.length > 1)) {
-            particle.acc.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialAccelerations, t)[0], particle.radialPhi, particle.radialTheta ) );
-          }
-    
-          if (particle.velocities && (t === 0 || particle.velocities.length > 1)) {
-            particle.vel.fromArray( this.lerpNumbers(particle.velocities) );
-          }
-    
-          if (particle.radialVelocities && (t === 0 || particle.radialVelocities.length > 1)) {
-            particle.vel.add( tempVec3.setFromSphericalCoords( this.lerpNumbers(particle.radialVelocities, t)[0], particle.radialPhi, particle.radialTheta ) );
-          }
-    
-          particle.vel.add( tempAcceleration.copy(particle.acc).multiplyScalar(dt) );
-          tempPosition.add( tempVelocity.copy(particle.vel).multiplyScalar(dt) );
-          instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z);
-    
-          if (particle.colors && (t === 0 || particle.colors.length > 1)) {
+          if (particle.colors && (isFirstFrame || particle.colors.length > 1)) {
             // colour is independent of the entity color
             tempColor.copy( this.lerpColors(particle.colors, t) );
             instance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b);
           }
     
-          if (particle.rotations && (t === 0 || particle.rotations.length > 1)) {
+          if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
             tempEuler.fromArray( this.lerpNumbers(particle.rotations, t) );
             tempQuaternion.setFromEuler(tempEuler);
-            tempQuaternion.premultiply(this.source.quaternion);
+            tempQuaternion.premultiply(particle.sourceQuaternion);
             instance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w);
           }
     
-          if (particle.scales && (t === 0 || particle.scales.length > 1)) {
-            tempScale.copy(this.source.scale);
-            const newScale = this.lerpNumbers(particle.scales, t);
-            if (newScale.length < 3) {
-              tempScale.multiplyScalar( newScale[0] );
-            } else {
-              tempScale.multiple( tempVec3.fromArray( newScale ) );
-            }
+          if (particle.scales && (isFirstFrame || particle.scales.length > 1)) {
+            tempScale.copy(particle.sourceScale);
+            tempScale.multiply( tempVec3.fromArray( this.lerpNumbers(particle.scales, t) ) );
             instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z);
           }
     
         }
       }
     })(),
+
+    lerpFloat(floats, t) {
+      const [i,r] = lerpKeys(floats, t);
+      return lerp(floats[i], floats[i+1], r)
+    },
 
     lerpNumbers(numbers, t) {
       const [i,r] = lerpKeys(numbers, t);
