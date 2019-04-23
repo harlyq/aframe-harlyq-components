@@ -2921,7 +2921,6 @@
     return { x: degToRad$1(vec3.x), y: degToRad$1(vec3.y), z: degToRad$1(vec3.z) }
   }
 
-
   function getMaxRangeOptions(rule) {
     return rule.options ? Math.max(...rule.options) : Math.max(...rule.range)
   } 
@@ -3000,6 +2999,25 @@
     return result
   }
 
+  // ideally these parsers would be in the parse property of the schema, but doing it 
+  // that way generates a lot of [object Object]s in the Inspector
+  const CUSTOM_PARSER = {
+    position: parseVec3RangeOptionArray,
+    velocity: parseVec3RangeOptionArray,
+    acceleration: parseVec3RangeOptionArray,
+    radialPosition: parseFloatRangeOptionArray,
+    radialVelocity: parseFloatRangeOptionArray,
+    radialAcceleration: parseFloatRangeOptionArray,
+    angularVelocity: parseVec3RangeOptionArray,
+    angularAcceleration: parseVec3RangeOptionArray,
+    orbitalVelocity: parseFloatRangeOptionArray,
+    orbitalAcceleration: parseFloatRangeOptionArray,
+    scale: parseScaleArray,
+    color: parseColorRangeOptionArray,
+    rotation: parseVec3RangeOptionArray,
+    opacity: parseFloatRangeOptionArray,
+  };
+
 
   AFRAME.registerComponent("mesh-particles", {
     schema: {
@@ -3008,21 +3026,21 @@
       instances: { default: "" },
       spawnRate: { default: "10" },
       lifeTime: { default: "1" },
-      position: { default: "", parse: parseVec3RangeOptionArray },
-      velocity: { default: "", parse: parseVec3RangeOptionArray },
-      acceleration: { default: "", parse: parseVec3RangeOptionArray },
+      position: { default: "" },
+      velocity: { default: "" },
+      acceleration: { default: "" },
       radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circleyz", "circlexz"], parse: toLowerCase },
-      radialPosition: { default: "", parse: parseFloatRangeOptionArray },
-      radialVelocity: { default: "", parse: parseFloatRangeOptionArray },
-      radialAcceleration: { default: "", parse: parseFloatRangeOptionArray },
-      angularVelocity: { default: "", parse: parseVec3RangeOptionArray },
-      angularAcceleration: { default: "", parse: parseVec3RangeOptionArray },
-      orbitalVelocity: { default: "", parse: parseFloatRangeOptionArray },
-      orbitalAcceleration: { default: "", parse: parseFloatRangeOptionArray },
-      scale: { default: "", parse: parseScaleArray },
-      color: { default: "", parse: parseColorRangeOptionArray },
-      rotation: { default: "", parse: parseVec3RangeOptionArray },
-      opacity: { default: "", parse: parseFloatRangeOptionArray },
+      radialPosition: { default: "" },
+      radialVelocity: { default: "" },
+      radialAcceleration: { default: "" },
+      angularVelocity: { default: "" },
+      angularAcceleration: { default: "" },
+      orbitalVelocity: { default: "" },
+      orbitalAcceleration: { default: "" },
+      scale: { default: "" },
+      color: { default: "" },
+      rotation: { default: "" },
+      opacity: { default: "" },
       drag: { default: "" },
       source: { type: "selector" },
       destination: { type: "selector" },
@@ -3036,14 +3054,15 @@
     init() {
       this.spawnID = 0;
       this.spawnCount = 0;
-      this.instanceIndices = [];
+      this.instances = [];
       this.instanceIndices = [];
       this.particles = [];
+      this.customData = {};
       this.lcg = lcg();
     },
 
     remove() {
-
+      this.releaseInstances();
     },
 
     update(oldData) {
@@ -3051,6 +3070,12 @@
       this.lcg.setSeed(data.seed);
 
       this.duration = data.duration;
+
+      for (let prop in data) {
+        if (oldData[prop] !== data[prop] && prop in CUSTOM_PARSER) {
+          this.customData[prop] = CUSTOM_PARSER[prop](data[prop]);
+        }
+      }
 
       if (data.lifeTime !== oldData.lifeTime) {
         this.lifeTimeRule = parse$1(data.lifeTime);
@@ -3060,12 +3085,6 @@
 
       if (data.delay !== oldData.delay) {
         this.startTime = data.delay; // this will not work if we restart the spawner
-      }
-
-      if (data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
-        this.spawnRateRule = parse$1(data.spawnRate);
-        this.maxParticles = getMaxRangeOptions(this.spawnRateRule)*this.maxLifeTime;
-        this.spawnRate = randomize(this.spawnRateRule, this.lcg.random); // How do we keep this in-sync?
       }
 
       if (data.source !== oldData.source) {
@@ -3092,8 +3111,16 @@
         }
       }
 
-      if (data.instances !== oldData.instances) {
-        this.instanceIndices = [];
+      if (data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
+        this.spawnRateRule = parse$1(data.spawnRate);
+        this.maxParticles = getMaxRangeOptions(this.spawnRateRule)*this.maxLifeTime;
+        this.spawnRate = randomize(this.spawnRateRule, this.lcg.random); // How do we keep this in-sync?
+      }
+
+      if (data.instances !== oldData.instances || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
+        this.spawnID = 0;
+        this.releaseInstances();
+
         this.instances = data.instances ? 
           [].slice.call(document.querySelectorAll(data.instances)).map(el => el.components ? el.components["instance"] : undefined).filter(x => x) :
           this.el.components["instance"] ? [this.el.components["instance"]] : [];
@@ -3132,6 +3159,12 @@
       this.move(dt);
     },
 
+    releaseInstances() {
+      this.instances.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]));
+      this.instanceIndices.length = 0;
+      this.spawnID = 0;
+    },
+
     configureRandomizer(id) {
       // TODO this may not be random enough, try a second type of randomizer
       if (this.data.seed > 0) {
@@ -3150,6 +3183,7 @@
 
     spawn() {
       const data = this.data;
+      const cData = this.customData;
 
       const random = this.lcg.random;
 
@@ -3170,22 +3204,22 @@
       newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion);
       newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale);
       newParticle.lifeTime = randomize(this.lifeTimeRule, random);
-      newParticle.positions = data.position ? data.position.map(part => randomize(part, random)) : undefined;
-      newParticle.rotations = data.rotation ? data.rotation.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
-      newParticle.scales = data.scale ? data.scale.map(part => randomize(part, random)) : undefined;
-      newParticle.colors = data.color ? data.color.map(part => randomize(part, random)) : undefined;
-      newParticle.opacities = data.opacity ? data.opacity.map(part => randomize(part, random)) : undefined;
+      newParticle.positions = cData.position ? cData.position.map(part => randomize(part, random)) : undefined;
+      newParticle.rotations = cData.rotation ? cData.rotation.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
+      newParticle.scales = cData.scale ? cData.scale.map(part => randomize(part, random)) : undefined;
+      newParticle.colors = cData.color ? cData.color.map(part => randomize(part, random)) : undefined;
+      newParticle.opacities = cData.opacity ? cData.opacity.map(part => randomize(part, random)) : undefined;
       newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2;
       newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI;
-      newParticle.velocities = data.velocity ? data.velocity.map(part => randomize(part, random)) : undefined;
-      newParticle.accelerations = data.acceleration ? data.acceleration.map(part => randomize(part, random)) : undefined;
-      newParticle.radialPositions = data.radialPosition ? data.radialPosition.map(part => randomize(part, random)) : undefined;
-      newParticle.radialVelocities = data.radialVelocity ? data.radialVelocity.map(part => randomize(part, random)) : undefined;
-      newParticle.radialAccelerations = data.radialAcceleration ? data.radialAcceleration.map(part => randomize(part, random)) : undefined;
-      newParticle.angularVelocities = data.angularVelocity ? data.angularVelocity.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
-      newParticle.angularAccelerations = data.angularAcceleration ? data.angularAcceleration.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
-      newParticle.orbitalVelocities = data.orbitalVelocity ? data.orbitalVelocity.map(part => degToRad$1( randomize(part, random) )) : undefined;
-      newParticle.orbitalAccelerations = data.orbitalAcceleration ? data.orbitalAcceleration.map(part => degToRad$1( randomize(part, random) )) : undefined;
+      newParticle.velocities = cData.velocity ? cData.velocity.map(part => randomize(part, random)) : undefined;
+      newParticle.accelerations = cData.acceleration ? cData.acceleration.map(part => randomize(part, random)) : undefined;
+      newParticle.radialPositions = cData.radialPosition ? cData.radialPosition.map(part => randomize(part, random)) : undefined;
+      newParticle.radialVelocities = cData.radialVelocity ? cData.radialVelocity.map(part => randomize(part, random)) : undefined;
+      newParticle.radialAccelerations = cData.radialAcceleration ? cData.radialAcceleration.map(part => randomize(part, random)) : undefined;
+      newParticle.angularVelocities = cData.angularVelocity ? cData.angularVelocity.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
+      newParticle.angularAccelerations = cData.angularAcceleration ? cData.angularAcceleration.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
+      newParticle.orbitalVelocities = cData.orbitalVelocity ? cData.orbitalVelocity.map(part => degToRad$1( randomize(part, random) )) : undefined;
+      newParticle.orbitalAccelerations = cData.orbitalAcceleration ? cData.orbitalAcceleration.map(part => degToRad$1( randomize(part, random) )) : undefined;
 
       newParticle.orbitalAxis = new THREE.Vector3();
 
