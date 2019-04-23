@@ -263,6 +263,8 @@
    * @typedef {number} Distance
    */
 
+  const DEG_TO_RAD = Math.PI/180;
+
   /** @type {VecXYZ} */
   const ZERO = Object.freeze({x: 0, y: 0, z: 0});
 
@@ -478,26 +480,12 @@
     return out
   }
 
-  /** @type {(out: number[], vecMin: number[], vecMax: number[], randFn: () => number) => number[]} */
+  /** @type {<T extends {x:number, y:number, z?:number, w?:number}>(out: T, vecMin: T, vecMax: T, randFn: () => number) => T} */
   function vector(out, vecMin, vecMax, randFn = Math.random) {
-    const lengthOfMin = vecMin.length;
-    const lengthOfMax = vecMax.length;
-    const m = Math.min(lengthOfMin, lengthOfMax);
-    out.length = Math.max(lengthOfMin, lengthOfMax);
-
-    for (let i = 0; i < m; i++) {
-      out[i] = float(vecMin[i], vecMax[i], randFn);
-    }
-
-    if (lengthOfMax > lengthOfMin) {
-      for (let i = m; i < lengthOfMax; i++) {
-        out[i] = vecMax[i];
-      }
-    } else {
-      for (let i = m; i < lengthOfMin; i++) {
-        out[i] = vecMin[i];
-      }
-    }
+    out.x = float(vecMin.x, vecMax.x, randFn);
+    out.y = float(vecMin.y, vecMax.y, randFn);
+    if ('z' in vecMin && 'z' in vecMax) { out.z = float(vecMin.z, vecMax.z, randFn); }
+    if ('w' in vecMin && 'w' in vecMax) { out.w = float(vecMin.w, vecMax.w, randFn); }
     return out
   }
 
@@ -744,8 +732,11 @@
   }
 
   /**
+   * @typedef {{x: number, y: number}} VecXY
+   * @typedef {{x: number, y: number, z: number}} VecXYZ
+   * @typedef {{x: number, y: number, z: number, w: number}} VecXYZW
    * @typedef {{r: number, g: number, b: number}} RGBColor
-   * @typedef {number[] | RGBColor | string} AttributePart
+   * @typedef {number | VecXY | VecXYZ | VecXYZW | RGBColor | string} AttributePart
    * @typedef {{range?: AttributePart[], options?: AttributePart[]}} Attribute
    */
 
@@ -771,7 +762,12 @@
 
       let vec = str.split(" ").filter(x => x !== "").map(toNumber);
       if (!vec.some(isNaN)) {
-        return vec
+        switch (vec.length) {
+          case 1: return vec[0]
+          case 2: return {x: vec[0], y: vec[1]}
+          case 3: return {x: vec[0], y: vec[1], z: vec[2]}
+          case 4: return {x: vec[0], y: vec[1], z: vec[2], w: vec[3]}
+        }
       }
     
       let col = parse(str.trim());
@@ -809,10 +805,10 @@
 
       if (isColor(min)) {
         return color({r:0, g:0, b:0}, /** @type {RGBColor} */ (min), /** @type {RGBColor} */ (max), randFn)
-      } else if (Array.isArray(min) && min.length > 0 && typeof min[0] === "number") {
-        return vector([], /** @type {number[]} */ (min), /** @type {number[]} */ (max), randFn)
-      // } else if (typeof min === "number") {
-      //   return pseudorandom.float(min, max) // not needed all numbers should be in a float array
+      } else if (typeof min === "object" && "x" in min && typeof max === "object" && "x" in max) {
+        return vector({x:0, y: 0}, (min), (max), randFn)
+      } else if (typeof min === "number" && typeof max === "number") {
+        return float(min, max)
       } else {
         return min
       }
@@ -828,8 +824,8 @@
       if (attr.range) { return stringify(attr.range[0]) + ".." + stringify(attr.range[1]) }
       if (attr.options) { return attr.options.map(option => stringify(option)).join("|") }
       if (isColor(attr)) { return toString(attr) }
-      if ("x" in attr && "y" in attr) { return attr.x + " " + attr.y + ("z" in attr ? " " + attr.z : "") }
-      if (attr.length && "0" in attr) { return typeof attr[0] === "number" ? attr.join(" ") : attr.join(",") }
+      if ("x" in attr && "y" in attr) { return attr.x + " " + attr.y + ("z" in attr ? " " + attr.z : "") + ("w" in attr ? " " + attr.w : "") }
+      if (attr.length && "0" in attr) { return attr.join(",") }
     }
     return attr.toString()
   }
@@ -1054,17 +1050,6 @@
 
     for (let k in b) {
       out[k] = typeof a[k] !== "undefined" ? lerp(a[k], b[k], t) : b[k];
-    }
-    return out
-  }
-
-  /** @type {<TA extends number[] | Float32Array, TB extends number[] | Float32Array>(a: TA, b: TB, t: number) => number[]} */
-  function lerpArray(a, b, t) {
-    let out = Array.from(a);
-    if (t === 0) return out
-    
-    for (let i = 0; i < b.length; i++) {
-      out[i] = typeof a[i] !== "undefined" ? lerp(a[i], b[i], t) : b[i];
     }
     return out
   }
@@ -2308,7 +2293,6 @@
 
     switch (type) {
       case "object": return lerpObject(keys[i], keys[i+1], t)
-      case "vector": return lerpArray(keys[i], keys[i+1], t)
       case "number": return lerp(keys[i], keys[i+1], t)
       default: return keys[i]
     }
@@ -2485,18 +2469,6 @@
     generateKeys(resolveMissingRules) {
       let lastKey;
 
-      function guessType(thing) {
-        if (typeof thing === "object") {
-          if (thing.length && typeof thing[0] === "number") {
-            return "vector" 
-          } else {
-            return "object"
-          }
-        } else {
-          return typeof thing
-        }
-      }
-
       this.keys = {};
       this.keyTypes = {};
 
@@ -2523,7 +2495,7 @@
 
           lastKey = randomize(rule, this.lcg.random);
           this.keys[prop][ruleIndex] = lastKey;
-          this.keyTypes[prop] = this.keyTypes[prop] || guessType(lastKey);
+          this.keyTypes[prop] = this.keyTypes[prop] || typeof lastKey;
         }
       }
     },
@@ -2932,20 +2904,27 @@
 
   const toLowerCase = x => x.toLowerCase();
   const warn = msg => console.warn("mesh-particles", msg);
+
   const TWO_PI = 2*Math.PI;
   const PI_2 = .5*Math.PI;
   const VECTOR3_UP = new THREE.Vector3(0,1,0);
+  const degToRad$1 = THREE.Math.degToRad;
+
+  function vec3DegToRad(vec3) {
+    return { x: degToRad$1(vec3.x), y: degToRad$1(vec3.y), z: degToRad$1(vec3.z) }
+  }
+
 
   function getMaxRangeOptions(rule) {
     return rule.options ? Math.max(...rule.options) : Math.max(...rule.range)
   } 
 
   function validateFloat(number) {
-    return Array.isArray(number) && typeof number[0] === "number"
+    return typeof number === "number"
   }
 
   function validateVec3(vec3) {
-    return Array.isArray(vec3) && typeof vec3[0] === "number" && typeof vec3[1] === "number" && typeof vec3[2] === "number"
+    return typeof vec3 === "object" && "x" in vec3 && "y" in vec3 && "z" in vec3
   }
 
   function validateColor(color) {
@@ -2982,8 +2961,8 @@
     return result
   }
 
-  function vec3OrFloatToVec3(numbers) {
-    return numbers.length === 1 ? [numbers[0], numbers[0], numbers[0]] : numbers
+  function vec3OrFloatToVec3(vec3) {
+    return typeof vec3 === "number" ? {x:vec3, y:vec3, z:vec3} : vec3
   }
 
   function parseScaleArray(str) {
@@ -2992,9 +2971,10 @@
     // @ts-ignore
     const result = nestedSplit(str).map( str => parse$1(str) ).flat();
     if (!result.every(part => validateRangeOption(part, validateVec3) || validateRangeOption(part, validateFloat))) {
-      console.warn(`unrecognized array of vec3 range options '${str}'`);
+      console.warn(`unrecognized array of float or vec3 range options '${str}'`);
       return undefined
     }
+    
     return result.map(rangeOption => {
       if (rangeOption.range) return { range: rangeOption.range.map(vec3OrFloatToVec3) }
       if (rangeOption.options) return { options: rangeOption.options.map(vec3OrFloatToVec3) }
@@ -3165,7 +3145,6 @@
       const data = this.data;
 
       const random = this.lcg.random;
-      const degToRad = THREE.Math.degToRad;
 
       this.configureRandomizer(this.spawnID);
 
@@ -3181,25 +3160,22 @@
       newParticle.sourcePosition = new THREE.Vector3().copy(this.source.position);
       newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion);
       newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale);
-      newParticle.lifeTime = randomize(this.lifeTimeRule, random)[0];
+      newParticle.lifeTime = randomize(this.lifeTimeRule, random);
       newParticle.positions = data.position ? data.position.map(part => randomize(part, random)) : undefined;
-      // @ts-ignore
-      newParticle.rotations = data.rotation ? data.rotation.map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
+      newParticle.rotations = data.rotation ? data.rotation.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
       newParticle.scales = data.scale ? data.scale.map(part => randomize(part, random)) : undefined;
       newParticle.colors = data.color ? data.color.map(part => randomize(part, random)) : undefined;
       newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2;
       newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI;
       newParticle.velocities = data.velocity ? data.velocity.map(part => randomize(part, random)) : undefined;
       newParticle.accelerations = data.acceleration ? data.acceleration.map(part => randomize(part, random)) : undefined;
-      newParticle.radialPositions = data.radialPosition ? data.radialPosition.map(part => randomize(part, random)[0]) : undefined;
-      newParticle.radialVelocities = data.radialVelocity ? data.radialVelocity.map(part => randomize(part, random)[0]) : undefined;
-      newParticle.radialAccelerations = data.radialAcceleration ? data.radialAcceleration.map(part => randomize(part, random)[0]) : undefined;
-      // @ts-ignore
-      newParticle.angularVelocities = data.angularVelocity ? data.angularVelocity.map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
-      // @ts-ignore
-      newParticle.angularAccelerations = data.angularAcceleration ? data.angularAcceleration.map(part => randomize(part, random).map(deg => degToRad(deg))) : undefined;
-      newParticle.orbitalVelocities = data.orbitalVelocity ? data.orbitalVelocity.map(part => degToRad( randomize(part, random)[0] )) : undefined;
-      newParticle.orbitalAccelerations = data.orbitalAcceleration ? data.orbitalAcceleration.map(part => degToRad( randomize(part, random)[0] )) : undefined;
+      newParticle.radialPositions = data.radialPosition ? data.radialPosition.map(part => randomize(part, random)) : undefined;
+      newParticle.radialVelocities = data.radialVelocity ? data.radialVelocity.map(part => randomize(part, random)) : undefined;
+      newParticle.radialAccelerations = data.radialAcceleration ? data.radialAcceleration.map(part => randomize(part, random)) : undefined;
+      newParticle.angularVelocities = data.angularVelocity ? data.angularVelocity.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
+      newParticle.angularAccelerations = data.angularAcceleration ? data.angularAcceleration.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
+      newParticle.orbitalVelocities = data.orbitalVelocity ? data.orbitalVelocity.map(part => degToRad$1( randomize(part, random) )) : undefined;
+      newParticle.orbitalAccelerations = data.orbitalAcceleration ? data.orbitalAcceleration.map(part => degToRad$1( randomize(part, random) )) : undefined;
 
       newParticle.orbitalAxis = new THREE.Vector3();
 
@@ -3235,7 +3211,7 @@
           particle.age += dt;
 
           if (particle.positions && (isFirstFrame || particle.positions.length > 1)) {
-            particle.pos.fromArray( this.lerpNumbers(particle.positions, t) );
+            particle.pos.copy( this.lerpVector(particle.positions, t) );
           }
     
           if (particle.radialPositions && (isFirstFrame || particle.radialPositions.length > 1)) {
@@ -3243,7 +3219,7 @@
           }
     
           if (particle.accelerations && (isFirstFrame || particle.accelerations.length > 1)) {
-            particle.acc.fromArray( this.lerpNumbers(particle.accelerations, t) );
+            particle.acc.copy( this.lerpVector(particle.accelerations, t) );
           }
     
           if (particle.radialAccelerations && (isFirstFrame || particle.radialAccelerations.length > 1)) {
@@ -3251,7 +3227,7 @@
           }
     
           if (particle.velocities && (isFirstFrame || particle.velocities.length > 1)) {
-            particle.vel.fromArray( this.lerpNumbers(particle.velocities, t) );
+            particle.vel.copy( this.lerpVector(particle.velocities, t) );
           }
     
           if (particle.radialVelocities && (isFirstFrame || particle.radialVelocities.length > 1)) {
@@ -3286,16 +3262,16 @@
           }
 
           if (particle.angularAccelerations && (isFirstFrame || particle.angularAccelerations.length > 1)) {
-            particle.angularAcc.fromArray( this.lerpNumbers(particle.angularAccelerations, t) );
+            particle.angularAcc.copy( this.lerpVector(particle.angularAccelerations, t) );
           }
 
           if (particle.angularVelocities && (isFirstFrame || particle.angularVelocities.length > 1)) {
-            particle.angularVel.fromArray( this.lerpNumbers(particle.angularVelocities, t) );
+            particle.angularVel.copy( this.lerpVector(particle.angularVelocities, t) );
           }
 
           if (particle.angularAccelerations || particle.angularVelocities) {
             tempVec3.copy( particle.angularAcc ).multiplyScalar( 0.5*age ).add( particle.angularVel ).multiplyScalar( age );
-            tempEuler.set( tempVec3.x, tempVec3.y, tempVec3.z );
+            tempEuler.set( tempVec3.x, tempVec3.y, tempVec3.z, "YXZ" );
             tempQuaternion.setFromEuler( tempEuler );
             tempPosition.applyQuaternion( tempQuaternion );
             hasMovement = true;
@@ -3308,12 +3284,12 @@
     
           if (particle.colors && (isFirstFrame || particle.colors.length > 1)) {
             // colour is independent of the entity color
-            tempColor.copy( this.lerpColors(particle.colors, t) );
+            tempColor.copy( this.lerpVector(particle.colors, t) );
             instance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b);
           }
     
           if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
-            tempEuler.fromArray( this.lerpNumbers(particle.rotations, t) );
+            tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) );
             tempQuaternion.setFromEuler(tempEuler);
             tempQuaternion.premultiply(particle.sourceQuaternion);
             instance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w);
@@ -3321,7 +3297,7 @@
     
           if (particle.scales && (isFirstFrame || particle.scales.length > 1)) {
             tempScale.copy(particle.sourceScale);
-            tempScale.multiply( tempVec3.fromArray( this.lerpNumbers(particle.scales, t) ) );
+            tempScale.multiply( tempVec3.copy( this.lerpVector(particle.scales, t) ) );
             instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z);
           }
     
@@ -3334,14 +3310,9 @@
       return lerp(floats[i], floats[i+1], r)
     },
 
-    lerpNumbers(numbers, t) {
+    lerpVector(numbers, t) {
       const [i,r] = lerpKeys(numbers, t);
-      return lerpArray(numbers[i], numbers[i+1], r)
-    },
-
-    lerpColors(colors, t) {
-      const [i,r] = lerpKeys(colors, t);
-      return lerpObject(colors[i], colors[i+1], r)
+      return lerpObject(numbers[i], numbers[i+1], r)
     },
   });
 
@@ -4195,7 +4166,7 @@ vec2 worley(const vec2 P, const float jitter) {
 
   const RANDOM_REPEAT_COUNT = 131072; // random numbers will start repeating after this number of particles
 
-  const degToRad$1 = THREE.Math.degToRad;
+  const degToRad$2 = THREE.Math.degToRad;
 
   const ATTR_TO_DEFINES = {
     acceleration: "USE_PARTICLE_ACCELERATION",
@@ -4768,7 +4739,7 @@ vec2 worley(const vec2 P, const float jitter) {
       // update i by 1 becase rotation is 1 numbers per vector, and k by 2 because rotationScaleOverTime is 2 numbers per vector
       let n = rotation.length;
       for (let i = 0, k = 2; i < n; i ++, k += 2) {
-        this.rotationScaleOverTime[k] = degToRad$1(rotation[i]); // glsl rotationScaleOverTime[1..].x
+        this.rotationScaleOverTime[k] = degToRad$2(rotation[i]); // glsl rotationScaleOverTime[1..].x
       }
 
       n = scale.length;
@@ -4791,17 +4762,17 @@ vec2 worley(const vec2 P, const float jitter) {
     updateAngularVec4XYZRange(vecData, uniformAttr) {
       const vecRange = parseVecRange(vecData, [0,0,0]);
       for (let i = 0, j = 0; i < vecRange.length; ) {
-        this[uniformAttr][j++] = degToRad$1(vecRange[i++]); // x
-        this[uniformAttr][j++] = degToRad$1(vecRange[i++]); // y
-        this[uniformAttr][j++] = degToRad$1(vecRange[i++]); // z
+        this[uniformAttr][j++] = degToRad$2(vecRange[i++]); // x
+        this[uniformAttr][j++] = degToRad$2(vecRange[i++]); // y
+        this[uniformAttr][j++] = degToRad$2(vecRange[i++]); // z
         j++; // skip the w
       }
     },
 
     updateAngularVec2PartRange(vecData, def, uniformAttr, part) {
       const vecRange = parseVecRange(vecData, def);
-      this[uniformAttr][part] = degToRad$1(vecRange[0]);
-      this[uniformAttr][part + 2] = degToRad$1(vecRange[1]);
+      this[uniformAttr][part] = degToRad$2(vecRange[0]);
+      this[uniformAttr][part + 2] = degToRad$2(vecRange[1]);
     },
 
     // update just the w component

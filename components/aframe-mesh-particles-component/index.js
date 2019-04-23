@@ -1,23 +1,28 @@
-import { pseudorandom, attribute, interpolation, rgbcolor } from "harlyq-helpers"
+import { pseudorandom, attribute, interpolation, vecxyz } from "harlyq-helpers"
 
 const toLowerCase = x => x.toLowerCase()
 const warn = msg => console.warn("mesh-particles", msg)
 
-const OVER_TIME_PROPERTIES = [/*"position", "velocity", "acceleration", "radialPosition", "radialVelocity", "radialAcceleration", "angularVelocity", "angularAcceleration", "orbitalVelocity", "orbitalAcceleration", "scale", "color", "rotation",*/ "opacity", "drag"]
 const TWO_PI = 2*Math.PI
 const PI_2 = .5*Math.PI
 const VECTOR3_UP = new THREE.Vector3(0,1,0)
+const degToRad = THREE.Math.degToRad
+
+function vec3DegToRad(vec3) {
+  return { x: degToRad(vec3.x), y: degToRad(vec3.y), z: degToRad(vec3.z) }
+}
+
 
 function getMaxRangeOptions(rule) {
   return rule.options ? Math.max(...rule.options) : Math.max(...rule.range)
 } 
 
 function validateFloat(number) {
-  return Array.isArray(number) && typeof number[0] === "number"
+  return typeof number === "number"
 }
 
 function validateVec3(vec3) {
-  return Array.isArray(vec3) && typeof vec3[0] === "number" && typeof vec3[1] === "number" && typeof vec3[2] === "number"
+  return typeof vec3 === "object" && "x" in vec3 && "y" in vec3 && "z" in vec3
 }
 
 function validateColor(color) {
@@ -54,8 +59,8 @@ function parseFloatRangeOptionArray(str) {
   return result
 }
 
-function vec3OrFloatToVec3(numbers) {
-  return numbers.length === 1 ? [numbers[0], numbers[0], numbers[0]] : numbers
+function vec3OrFloatToVec3(vec3) {
+  return typeof vec3 === "number" ? {x:vec3, y:vec3, z:vec3} : vec3
 }
 
 function parseScaleArray(str) {
@@ -64,9 +69,10 @@ function parseScaleArray(str) {
   // @ts-ignore
   const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
   if (!result.every(part => validateRangeOption(part, validateVec3) || validateRangeOption(part, validateFloat))) {
-    console.warn(`unrecognized array of vec3 range options '${str}'`)
+    console.warn(`unrecognized array of float or vec3 range options '${str}'`)
     return undefined
   }
+  
   return result.map(rangeOption => {
     if (rangeOption.range) return { range: rangeOption.range.map(vec3OrFloatToVec3) }
     if (rangeOption.options) return { options: rangeOption.options.map(vec3OrFloatToVec3) }
@@ -237,7 +243,6 @@ AFRAME.registerComponent("mesh-particles", {
     const data = this.data
 
     const random = this.lcg.random
-    const degToRad = THREE.Math.degToRad
 
     this.configureRandomizer(this.spawnID)
 
@@ -253,25 +258,22 @@ AFRAME.registerComponent("mesh-particles", {
     newParticle.sourcePosition = new THREE.Vector3().copy(this.source.position)
     newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion)
     newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale)
-    newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)[0]
+    newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)
     newParticle.positions = data.position ? data.position.map(part => attribute.randomize(part, random)) : undefined
-    // @ts-ignore
-    newParticle.rotations = data.rotation ? data.rotation.map(part => attribute.randomize(part, random).map(deg => degToRad(deg))) : undefined
+    newParticle.rotations = data.rotation ? data.rotation.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
     newParticle.scales = data.scale ? data.scale.map(part => attribute.randomize(part, random)) : undefined
     newParticle.colors = data.color ? data.color.map(part => attribute.randomize(part, random)) : undefined
     newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2
     newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI
     newParticle.velocities = data.velocity ? data.velocity.map(part => attribute.randomize(part, random)) : undefined
     newParticle.accelerations = data.acceleration ? data.acceleration.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.radialPositions = data.radialPosition ? data.radialPosition.map(part => attribute.randomize(part, random)[0]) : undefined
-    newParticle.radialVelocities = data.radialVelocity ? data.radialVelocity.map(part => attribute.randomize(part, random)[0]) : undefined
-    newParticle.radialAccelerations = data.radialAcceleration ? data.radialAcceleration.map(part => attribute.randomize(part, random)[0]) : undefined
-    // @ts-ignore
-    newParticle.angularVelocities = data.angularVelocity ? data.angularVelocity.map(part => attribute.randomize(part, random).map(deg => degToRad(deg))) : undefined
-    // @ts-ignore
-    newParticle.angularAccelerations = data.angularAcceleration ? data.angularAcceleration.map(part => attribute.randomize(part, random).map(deg => degToRad(deg))) : undefined
-    newParticle.orbitalVelocities = data.orbitalVelocity ? data.orbitalVelocity.map(part => degToRad( attribute.randomize(part, random)[0] )) : undefined
-    newParticle.orbitalAccelerations = data.orbitalAcceleration ? data.orbitalAcceleration.map(part => degToRad( attribute.randomize(part, random)[0] )) : undefined
+    newParticle.radialPositions = data.radialPosition ? data.radialPosition.map(part => attribute.randomize(part, random)) : undefined
+    newParticle.radialVelocities = data.radialVelocity ? data.radialVelocity.map(part => attribute.randomize(part, random)) : undefined
+    newParticle.radialAccelerations = data.radialAcceleration ? data.radialAcceleration.map(part => attribute.randomize(part, random)) : undefined
+    newParticle.angularVelocities = data.angularVelocity ? data.angularVelocity.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
+    newParticle.angularAccelerations = data.angularAcceleration ? data.angularAcceleration.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
+    newParticle.orbitalVelocities = data.orbitalVelocity ? data.orbitalVelocity.map(part => degToRad( attribute.randomize(part, random) )) : undefined
+    newParticle.orbitalAccelerations = data.orbitalAcceleration ? data.orbitalAcceleration.map(part => degToRad( attribute.randomize(part, random) )) : undefined
 
     newParticle.orbitalAxis = new THREE.Vector3()
 
@@ -307,7 +309,7 @@ AFRAME.registerComponent("mesh-particles", {
         particle.age += dt
 
         if (particle.positions && (isFirstFrame || particle.positions.length > 1)) {
-          particle.pos.fromArray( this.lerpNumbers(particle.positions, t) )
+          particle.pos.copy( this.lerpVector(particle.positions, t) )
         }
   
         if (particle.radialPositions && (isFirstFrame || particle.radialPositions.length > 1)) {
@@ -315,7 +317,7 @@ AFRAME.registerComponent("mesh-particles", {
         }
   
         if (particle.accelerations && (isFirstFrame || particle.accelerations.length > 1)) {
-          particle.acc.fromArray( this.lerpNumbers(particle.accelerations, t) )
+          particle.acc.copy( this.lerpVector(particle.accelerations, t) )
         }
   
         if (particle.radialAccelerations && (isFirstFrame || particle.radialAccelerations.length > 1)) {
@@ -323,7 +325,7 @@ AFRAME.registerComponent("mesh-particles", {
         }
   
         if (particle.velocities && (isFirstFrame || particle.velocities.length > 1)) {
-          particle.vel.fromArray( this.lerpNumbers(particle.velocities, t) )
+          particle.vel.copy( this.lerpVector(particle.velocities, t) )
         }
   
         if (particle.radialVelocities && (isFirstFrame || particle.radialVelocities.length > 1)) {
@@ -358,16 +360,16 @@ AFRAME.registerComponent("mesh-particles", {
         }
 
         if (particle.angularAccelerations && (isFirstFrame || particle.angularAccelerations.length > 1)) {
-          particle.angularAcc.fromArray( this.lerpNumbers(particle.angularAccelerations, t) )
+          particle.angularAcc.copy( this.lerpVector(particle.angularAccelerations, t) )
         }
 
         if (particle.angularVelocities && (isFirstFrame || particle.angularVelocities.length > 1)) {
-          particle.angularVel.fromArray( this.lerpNumbers(particle.angularVelocities, t) )
+          particle.angularVel.copy( this.lerpVector(particle.angularVelocities, t) )
         }
 
         if (particle.angularAccelerations || particle.angularVelocities) {
           tempVec3.copy( particle.angularAcc ).multiplyScalar( 0.5*age ).add( particle.angularVel ).multiplyScalar( age )
-          tempEuler.set( tempVec3.x, tempVec3.y, tempVec3.z )
+          tempEuler.set( tempVec3.x, tempVec3.y, tempVec3.z, "YXZ" )
           tempQuaternion.setFromEuler( tempEuler )
           tempPosition.applyQuaternion( tempQuaternion )
           hasMovement = true
@@ -380,12 +382,12 @@ AFRAME.registerComponent("mesh-particles", {
   
         if (particle.colors && (isFirstFrame || particle.colors.length > 1)) {
           // colour is independent of the entity color
-          tempColor.copy( this.lerpColors(particle.colors, t) )
+          tempColor.copy( this.lerpVector(particle.colors, t) )
           instance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b)
         }
   
         if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
-          tempEuler.fromArray( this.lerpNumbers(particle.rotations, t) )
+          tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) )
           tempQuaternion.setFromEuler(tempEuler)
           tempQuaternion.premultiply(particle.sourceQuaternion)
           instance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w)
@@ -393,7 +395,7 @@ AFRAME.registerComponent("mesh-particles", {
   
         if (particle.scales && (isFirstFrame || particle.scales.length > 1)) {
           tempScale.copy(particle.sourceScale)
-          tempScale.multiply( tempVec3.fromArray( this.lerpNumbers(particle.scales, t) ) )
+          tempScale.multiply( tempVec3.copy( this.lerpVector(particle.scales, t) ) )
           instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z)
         }
   
@@ -406,14 +408,9 @@ AFRAME.registerComponent("mesh-particles", {
     return interpolation.lerp(floats[i], floats[i+1], r)
   },
 
-  lerpNumbers(numbers, t) {
+  lerpVector(numbers, t) {
     const [i,r] = interpolation.lerpKeys(numbers, t)
-    return interpolation.lerpArray(numbers[i], numbers[i+1], r)
-  },
-
-  lerpColors(colors, t) {
-    const [i,r] = interpolation.lerpKeys(colors, t)
-    return interpolation.lerpObject(colors[i], colors[i+1], r)
+    return interpolation.lerpObject(numbers[i], numbers[i+1], r)
   },
 })
 

@@ -11,7 +11,6 @@ function lerpKeys(type, keys, r, easingFn = interpolation.Linear) {
 
   switch (type) {
     case "object": return interpolation.lerpObject(keys[i], keys[i+1], t)
-    case "vector": return interpolation.lerpArray(keys[i], keys[i+1], t)
     case "number": return interpolation.lerp(keys[i], keys[i+1], t)
     default: return keys[i]
   }
@@ -188,18 +187,6 @@ AFRAME.registerComponent("keyframe", {
   generateKeys(resolveMissingRules) {
     let lastKey
 
-    function guessType(thing) {
-      if (typeof thing === "object") {
-        if (thing.length && typeof thing[0] === "number") {
-          return "vector" 
-        } else {
-          return "object"
-        }
-      } else {
-        return typeof thing
-      }
-    }
-
     this.keys = {}
     this.keyTypes = {}
 
@@ -226,7 +213,7 @@ AFRAME.registerComponent("keyframe", {
 
         lastKey = attribute.randomize(rule, this.lcg.random)
         this.keys[prop][ruleIndex] = lastKey
-        this.keyTypes[prop] = this.keyTypes[prop] || guessType(lastKey)
+        this.keyTypes[prop] = this.keyTypes[prop] || typeof lastKey
       }
     }
   },
