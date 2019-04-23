@@ -113,7 +113,7 @@ AFRAME.registerComponent("mesh-particles", {
     scale: { default: "", parse: parseScaleArray },
     color: { default: "", parse: parseColorRangeOptionArray },
     rotation: { default: "", parse: parseVec3RangeOptionArray },
-    opacity: { default: "" },
+    opacity: { default: "", parse: parseFloatRangeOptionArray },
     drag: { default: "" },
     source: { type: "selector" },
     destination: { type: "selector" },
@@ -248,6 +248,8 @@ AFRAME.registerComponent("mesh-particles", {
 
     const newParticle = {}
     newParticle.age = 0
+    newParticle.col = new THREE.Color()
+    newParticle.col.a = 1 // for opacity
     newParticle.pos = new THREE.Vector3(0,0,0)
     newParticle.vel = new THREE.Vector3(0,0,0)
     newParticle.acc = new THREE.Vector3(0,0,0)    
@@ -263,6 +265,7 @@ AFRAME.registerComponent("mesh-particles", {
     newParticle.rotations = data.rotation ? data.rotation.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
     newParticle.scales = data.scale ? data.scale.map(part => attribute.randomize(part, random)) : undefined
     newParticle.colors = data.color ? data.color.map(part => attribute.randomize(part, random)) : undefined
+    newParticle.opacities = data.opacity ? data.opacity.map(part => attribute.randomize(part, random)) : undefined
     newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2
     newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI
     newParticle.velocities = data.velocity ? data.velocity.map(part => attribute.randomize(part, random)) : undefined
@@ -298,6 +301,7 @@ AFRAME.registerComponent("mesh-particles", {
         const t = particle.age/particle.lifeTime
         const isFirstFrame = t === 0
         let hasMovement = false
+        let hasColor = false
 
 
         if (t > 1) {
@@ -379,13 +383,23 @@ AFRAME.registerComponent("mesh-particles", {
           tempPosition.add( particle.sourcePosition )
           instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z)
         }
-  
+
+        if (particle.opacities && (isFirstFrame || particle.opacities.length > 1)) {
+          particle.col.a = this.lerpFloat(particle.opacities, t)
+          hasColor = true
+        }
+
         if (particle.colors && (isFirstFrame || particle.colors.length > 1)) {
           // colour is independent of the entity color
           tempColor.copy( this.lerpVector(particle.colors, t) )
-          instance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b)
+          particle.col.setRGB(tempColor.r, tempColor.g, tempColor.b)
+          hasColor = true
         }
-  
+
+        if (isFirstFrame || hasColor) {
+          instance.setColorAt(i, particle.col.r, particle.col.g, particle.col.b, particle.col.a)
+        }
+
         if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
           tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) )
           tempQuaternion.setFromEuler(tempEuler)

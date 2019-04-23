@@ -1,3 +1,8 @@
+const FLOATS_PER_COLOR = 4
+const FLOATS_PER_POSITION = 3
+const FLOATS_PER_QUATERNION = 4
+const FLOATS_PER_SCALE = 3
+
 AFRAME.registerComponent("instance", {
   schema: {
     size: { default: 1000 },
@@ -49,15 +54,15 @@ AFRAME.registerComponent("instance", {
     const numInstances = data.size
     instancedGeometry.maxInstancedCount = 0
 
-    const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*3)
-    const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*3).fill(1)
-    const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*3).fill(1)
-    const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*4).map((x,i) => (i-3)%4 ? 0 : 1)
+    const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*FLOATS_PER_POSITION)
+    const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*FLOATS_PER_SCALE).fill(1)
+    const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*FLOATS_PER_COLOR).fill(1)
+    const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*FLOATS_PER_QUATERNION).map((x,i) => (i-3) % FLOATS_PER_QUATERNION ? 0 : 1)
 
-    this.instancePosition = new THREE.InstancedBufferAttribute(positions, 3)
-    this.instanceQuaternion = new THREE.InstancedBufferAttribute(quaternions, 4)
-    this.instanceScale = new THREE.InstancedBufferAttribute(scales, 3)
-    this.instanceColor = new THREE.InstancedBufferAttribute(colors, 3)
+    this.instancePosition = new THREE.InstancedBufferAttribute(positions, FLOATS_PER_POSITION)
+    this.instanceQuaternion = new THREE.InstancedBufferAttribute(quaternions, FLOATS_PER_QUATERNION)
+    this.instanceScale = new THREE.InstancedBufferAttribute(scales, FLOATS_PER_SCALE)
+    this.instanceColor = new THREE.InstancedBufferAttribute(colors, FLOATS_PER_COLOR)
 
     instancedGeometry.addAttribute("instancePosition", this.instancePosition)
     instancedGeometry.addAttribute("instanceQuaternion", this.instanceQuaternion)
@@ -104,10 +109,10 @@ AFRAME.registerComponent("instance", {
     vertexShader = vertexShader.replace('void main()', `
     attribute vec3 instancePosition;
     attribute vec4 instanceQuaternion;
-    attribute vec3 instanceColor;
+    attribute vec4 instanceColor;
     attribute vec3 instanceScale;
 
-    varying vec3 vInstanceColor;
+    varying vec4 vInstanceColor;
 
     vec3 applyQuaternion( const vec3 v, const vec4 q ) 
     {
@@ -139,11 +144,11 @@ AFRAME.registerComponent("instance", {
 
     fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
     #include <color_pars_fragment>
-    varying vec3 vInstanceColor;`)
+    varying vec4 vInstanceColor;`)
 
     fragmentShader = fragmentShader.replace('#include <color_fragment>', `
     #include <color_fragment>
-    diffuseColor.rgb *= vInstanceColor;`)
+    diffuseColor *= vInstanceColor;`)
 
     shader.vertexShader = vertexShader
     shader.fragmentShader = fragmentShader
@@ -164,16 +169,17 @@ AFRAME.registerComponent("instance", {
     console.warn("releaseBlock not supported")
   },
 
-  setColorAt(i, r, g, b) {
-    const j = i*3
+  setColorAt(i, r, g, b, a) {
+    const j = i*FLOATS_PER_COLOR
     this.colors[j] = r
     this.colors[j+1] = g
     this.colors[j+2] = b
+    this.colors[j+3] = typeof a !== "undefined" ? a : 1
     this.instanceColor.needsUpdate = true
   },
 
   setPositionAt(i, x, y, z) {
-    const j = i*3
+    const j = i*FLOATS_PER_POSITION
     this.positions[j] = x
     this.positions[j+1] = y
     this.positions[j+2] = z
@@ -181,7 +187,7 @@ AFRAME.registerComponent("instance", {
   },
 
   setScaleAt(i, x, y, z) {
-    const j = i*3
+    const j = i*FLOATS_PER_SCALE
     this.scales[j] = x
     this.scales[j+1] = typeof y !== "undefined" ? y : x
     this.scales[j+2] = typeof z !== "undefined" ? z : x
@@ -189,7 +195,7 @@ AFRAME.registerComponent("instance", {
   },
 
   setQuaternionAt(i, x, y, z, w) {
-    const j = i*4
+    const j = i*FLOATS_PER_QUATERNION
     this.quaternions[j] = x
     this.quaternions[j+1] = y
     this.quaternions[j+2] = z
@@ -198,7 +204,7 @@ AFRAME.registerComponent("instance", {
   },
 
   getPositionAt(i, out) {
-    const j = i*3
+    const j = i*FLOATS_PER_POSITION
     out.x = this.positions[j]
     out.y = this.positions[j+1]
     out.z = this.positions[j+2]
@@ -206,15 +212,16 @@ AFRAME.registerComponent("instance", {
   },
 
   getColorAt(i, out) {
-    const j = i*3
+    const j = i*FLOATS_PER_COLOR
     out.r = this.colors[j]
     out.g = this.colors[j+1]
     out.b = this.colors[j+2]
+    out.a = this.colors[j+3]
     return out
   },
 
   getScaleAt(i, out) {
-    const j = i*3
+    const j = i*FLOATS_PER_SCALE
     out.x = this.scales[j]
     out.y = this.scales[j+1]
     out.z = this.scales[j+2]
@@ -222,7 +229,7 @@ AFRAME.registerComponent("instance", {
   },
 
   getQuaternionAt(i, out) {
-    const j = i*4
+    const j = i*FLOATS_PER_QUATERNION
     out.x = this.quaternions[j]
     out.y = this.quaternions[j+1]
     out.z = this.quaternions[j+2]

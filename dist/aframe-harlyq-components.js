@@ -2048,6 +2048,11 @@
     },
   });
 
+  const FLOATS_PER_COLOR = 4;
+  const FLOATS_PER_POSITION = 3;
+  const FLOATS_PER_QUATERNION = 4;
+  const FLOATS_PER_SCALE = 3;
+
   AFRAME.registerComponent("instance", {
     schema: {
       size: { default: 1000 },
@@ -2099,15 +2104,15 @@
       const numInstances = data.size;
       instancedGeometry.maxInstancedCount = 0;
 
-      const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*3);
-      const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*3).fill(1);
-      const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*3).fill(1);
-      const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*4).map((x,i) => (i-3)%4 ? 0 : 1);
+      const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*FLOATS_PER_POSITION);
+      const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*FLOATS_PER_SCALE).fill(1);
+      const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*FLOATS_PER_COLOR).fill(1);
+      const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*FLOATS_PER_QUATERNION).map((x,i) => (i-3) % FLOATS_PER_QUATERNION ? 0 : 1);
 
-      this.instancePosition = new THREE.InstancedBufferAttribute(positions, 3);
-      this.instanceQuaternion = new THREE.InstancedBufferAttribute(quaternions, 4);
-      this.instanceScale = new THREE.InstancedBufferAttribute(scales, 3);
-      this.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
+      this.instancePosition = new THREE.InstancedBufferAttribute(positions, FLOATS_PER_POSITION);
+      this.instanceQuaternion = new THREE.InstancedBufferAttribute(quaternions, FLOATS_PER_QUATERNION);
+      this.instanceScale = new THREE.InstancedBufferAttribute(scales, FLOATS_PER_SCALE);
+      this.instanceColor = new THREE.InstancedBufferAttribute(colors, FLOATS_PER_COLOR);
 
       instancedGeometry.addAttribute("instancePosition", this.instancePosition);
       instancedGeometry.addAttribute("instanceQuaternion", this.instanceQuaternion);
@@ -2154,10 +2159,10 @@
       vertexShader = vertexShader.replace('void main()', `
     attribute vec3 instancePosition;
     attribute vec4 instanceQuaternion;
-    attribute vec3 instanceColor;
+    attribute vec4 instanceColor;
     attribute vec3 instanceScale;
 
-    varying vec3 vInstanceColor;
+    varying vec4 vInstanceColor;
 
     vec3 applyQuaternion( const vec3 v, const vec4 q ) 
     {
@@ -2189,11 +2194,11 @@
 
       fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
     #include <color_pars_fragment>
-    varying vec3 vInstanceColor;`);
+    varying vec4 vInstanceColor;`);
 
       fragmentShader = fragmentShader.replace('#include <color_fragment>', `
     #include <color_fragment>
-    diffuseColor.rgb *= vInstanceColor;`);
+    diffuseColor *= vInstanceColor;`);
 
       shader.vertexShader = vertexShader;
       shader.fragmentShader = fragmentShader;
@@ -2214,16 +2219,17 @@
       console.warn("releaseBlock not supported");
     },
 
-    setColorAt(i, r, g, b) {
-      const j = i*3;
+    setColorAt(i, r, g, b, a) {
+      const j = i*FLOATS_PER_COLOR;
       this.colors[j] = r;
       this.colors[j+1] = g;
       this.colors[j+2] = b;
+      this.colors[j+3] = typeof a !== "undefined" ? a : 1;
       this.instanceColor.needsUpdate = true;
     },
 
     setPositionAt(i, x, y, z) {
-      const j = i*3;
+      const j = i*FLOATS_PER_POSITION;
       this.positions[j] = x;
       this.positions[j+1] = y;
       this.positions[j+2] = z;
@@ -2231,7 +2237,7 @@
     },
 
     setScaleAt(i, x, y, z) {
-      const j = i*3;
+      const j = i*FLOATS_PER_SCALE;
       this.scales[j] = x;
       this.scales[j+1] = typeof y !== "undefined" ? y : x;
       this.scales[j+2] = typeof z !== "undefined" ? z : x;
@@ -2239,7 +2245,7 @@
     },
 
     setQuaternionAt(i, x, y, z, w) {
-      const j = i*4;
+      const j = i*FLOATS_PER_QUATERNION;
       this.quaternions[j] = x;
       this.quaternions[j+1] = y;
       this.quaternions[j+2] = z;
@@ -2248,7 +2254,7 @@
     },
 
     getPositionAt(i, out) {
-      const j = i*3;
+      const j = i*FLOATS_PER_POSITION;
       out.x = this.positions[j];
       out.y = this.positions[j+1];
       out.z = this.positions[j+2];
@@ -2256,15 +2262,16 @@
     },
 
     getColorAt(i, out) {
-      const j = i*3;
+      const j = i*FLOATS_PER_COLOR;
       out.r = this.colors[j];
       out.g = this.colors[j+1];
       out.b = this.colors[j+2];
+      out.a = this.colors[j+3];
       return out
     },
 
     getScaleAt(i, out) {
-      const j = i*3;
+      const j = i*FLOATS_PER_SCALE;
       out.x = this.scales[j];
       out.y = this.scales[j+1];
       out.z = this.scales[j+2];
@@ -2272,7 +2279,7 @@
     },
 
     getQuaternionAt(i, out) {
-      const j = i*4;
+      const j = i*FLOATS_PER_QUATERNION;
       out.x = this.quaternions[j];
       out.y = this.quaternions[j+1];
       out.z = this.quaternions[j+2];
@@ -3015,7 +3022,7 @@
       scale: { default: "", parse: parseScaleArray },
       color: { default: "", parse: parseColorRangeOptionArray },
       rotation: { default: "", parse: parseVec3RangeOptionArray },
-      opacity: { default: "" },
+      opacity: { default: "", parse: parseFloatRangeOptionArray },
       drag: { default: "" },
       source: { type: "selector" },
       destination: { type: "selector" },
@@ -3150,6 +3157,8 @@
 
       const newParticle = {};
       newParticle.age = 0;
+      newParticle.col = new THREE.Color();
+      newParticle.col.a = 1; // for opacity
       newParticle.pos = new THREE.Vector3(0,0,0);
       newParticle.vel = new THREE.Vector3(0,0,0);
       newParticle.acc = new THREE.Vector3(0,0,0);    
@@ -3165,6 +3174,7 @@
       newParticle.rotations = data.rotation ? data.rotation.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
       newParticle.scales = data.scale ? data.scale.map(part => randomize(part, random)) : undefined;
       newParticle.colors = data.color ? data.color.map(part => randomize(part, random)) : undefined;
+      newParticle.opacities = data.opacity ? data.opacity.map(part => randomize(part, random)) : undefined;
       newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2;
       newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI;
       newParticle.velocities = data.velocity ? data.velocity.map(part => randomize(part, random)) : undefined;
@@ -3200,6 +3210,7 @@
           const t = particle.age/particle.lifeTime;
           const isFirstFrame = t === 0;
           let hasMovement = false;
+          let hasColor = false;
 
 
           if (t > 1) {
@@ -3281,13 +3292,23 @@
             tempPosition.add( particle.sourcePosition );
             instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z);
           }
-    
+
+          if (particle.opacities && (isFirstFrame || particle.opacities.length > 1)) {
+            particle.col.a = this.lerpFloat(particle.opacities, t);
+            hasColor = true;
+          }
+
           if (particle.colors && (isFirstFrame || particle.colors.length > 1)) {
             // colour is independent of the entity color
             tempColor.copy( this.lerpVector(particle.colors, t) );
-            instance.setColorAt(i, tempColor.r, tempColor.g, tempColor.b);
+            particle.col.setRGB(tempColor.r, tempColor.g, tempColor.b);
+            hasColor = true;
           }
-    
+
+          if (isFirstFrame || hasColor) {
+            instance.setColorAt(i, particle.col.r, particle.col.g, particle.col.b, particle.col.a);
+          }
+
           if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
             tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) );
             tempQuaternion.setFromEuler(tempEuler);
