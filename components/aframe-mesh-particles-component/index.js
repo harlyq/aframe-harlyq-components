@@ -112,7 +112,6 @@ const CUSTOM_PARSER = {
 
 AFRAME.registerComponent("mesh-particles", {
   schema: {
-    // TODO validate the input types
     duration: { default: -1 },
     instances: { default: "" },
     spawnRate: { default: "1" },
@@ -132,9 +131,8 @@ AFRAME.registerComponent("mesh-particles", {
     color: { default: "" },
     rotation: { default: "" },
     opacity: { default: "" },
-    drag: { default: "" },
-    source: { type: "selector" },
-    destination: { type: "selector" },
+    source: { type: "string" },
+    destination: { type: "string" },
     destinationOffset: { type: "vec3" },
     destinationWeight: { type: "number" },
     seed: { type: "int", default: -1 }
@@ -154,6 +152,9 @@ AFRAME.registerComponent("mesh-particles", {
 
   remove() {
     this.releaseInstances()
+
+    this.source = undefined
+    this.destination = undefined
   },
 
   update(oldData) {
@@ -190,14 +191,14 @@ AFRAME.registerComponent("mesh-particles", {
       }
     }
 
-    if (data.target !== oldData.target) {
-      this.target = undefined
-      if (data.target) {
-        const targetEl = document.querySelector(data.target)
-        if (targetEl && targetEl.object3D) { 
-          this.target = targetEl.object3D
+    if (data.destination !== oldData.destination) {
+      this.destination = undefined
+      if (data.destination) {
+        const destinationEl = document.querySelector(data.destination)
+        if (destinationEl && destinationEl.object3D) { 
+          this.destination = destinationEl.object3D
         } else {
-          warn(`unable to find object3D on target '${data.target}'`) 
+          warn(`unable to find object3D on destination '${data.destination}'`) 
         }
       }
     }
@@ -253,7 +254,9 @@ AFRAME.registerComponent("mesh-particles", {
   releaseInstances() {
     this.instances.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]))
     this.instanceIndices.length = 0
+    this.particles = []
     this.spawnID = 0
+    this.spawnCount = 0
   },
 
   configureRandomizer(id) {
@@ -301,22 +304,23 @@ AFRAME.registerComponent("mesh-particles", {
     newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale)
 
     newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)
-    newParticle.positions = cData.position ? cData.position.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.rotations = cData.rotation ? cData.rotation.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
-    newParticle.scales = cData.scale ? cData.scale.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.colors = cData.color ? cData.color.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.opacities = cData.opacity ? cData.opacity.map(part => attribute.randomize(part, random)) : undefined
     newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2
     newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI
-    newParticle.velocities = cData.velocity ? cData.velocity.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.accelerations = cData.acceleration ? cData.acceleration.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.radialPositions = cData.radialPosition ? cData.radialPosition.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.radialVelocities = cData.radialVelocity ? cData.radialVelocity.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.radialAccelerations = cData.radialAcceleration ? cData.radialAcceleration.map(part => attribute.randomize(part, random)) : undefined
-    newParticle.angularVelocities = cData.angularVelocity ? cData.angularVelocity.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
-    newParticle.angularAccelerations = cData.angularAcceleration ? cData.angularAcceleration.map(part => vec3DegToRad( attribute.randomize(part, random) )) : undefined
-    newParticle.orbitalVelocities = cData.orbitalVelocity ? cData.orbitalVelocity.map(part => degToRad( attribute.randomize(part, random) )) : undefined
-    newParticle.orbitalAccelerations = cData.orbitalAcceleration ? cData.orbitalAcceleration.map(part => degToRad( attribute.randomize(part, random) )) : undefined
+
+    if (cData.position) { newParticle.positions = cData.position.map(part => attribute.randomize(part, random)) }
+    if (cData.rotation) { newParticle.rotations = cData.rotation.map(part => vec3DegToRad( attribute.randomize(part, random) )) }
+    if (cData.scale) { newParticle.scales = cData.scale.map(part => attribute.randomize(part, random)) }
+    if (cData.color) { newParticle.colors = cData.color.map(part => attribute.randomize(part, random)) }
+    if (cData.opacity) { newParticle.opacities = cData.opacity.map(part => attribute.randomize(part, random)) }
+    if (cData.velocity) { newParticle.velocities = cData.velocity.map(part => attribute.randomize(part, random)) }
+    if (cData.acceleration) { newParticle.accelerations = cData.acceleration.map(part => attribute.randomize(part, random)) }
+    if (cData.radialPosition) { newParticle.radialPositions = cData.radialPosition.map(part => attribute.randomize(part, random)) }
+    if (cData.radialVelocity) { newParticle.radialVelocities = cData.radialVelocity.map(part => attribute.randomize(part, random)) }
+    if (cData.radialAcceleration) { newParticle.radialAccelerations = cData.radialAcceleration.map(part => attribute.randomize(part, random)) }
+    if (cData.angularVelocity) { newParticle.angularVelocities = cData.angularVelocity.map(part => vec3DegToRad( attribute.randomize(part, random) )) }
+    if (cData.angularAcceleration) { newParticle.angularAccelerations = cData.angularAcceleration.map(part => vec3DegToRad( attribute.randomize(part, random) )) }
+    if (cData.orbitalVelocity) { newParticle.orbitalVelocities = cData.orbitalVelocity.map(part => degToRad( attribute.randomize(part, random) )) }
+    if (cData.orbitalAcceleration) { newParticle.orbitalAccelerations = cData.orbitalAcceleration.map(part => degToRad( attribute.randomize(part, random) )) }
 
     newParticle.orbitalAxis = new THREE.Vector3()
 
@@ -334,6 +338,7 @@ AFRAME.registerComponent("mesh-particles", {
     const tempVec3 = new THREE.Vector3(0,0,0)
 
     return function move(dt) {
+      const data = this.data
 
       for (let id = Math.max(0, this.spawnID - this.maxParticles); id < this.spawnID; id++) {
         const [instance, i, particleID] = this.instanceFromID(id)
@@ -423,8 +428,14 @@ AFRAME.registerComponent("mesh-particles", {
           hasMovement = true
         }
 
-        if (isFirstFrame || hasMovement) {
+        if (isFirstFrame || hasMovement || this.destination) {
           tempPosition.add( particle.sourcePosition )
+
+          if (this.destination) {
+            tempVec3.copy(data.destinationOffset).applyMatrix4(this.destination.matrixWorld)
+            tempPosition.copy( interpolation.lerpObject(tempPosition, tempVec3, data.destinationWeight*t) )
+          }
+
           instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z)
         }
 
