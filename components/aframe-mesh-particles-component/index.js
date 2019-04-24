@@ -112,7 +112,7 @@ const CUSTOM_PARSER = {
 
 AFRAME.registerComponent("mesh-particles", {
   schema: {
-    delay: { default: 0 },
+    // TODO validate the input types
     duration: { default: -1 },
     instances: { default: "" },
     spawnRate: { default: "1" },
@@ -210,7 +210,6 @@ AFRAME.registerComponent("mesh-particles", {
 
     if (data.instances !== oldData.instances || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
       this.spawnID = 0
-      this.spawnCount = data.delay < 0 ? -data.delay*this.spawnRate : 0 // for -ve delays prespawn a bunch of particles
       this.releaseInstances()
 
       this.instances = data.instances ? 
