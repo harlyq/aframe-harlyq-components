@@ -299,9 +299,12 @@ AFRAME.registerComponent("mesh-particles", {
     newParticle.orbitalVel = 0
     newParticle.orbitalAcc = 0
 
-    newParticle.sourcePosition = new THREE.Vector3().copy(this.source.position)
-    newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion)
-    newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale)
+    if (this.source) {
+      newParticle.sourcePosition = new THREE.Vector3()
+      newParticle.sourceQuaternion = new THREE.Quaternion()
+      newParticle.sourceScale = new THREE.Vector3()
+      this.source.matrixWorld.decompose(newParticle.sourcePosition, newParticle.sourceQuaternion, newParticle.sourceScale)
+    }
 
     newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)
     newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2

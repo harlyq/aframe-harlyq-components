@@ -2053,6 +2053,9 @@
   const FLOATS_PER_QUATERNION = 4;
   const FLOATS_PER_SCALE = 3;
 
+  const BLOCK_INDEX = 0;
+  const BLOCK_SIZE = 1;
+
   AFRAME.registerComponent("instance", {
     schema: {
       size: { default: 1000 },
@@ -2067,6 +2070,8 @@
       this.scales = undefined;
       this.instancedGeoemtry = undefined;
       this.reservedCount = 0;
+      this.occupiedBlocks = [];
+      this.freeBlocks = [];
 
       this.onSetObject3D = this.onSetObject3D.bind(this);
       this.patchInstancesIntoShader = this.patchInstancesIntoShader.bind(this);
@@ -2105,7 +2110,7 @@
       instancedGeometry.maxInstancedCount = 0;
 
       const positions = this.positions && this.positions.length === numInstances ? this.positions : new Float32Array(numInstances*FLOATS_PER_POSITION);
-      const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*FLOATS_PER_SCALE).fill(1);
+      const scales = this.scales && this.scales.length === numInstances ? this.scales : new Float32Array(numInstances*FLOATS_PER_SCALE).fill(0); // scale to 0 to hide
       const colors = this.colors && this.colors.length === numInstances ? this.colors : new Float32Array(numInstances*FLOATS_PER_COLOR).fill(1);
       const quaternions = this.quaternions && this.quaternions === numInstances ? this.quaternions : new Float32Array(numInstances*FLOATS_PER_QUATERNION).map((x,i) => (i-3) % FLOATS_PER_QUATERNION ? 0 : 1);
 
@@ -2143,6 +2148,8 @@
       this.scales = scales;
       this.colors = colors;
       this.reservedCount = 0;
+      this.freeBlocks = [[0, numInstances]]; // blockIndex, number of instances
+      this.occupiedBlocks = [];
     },
 
     destroyInstances() {
@@ -2150,6 +2157,13 @@
         this.el.setObject3D("mesh", this.oldMesh);
         this.oldMesh = undefined;
       }
+      this.instancedGeoemtry = undefined;
+      this.positions = undefined;
+      this.quaternions = undefined;
+      this.scales = undefined;
+      this.colors = undefined;
+      this.freeBlocks = [];
+      this.occupiedBlocks = [];
     },
 
     patchInstancesIntoShader(shader) {
@@ -2204,19 +2218,75 @@
       shader.fragmentShader = fragmentShader;
     },
 
-    reserveBlock(requested) {
-      const total = this.data.size;
-      const reserved = this.reservedCount;
-      if (reserved + requested < total) {
-        this.reservedCount += requested;
-        this.instancedGeoemtry.maxInstancedCount = this.reservedCount;
-        return reserved
+    reserveBlock(requestedSize) {
+      // search in reverse, prefer to reuse released blocks
+      for (let j = this.freeBlocks.length - 1; j >= 0; j--) {
+        const block = this.freeBlocks[j];
+        const remainder = block[BLOCK_SIZE] - requestedSize;
+
+        if (remainder >= 0) {
+          const newBlock = [block[BLOCK_INDEX], requestedSize];
+          this.occupiedBlocks.push(newBlock);
+
+          this.instancedGeoemtry.maxInstancedCount = Math.max(this.instancedGeoemtry.maxInstancedCount, newBlock[BLOCK_INDEX] + newBlock[BLOCK_SIZE]);
+
+          if (remainder > 0) {
+            block[BLOCK_INDEX] += requestedSize;
+            block[BLOCK_SIZE] = remainder;
+          } else {
+            const i = this.freeBlocks;
+            this.freeBlocks.splice(i, 1);
+          }
+
+          return newBlock[BLOCK_INDEX]
+        }
       }
-      return -1
-    },
+
+      return undefined
+    },  
 
     releaseBlock(index) {
-      console.warn("releaseBlock not supported");
+      for (let i = 0; i < this.occupiedBlocks.length; i++) {
+        const block = this.occupiedBlocks[i];
+        if (block[BLOCK_INDEX] === index) {
+          for (let j = index; j < index + block[BLOCK_SIZE]; j++) {
+            this.setScaleAt(j, 0, 0, 0); // scale to 0 to hide
+          }
+
+          this.occupiedBlocks.splice(i, 1);
+          this.freeBlocks.push(block);
+          this.repartionBlocks(block);
+
+          const lastOccupiedInstance = this.occupiedBlocks.reduce((highest, block) => Math.max(highest, block[BLOCK_INDEX] + block[BLOCK_SIZE]), 0);
+          this.instancedGeoemtry.maxInstancedCount = Math.max(this.instancedGeoemtry.maxInstancedCount, lastOccupiedInstance);
+
+          return true
+        }
+      }
+      return false
+    },
+
+    repartionBlocks() {
+      // go in reverse for simple removal, always removing the block with the largest index on a merge
+      for (let mergeIndex = this.freeBlocks.length - 1; mergeIndex >= 0; mergeIndex--) {
+        const mergeBlock = this.freeBlocks[mergeIndex];
+
+        for (let j = 0; j < mergeIndex; j++) {
+          const otherBlock = this.freeBlocks[j];
+          if (otherBlock[BLOCK_INDEX] == mergeBlock[BLOCK_INDEX] + mergeBlock[BLOCK_SIZE]) {
+            // otherBlock immediately after mergeBlock
+            otherBlock[BLOCK_INDEX] = mergeBlock[BLOCK_INDEX];
+            otherBlock[BLOCK_SIZE] += mergeBlock[BLOCK_SIZE];
+            this.freeBlocks.splice(mergeIndex, 1);
+            break
+          } else if (otherBlock[BLOCK_INDEX] + otherBlock[BLOCK_SIZE] === mergeBlock[BLOCK_INDEX]) {
+            // otherBlock immediately before mergeBlock
+            otherBlock[BLOCK_SIZE] += mergeBlock[BLOCK_SIZE];
+            this.freeBlocks.splice(mergeIndex, 1);
+            break
+          }
+        }
+      }
     },
 
     setColorAt(i, r, g, b, a) {
@@ -3021,10 +3091,9 @@
 
   AFRAME.registerComponent("mesh-particles", {
     schema: {
-      // TODO validate the input types
       duration: { default: -1 },
       instances: { default: "" },
-      spawnRate: { default: "10" },
+      spawnRate: { default: "1" },
       lifeTime: { default: "1" },
       position: { default: "" },
       velocity: { default: "" },
@@ -3041,9 +3110,8 @@
       color: { default: "" },
       rotation: { default: "" },
       opacity: { default: "" },
-      drag: { default: "" },
-      source: { type: "selector" },
-      destination: { type: "selector" },
+      source: { type: "string" },
+      destination: { type: "string" },
       destinationOffset: { type: "vec3" },
       destinationWeight: { type: "number" },
       seed: { type: "int", default: -1 }
@@ -3063,6 +3131,9 @@
 
     remove() {
       this.releaseInstances();
+
+      this.source = undefined;
+      this.destination = undefined;
     },
 
     update(oldData) {
@@ -3099,14 +3170,14 @@
         }
       }
 
-      if (data.target !== oldData.target) {
-        this.target = undefined;
-        if (data.target) {
-          const targetEl = document.querySelector(data.target);
-          if (targetEl && targetEl.object3D) { 
-            this.target = targetEl.object3D;
+      if (data.destination !== oldData.destination) {
+        this.destination = undefined;
+        if (data.destination) {
+          const destinationEl = document.querySelector(data.destination);
+          if (destinationEl && destinationEl.object3D) { 
+            this.destination = destinationEl.object3D;
           } else {
-            warn(`unable to find object3D on target '${data.target}'`); 
+            warn(`unable to find object3D on destination '${data.destination}'`); 
           }
         }
       }
@@ -3135,7 +3206,7 @@
           // this.instanceBlocks = this.instances.map(inst => inst.requestBlock(this.maxParticles))
           // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
           this.instanceIndices = this.instances.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instances.length)) );
-          this.instanceIndices.forEach((index,i) => { if (index === -1) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`); });
+          this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`); });
         }
       }
 
@@ -3162,7 +3233,9 @@
     releaseInstances() {
       this.instances.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]));
       this.instanceIndices.length = 0;
+      this.particles = [];
       this.spawnID = 0;
+      this.spawnCount = 0;
     },
 
     configureRandomizer(id) {
@@ -3177,6 +3250,10 @@
       const particleID = (spawnID % this.maxParticles);
       const instanceIndex = spawnID % this.instances.length;
       const instance = this.instances[instanceIndex];
+      if (this.instanceIndices[instanceIndex] === undefined) {
+        return [undefined, undefined, undefined]
+      }
+
       const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instances.length;
       return [instance, instanceID, particleID]
     },
@@ -3200,26 +3277,32 @@
       newParticle.angularAcc = new THREE.Vector3(0,0,0);
       newParticle.orbitalVel = 0;
       newParticle.orbitalAcc = 0;
-      newParticle.sourcePosition = new THREE.Vector3().copy(this.source.position);
-      newParticle.sourceQuaternion = new THREE.Quaternion().copy(this.source.quaternion);
-      newParticle.sourceScale = new THREE.Vector3().copy(this.source.scale);
+
+      if (this.source) {
+        newParticle.sourcePosition = new THREE.Vector3();
+        newParticle.sourceQuaternion = new THREE.Quaternion();
+        newParticle.sourceScale = new THREE.Vector3();
+        this.source.matrixWorld.decompose(newParticle.sourcePosition, newParticle.sourceQuaternion, newParticle.sourceScale);
+      }
+
       newParticle.lifeTime = randomize(this.lifeTimeRule, random);
-      newParticle.positions = cData.position ? cData.position.map(part => randomize(part, random)) : undefined;
-      newParticle.rotations = cData.rotation ? cData.rotation.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
-      newParticle.scales = cData.scale ? cData.scale.map(part => randomize(part, random)) : undefined;
-      newParticle.colors = cData.color ? cData.color.map(part => randomize(part, random)) : undefined;
-      newParticle.opacities = cData.opacity ? cData.opacity.map(part => randomize(part, random)) : undefined;
       newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2;
       newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI;
-      newParticle.velocities = cData.velocity ? cData.velocity.map(part => randomize(part, random)) : undefined;
-      newParticle.accelerations = cData.acceleration ? cData.acceleration.map(part => randomize(part, random)) : undefined;
-      newParticle.radialPositions = cData.radialPosition ? cData.radialPosition.map(part => randomize(part, random)) : undefined;
-      newParticle.radialVelocities = cData.radialVelocity ? cData.radialVelocity.map(part => randomize(part, random)) : undefined;
-      newParticle.radialAccelerations = cData.radialAcceleration ? cData.radialAcceleration.map(part => randomize(part, random)) : undefined;
-      newParticle.angularVelocities = cData.angularVelocity ? cData.angularVelocity.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
-      newParticle.angularAccelerations = cData.angularAcceleration ? cData.angularAcceleration.map(part => vec3DegToRad( randomize(part, random) )) : undefined;
-      newParticle.orbitalVelocities = cData.orbitalVelocity ? cData.orbitalVelocity.map(part => degToRad$1( randomize(part, random) )) : undefined;
-      newParticle.orbitalAccelerations = cData.orbitalAcceleration ? cData.orbitalAcceleration.map(part => degToRad$1( randomize(part, random) )) : undefined;
+
+      if (cData.position) { newParticle.positions = cData.position.map(part => randomize(part, random)); }
+      if (cData.rotation) { newParticle.rotations = cData.rotation.map(part => vec3DegToRad( randomize(part, random) )); }
+      if (cData.scale) { newParticle.scales = cData.scale.map(part => randomize(part, random)); }
+      if (cData.color) { newParticle.colors = cData.color.map(part => randomize(part, random)); }
+      if (cData.opacity) { newParticle.opacities = cData.opacity.map(part => randomize(part, random)); }
+      if (cData.velocity) { newParticle.velocities = cData.velocity.map(part => randomize(part, random)); }
+      if (cData.acceleration) { newParticle.accelerations = cData.acceleration.map(part => randomize(part, random)); }
+      if (cData.radialPosition) { newParticle.radialPositions = cData.radialPosition.map(part => randomize(part, random)); }
+      if (cData.radialVelocity) { newParticle.radialVelocities = cData.radialVelocity.map(part => randomize(part, random)); }
+      if (cData.radialAcceleration) { newParticle.radialAccelerations = cData.radialAcceleration.map(part => randomize(part, random)); }
+      if (cData.angularVelocity) { newParticle.angularVelocities = cData.angularVelocity.map(part => vec3DegToRad( randomize(part, random) )); }
+      if (cData.angularAcceleration) { newParticle.angularAccelerations = cData.angularAcceleration.map(part => vec3DegToRad( randomize(part, random) )); }
+      if (cData.orbitalVelocity) { newParticle.orbitalVelocities = cData.orbitalVelocity.map(part => degToRad$1( randomize(part, random) )); }
+      if (cData.orbitalAcceleration) { newParticle.orbitalAccelerations = cData.orbitalAcceleration.map(part => degToRad$1( randomize(part, random) )); }
 
       newParticle.orbitalAxis = new THREE.Vector3();
 
@@ -3237,9 +3320,14 @@
       const tempVec3 = new THREE.Vector3(0,0,0);
 
       return function move(dt) {
+        const data = this.data;
 
         for (let id = Math.max(0, this.spawnID - this.maxParticles); id < this.spawnID; id++) {
           const [instance, i, particleID] = this.instanceFromID(id);
+          if (instance === undefined) {
+            continue // no instance available
+          }
+
           const particle = this.particles[particleID];
           const t = particle.age/particle.lifeTime;
           const isFirstFrame = t === 0;
@@ -3322,8 +3410,14 @@
             hasMovement = true;
           }
 
-          if (isFirstFrame || hasMovement) {
+          if (isFirstFrame || hasMovement || this.destination) {
             tempPosition.add( particle.sourcePosition );
+
+            if (this.destination) {
+              tempVec3.copy(data.destinationOffset).applyMatrix4(this.destination.matrixWorld);
+              tempPosition.copy( lerpObject(tempPosition, tempVec3, data.destinationWeight*t) );
+            }
+
             instance.setPositionAt(i, tempPosition.x, tempPosition.y, tempPosition.z);
           }
 
@@ -3344,15 +3438,21 @@
           }
 
           if (particle.rotations && (isFirstFrame || particle.rotations.length > 1)) {
-            tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) );
-            tempQuaternion.setFromEuler(tempEuler);
-            tempQuaternion.premultiply(particle.sourceQuaternion);
+            if (particle.rotations.length > 0) {
+              tempEuler.setFromVector3( this.lerpVector(particle.rotations, t) );
+              tempQuaternion.setFromEuler(tempEuler);
+              tempQuaternion.premultiply(particle.sourceQuaternion);
+            } else {
+              tempQuaternion.copy(particle.sourceQuaternion);
+            }
             instance.setQuaternionAt(i, tempQuaternion.x, tempQuaternion.y, tempQuaternion.z, tempQuaternion.w);
           }
     
           if (particle.scales && (isFirstFrame || particle.scales.length > 1)) {
             tempScale.copy(particle.sourceScale);
-            tempScale.multiply( tempVec3.copy( this.lerpVector(particle.scales, t) ) );
+            if (particle.scales.length > 0) {
+              tempScale.multiply( tempVec3.copy( this.lerpVector(particle.scales, t) ) );
+            }
             instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z);
           }
     
