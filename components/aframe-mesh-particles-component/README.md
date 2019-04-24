@@ -5,6 +5,11 @@
 One of more insantances MUST BE PROVIDED (see the **instances** property) for the particle system to work.
 
 e.g.
+```html
+<a-box id="box" instance="size: 10000" material="transparent:true"></a-box>
+<a-entity mesh-particles="instances: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1,2; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
+```
+Uses the `#box` box mesh instances as particles.  From 5 to 10 particles spawn every second, at a position of 1.5m in a ring around the z axis (default for radial), with an outward velocity of 1 m/s which increases to 2 m/s by the end of the particle's life.  The initial scale is between .4 and 2, and shrinks to .1 at the end of life.  Color starts as red, green or blue and blends to orange over the particle's lifetime.
 
 Multiple components can occur on a single instance
 
