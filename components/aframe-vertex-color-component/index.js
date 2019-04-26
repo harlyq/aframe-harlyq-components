@@ -1,8 +1,16 @@
+// @ts-ignore
+const COLOR_FLOATS_PER_VERTEX = 3
+
+function parseIntArray(str) {
+  return typeof str === "string" ? str.split(",").map(s => parseInt(s, 10)) : str
+}
+
 AFRAME.registerComponent("vertex-color", {
   schema: {
     color: { type: "color" },
-    minVertex: { type: "vec3", default: {x:-1e10, y:-1e10, z:-1e10} }, // top left
-    maxVertex: { type: "vec3", default: {x:1e10, y:1e10, z:1e10} }, // bottom right
+    verts: { type: "array", parse: parseIntArray },
+    minPosition: { type: "vec3", default: {x:-1e10, y:-1e10, z:-1e10} }, // top left
+    maxPosition: { type: "vec3", default: {x:1e10, y:1e10, z:1e10} }, // bottom right
     minSlope: { type: "int", default: 0 }, // absolute slope
     maxSlope: { type: "int", default: 90 }, // absolute slope
     meshName: { default: "mesh" },
@@ -51,25 +59,25 @@ AFRAME.registerComponent("vertex-color", {
       const materialColor = mesh.material.color
 
       material.vertexColors = THREE.VertexColors
+
       if (materialColor.r < .3 && materialColor.g < .3 && materialColor.b < .3) {
         console.warn("material color is very dark, vertex-color will also be dark")
       }
 
       console.assert(geometry.isBufferGeometry, "vertex-color only supports buffer geometry")
 
-      const positions = geometry.getAttribute("position")
-      const normals = geometry.getAttribute("normal")
-      let colors = geometry.getAttribute("color")
-
-      if (positions.count > 0 && !colors) {
-        const whiteColors = new Float32Array(positions.count*3).fill(1)
-        geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, 3))
-        colors = geometry.getAttribute("color")
+      if (!geometry.getAttribute("color")) {
+        const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX).fill(1)
+        geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX))
       }
 
-      // data.min/maxVertex are in the range (0,1), but the X and Z vertices use (-.5,.5)
-      const minX = data.minVertex.x-.5, minY = data.minVertex.y, minZ = data.minVertex.z-.5
-      const maxX = data.maxVertex.x-.5, maxY = data.maxVertex.y, maxZ = data.maxVertex.z-.5
+      const positions = geometry.getAttribute("position")
+      const normals = geometry.getAttribute("normal")
+      const colors = geometry.getAttribute("color")
+
+      // data.min/maxPosition are in the range (0,1), but the X and Z vertices use (-.5,.5)
+      const minX = data.minPosition.x-.5, minY = data.minPosition.y, minZ = data.minPosition.z-.5
+      const maxX = data.maxPosition.x-.5, maxY = data.maxPosition.y, maxZ = data.maxPosition.z-.5
       const col = new THREE.Color(data.color)
       const EPSILON = 0.00001
       const degToRad = THREE.Math.degToRad
@@ -77,34 +85,26 @@ AFRAME.registerComponent("vertex-color", {
       // minSlope will give the largest cos() and vice versa, use EPSILON to counter rounding errors
       const maxSlope = Math.cos(degToRad(Math.max(0, data.minSlope))) + EPSILON
       const minSlope = Math.cos(degToRad(Math.max(0, data.maxSlope))) - EPSILON
-      const vertsPerTriangle = geometry.getIndex() ? 1 : 3
 
-      for (let i = 0, n = colors.count; i < n; i += vertsPerTriangle) {
-        let paintVertex = true
+      for (let i = 0, n = colors.count; i < n; i++) {
 
-        // if any vertex in the triangle fails, then don't paint any of the vertices for this triangle
-        for (let j = 0; j < vertsPerTriangle; j++) {
-          const k = i + j
-          const x = positions.getX(k)
-          const y = positions.getY(k)
-          const z = positions.getZ(k)
-          if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) {
-            paintVertex = false
-            break
-          }
-
-          const slope = Math.abs(normals.getY(k)) // dot(normal,UP)
-          if (slope < minSlope || slope > maxSlope) {
-            paintVertex = false
-            break
-          }  
+        if (data.verts.length > 0 && !data.verts.includes(i)) {
+          continue
         }
 
-        if (paintVertex) {
-          for (let j = 0; j < vertsPerTriangle; j++) {
-            colors.setXYZ(i+j, col.r, col.g, col.b)
-          }
+        const x = positions.getX(i)
+        const y = positions.getY(i)
+        const z = positions.getZ(i)
+        if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) {
+          continue
         }
+
+        const slope = Math.abs(normals.getY(i)) // dot(normal,UP)
+        if (slope < minSlope || slope > maxSlope) {
+          continue
+        }  
+
+        colors.setXYZ(i, col.r, col.g, col.b)
       }
 
       colors.needsUpdate = true

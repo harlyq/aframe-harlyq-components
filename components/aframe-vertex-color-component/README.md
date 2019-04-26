@@ -1,11 +1,16 @@
 # vertex-color
 
-Defines vertex colors for the current geometry.  This is useful when merging geometry as the vertex colors are preserved. Note that the final object color is the material color multiplied by the vertex color, so to ensure the true vertex colors are shown, set the material color to white.  If the vertex-color is not applied, then it will default to the current material color.
+Defines vertex colors for the current geometry.  A vertex is coloured only if it satisfied the position, slope and vertex requirements (see the Properties below).
+
+Note that the final object color is the material color multiplied by the vertex color, so to ensure the true vertex colors are shown, set the material color to white.  If the vertex-color is not applied, then it will default to white (which will be multiplied by the material color to determine the final color).
+
+Vertex colors are useful for merged geometry, because the colors are preserved after the merger.
 
 e.g.
 ```html
 <a-box vertex-color="color: blue"></a-box>
 ```
+Uses vertex colors to make the box blue
 
 This component can appear multiple times on a single entity
 
@@ -21,6 +26,16 @@ The color for the vertices
 The name of the object3D to color
 
 ---
+**minPosition**: vec3 = {x:-1e10, y:-1e10, z:-1e10}
+
+Only paint vertices that have a local position higher than this value. Note positions are relative to the entity, so 0,0,0 is the entities' origin
+
+---
+**maxPosition**: vec3 = {x:1e10, y:1e10, z:1e10}
+
+Only paint vertices that have a local position lower than this value. Note positions are relative to the entity, so 0,0,0 is the entities' origin
+
+---
 **minSlope**: number = 0
 
 Paint vertices if the absolute slope (in degrees) of the triangle is larger than this value. 0 represents a horizontal triangle, and 90 is a vertical triangle
@@ -31,12 +46,6 @@ Paint vertices if the absolute slope (in degrees) of the triangle is larger than
 Paint vertices if the absolute slope (in degrees) of the triangle is smaller than this value. 0 represents a horizontal triangle, and 90 is a vertical triangle
 
 ---
-**minVertex**: vec3 = {x:0, y:0, z:0}
+**verts**: int[] = []
 
-Only paint vertices that are larger than this value.  Note, (0,0,0) represents the bottom left corner and (1,1,1) is the top right corner
-
----
-**maxVertex**: vec3 = {x:0, y:0, z:0}
-
-Only paint vertices that are smaller than this value.  Note, (0,0,0) represents the bottom left corner and (1,1,1) is the top right corner
-
+Only vertices in this list will be colored (provided they meet the slop and position conditions). If the list is empty then all vertices are candidates for coloring.
