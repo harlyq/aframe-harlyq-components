@@ -38,12 +38,12 @@ Only paint vertices that have a local position lower than this value. Note posit
 ---
 **minSlope**: number = 0
 
-Paint vertices if the absolute slope (in degrees) of the triangle is larger than this value. 0 represents a horizontal triangle, and 90 is a vertical triangle
+Paint vertices if the absolute slope (in degrees) of the vertex is larger than this value. 0 represents a horizontal vertex, and 90 is a vertical vertex
 
 ---
 **maxSlope**: number = 0
 
-Paint vertices if the absolute slope (in degrees) of the triangle is smaller than this value. 0 represents a horizontal triangle, and 90 is a vertical triangle
+Paint vertices if the absolute slope (in degrees) of the vertex is smaller than this value. 0 represents a horizontal vertex, and 90 is a vertical vertex
 
 ---
 **verts**: int[] = []
