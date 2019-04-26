@@ -30,16 +30,26 @@
       </a-assets>
       <a-entity id="island"
         procedural-texture__thing="shader: #thingshader; canvas: #thing; multiplier: 3; offset: .1"
-        heightfield="src: #thing; channels: r; numRows: 32; numCols: 32; heightScale: .4" material="color: white; side: double;" position="0 1 -2"
-        vertex-color__land="color: brown"
-        vertex-color__snow="color: grey; maxSlope: 70; minVertex: 0 .3 0"
-        vertex-color__tree="color: green; maxVertex: 1 .1 1; maxSlope: 40"
-        vertex-color__sea="color: blue; maxVertex: 1 0 1"></a-entity>
+        heightfield="src: #thing; channels: r; numRows: 32; numCols: 32; heightScale: .4; smooth: false" material="color: white; side: double;" position="0 1 -2"
+        face-color__ground="color: brown"
+        face-color__snow="color: grey; maxSlope: 70; minPosition: 0 .3 0"
+        face-color__tree="color: green; maxPosition: 1 .1 1; maxSlope: 40"
+        face-color__sea="color: blue; maxPosition: 1 0 1"></a-entity>
       <a-box material="src: #thing; color: grey;" scale=".1 .1 .1" position="0 1 -1"></a-box>
+
+      <a-entity id="smoothIsland"
+        position="1.5 1 -2"
+        procedural-texture__thing="shader: #thingshader; canvas: #thing; multiplier: 3; offset: .1"
+        heightfield="src: #thing; channels: r; numRows: 32; numCols: 32; heightScale: .4; smooth: true" material="color: white; side: double;" position="0 1 -2"
+        vertex-color__ground="color: brown"
+        vertex-color__snow="color: grey; maxSlope: 70; minPosition: 0 .3 0"
+        vertex-color__tree="color: green; maxPosition: 1 .1 1; maxSlope: 40"
+        vertex-color__sea="color: blue; maxPosition: 1 0 1"></a-entity>
+      <a-box material="src: #thing; color: grey;" scale=".1 .1 .1" position="1.5 1 -1"></a-box>
 
       <a-entity id="test"
         procedural-texture__ramp="shader: #rampshader; canvas: #ramp;"
-        heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32"
+        heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32; smooth: true"
         material="wireframe: true; side: double; src: #ramp"
         position="-1.5 1 -2"></a-entity>
       <a-box material="src: #ramp;" scale=".1 .1 .1" position="-1.5 1 -1"></a-box>
