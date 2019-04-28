@@ -3,6 +3,175 @@
   factory();
 }(function () { 'use strict';
 
+  // @ts-ignore
+  const UP_VECTOR = new THREE.Vector3(0,1,0);
+  const MAX_HISTORY_LENGTH = 3;
+
+  AFRAME.registerSystem("arm-swinger", {
+    schema: {
+      left: { type: "selector" },
+      right: { type: "selector" },
+      startEvent: { default: "gripdown" },
+      endEvent: { default: "gripup"},
+      cameraRig: { type: "selector" },
+      scaling: { default: 1 },
+      enable: { default: true },
+    },
+
+    init() {
+      this.onStartEvent = this.onStartEvent.bind(this);
+      this.onEndEvent = this.onEndEvent.bind(this);
+      this.tick = AFRAME.utils.throttleTick(this.tick, 100, this);
+
+      this.newOffset = new THREE.Vector3();
+      this.isMoving = false;
+      this.isEnabled = false;
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      this.left = { hand: data.left, positions: [], forwards: [] };
+      this.right = { hand: data.right, positions: [], forwards: [] };
+
+      if (oldData.enable !== data.enable) {
+        if (data.enable) {
+          this.enable();
+        } else {
+          this.disable();
+        }
+      }
+    },
+
+    play() {
+      if (this.data.enable) {
+        this.enable();
+      }
+    },
+
+    pause() {
+      this.disable();
+    },
+
+    tick(time, deltaTime) {
+      const data = this.data;
+      const dt = deltaTime*0.001;
+
+      let [dLeft, forwardLeft] = this.tickHand(this.left);
+      let [dRight, forwardRight] = this.tickHand(this.right);
+
+      this.isMoving = false;
+      if (forwardLeft || forwardRight) {
+        this.newOffset.set(0,0,0);
+        let d = 0;
+
+        if (forwardLeft) {
+          this.newOffset.add(forwardLeft);
+          d = Math.max(d, dLeft);
+        }
+
+        if (forwardRight) {
+          this.newOffset.add(forwardRight);
+          d = Math.max(d, dRight);
+        }
+
+        this.newOffset.y = 0;
+        this.newOffset.normalize().multiplyScalar(-data.scaling*d*dt);
+        this.isMoving = true;
+      }
+    },
+
+    tock() {
+      // positioning the camera in the tock because the tick is throttled
+      if (this.data.cameraRig && this.data.cameraRig.object3D && this.isMoving) {
+        this.data.cameraRig.object3D.position.add(this.newOffset);
+      }
+    },
+
+    enable() {
+      if (!this.isEnabled) {
+        this.addListeners(this.left.hand);
+        this.addListeners(this.right.hand);
+        this.isEnabled = true;
+      }
+    },
+
+    disable() {
+      if (this.isEnabled) {
+        this.left.active = false;
+        this.right.active = false;
+        this.removeListeners(this.left.hand);
+        this.removeListeners(this.right.hand);
+        this.isEnabled = false;
+      }
+    },
+
+    onStartEvent(e) {
+      if (e.target == this.left.hand) {
+        this.activate(this.left);
+      } else if (e.target == this.right.hand) {
+        this.activate(this.right);
+      }
+    },
+
+    onEndEvent(e) {
+      if (e.target == this.left.hand) {
+        this.left.active = false;
+      } else if (e.target == this.right.hand) {
+        this.right.active = false;
+      }
+    },
+
+    addListeners(hand) {
+      if (hand) {
+        hand.addEventListener(this.data.startEvent, this.onStartEvent);
+        hand.addEventListener(this.data.endEvent, this.onEndEvent);
+      }
+    },
+
+    removeListeners(hand) {
+      if (hand) {
+        hand.removeEventListener(this.data.startEvent, this.onStartEvent);
+        hand.removeEventListener(this.data.endEvent, this.onEndEvent);
+      }
+    },
+
+    activate(side) {
+      side.active = true;
+      side.positions = [];
+      side.forwards = [];
+    },
+
+    tickHand(side) {
+      if (!side.hand || !side.active) {
+        return [undefined, undefined]
+      }
+
+      let position;
+      let forward;
+      if (side.positions.length >= MAX_HISTORY_LENGTH) {
+        position = side.positions.shift(); // reuse the matrix from the first entry
+        forward = side.forwards.shift();
+      } else {
+        position = new THREE.Vector3();
+        forward = new THREE.Vector3();
+      }
+      const handMatrixWorld = side.hand.object3D.matrixWorld;
+      side.positions.push( position.setFromMatrixPosition(handMatrixWorld) );
+      side.forwards.push( forward.setFromMatrixColumn(handMatrixWorld, 0).cross(UP_VECTOR) );
+
+      let distance = 0;
+      const n = side.positions.length;
+      for (let i = 1; i < n; i++) {
+        distance += side.positions[i].distanceTo(side.positions[i-1]);
+      }
+
+      // console.log("distance", distance.toFixed(2), "forward", forward.x.toFixed(2), forward.y.toFixed(2), forward.z.toFixed(2))
+      return [distance, forward]
+    }  
+
+  });
+
   // Copyright 2018-2019 harlyq
   // MIT license
 
@@ -165,96 +334,6 @@
     },
   });
 
-  // Copyright 2018-2019 harlyq
-  // MIT license
-
-  let cloneID = 0;
-
-  AFRAME.registerComponent("clone-entity", {
-    schema: {
-      type: "selector",
-    },
-    multiple: true,
-
-    update() {
-      const idPostFix = "_clone";
-      const template = this.data;
-      let cloneEl = document.importNode(template instanceof HTMLTemplateElement ? template.content : template, true);
-
-      const makeUniqueIDs = el => {
-        if (el.id) el.id += idPostFix + cloneID;
-        el.children.forEach(makeUniqueIDs);
-      };
-      makeUniqueIDs(cloneEl);
-
-      this.el.appendChild(cloneEl);
-      cloneID++;
-    }
-  });
-
-  // Copyright 2018-2019 harlyq
-  // MIT license
-
-  AFRAME.registerComponent("clone-geometry", {
-    schema: {
-      src: { type: "selector" },
-    },
-
-    init() {
-      this.onObject3DSet = this.onObject3DSet.bind(this); // used for models which may have a delay before loading
-    },
-
-    update(oldData) {
-      if (this.data.src !== oldData.src) {
-        if (oldData instanceof HTMLElement) { oldData.removeEventListener("object3dset", this.onObject3DSet); }
-
-        const template = this.data.src;
-        if (template instanceof HTMLElement && 'object3D' in template) {
-          this.cloneObject3D(template);
-          // @ts-ignore
-          template.addEventListener("object3dset", this.onObject3DSet);
-        }
-      }
-    },
-
-    onObject3DSet(evt) {
-      if (evt.target === this.data.src && evt.detail.type) {
-        this.cloneObject3D(this.data.src);
-      }
-    },
-
-    cloneObject3D(from) {
-      const object3D = this.el.object3D;
-      for (let k in this.el.object3DMap) {
-        this.el.removeObject3D(k);
-      }
-      while (object3D.children.length > 0) {
-        object3D.remove(object3D.children[0]);
-      }
-
-      function getObjectName(obj3D) {
-        for (let k in from.object3DMap) {
-          if (obj3D === from.object3DMap[k]) {
-            return k
-          }
-        }
-        return undefined
-      }
-
-      for (let i = 0; i < from.object3D.children.length; i++) {
-        const child = from.object3D.children[i];
-        const name = getObjectName(child);
-        if (name) {
-          // if the object is in the aframe object map then add it via aframe
-          this.el.setObject3D(name, child.clone());
-        } else {
-          // otherwise add it via threejs
-          object3D.add(child.clone());
-        }
-      }
-    },
-  });
-
   /**
    * @typedef {{x: number, y: number, z: number}} VecXYZ
    * @typedef {{x: number, y: number, z: number, w: number}} QuatXYZW
@@ -276,6 +355,55 @@
 
   /** @type {VecXYZ} */
   const UNIT_Z = Object.freeze({x: 0, y: 0, z: 1});
+
+  // out = a - b
+  /** @type {<T extends VecXYZ, TA extends VecXYZ, TB extends VecXYZ>(out: T, a: TA, b: TB) => T} */
+  function sub(out, a, b) {
+    out.x = a.x - b.x;
+    out.y = a.y - b.y;
+    out.z = a.z - b.z;
+    return out
+  }
+
+  // elementwise divide
+  /** @type {<T extends VecXYZ, TA extends VecXYZ, TB extends VecXYZ>(out: T, a: TA, b: TB) => T} */
+  function divide(out, a, b) {
+    out.x = a.x/b.x;
+    out.y = a.y/b.y;
+    out.z = a.z/b.z;
+    return out
+  }
+
+  /** @type {<T extends VecXYZ, TA extends VecXYZ, TQ extends QuatXYZW>(out: T, a: TA, q: TQ) => T} */
+  function transformQuaternion(out, a, q) {
+    const ax = a.x, ay = a.y, az = a.z;
+    const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+
+    // gl-matrix vec3.transformQuat() implementation
+    // var qvec = [qx, qy, qz];
+    // var uv = vec3.cross([], qvec, a);
+    let uvx = qy * az - qz * ay;
+    let uvy = qz * ax - qx * az;
+    let uvz = qx * ay - qy * ax;
+    // var uuv = vec3.cross([], qvec, uv);
+    let uuvx = qy * uvz - qz * uvy;
+    let uuvy = qz * uvx - qx * uvz;
+    let uuvz = qx * uvy - qy * uvx;
+    // vec3.scale(uv, uv, 2 * w);
+    const w2 = qw * 2;
+    uvx *= w2;
+    uvy *= w2;
+    uvz *= w2;
+    // vec3.scale(uuv, uuv, 2);
+    uuvx *= 2;
+    uuvy *= 2;
+    uuvz *= 2;
+    // return vec3.add(out, a, vec3.add(out, uv, uuv));
+    out.x = ax + uvx + uuvx;
+    out.y = ay + uvy + uuvy;
+    out.z = az + uvz + uuvz;
+    return out
+  }
 
   /**
    * @typedef {{x: number, y: number, z: number, w: number}} QuatXYZW
@@ -304,6 +432,15 @@
 
   /** @type {QuatXYZW} */
   const ROTATE_Z_90 = Object.freeze({x:0, y:0, z:SQRT_1_2, w:SQRT_1_2});
+
+  /** @type {<T extends QuatXYZW, TA extends QuatXYZW>(out: T, a: TA) => T} */
+  function conjugate(out, a) {
+    out.x = -a.x;
+    out.y = -a.y;
+    out.z = -a.z;
+    out.w = a.w;
+    return out
+  }
 
   /** @type {<T extends QuatXYZW>(out: T, aff: Affine4) => T} */
   function setFromUnscaledAffine4(out, aff) {
@@ -1341,6 +1478,26 @@
     }
   })();
 
+  /** @typedef {<AC extends VecXYZ, BN extends VecXYZ, BX extends VecXYZ, PB extends VecXYZ, QB extends QuatXYZW, SB extends VecXYZ>(sphereACenter: AC, sphereARadius: Distance, boxBMin: BN, boxBMax: BX, posB: PB, quatB: QB, scaleB: SB) => boolean} SphereWithBoxFn */
+  /** @type {SphereWithBoxFn} */
+  const sphereWithBox = (function() {
+    let vertA = {x:0,y:0,z:0};
+    let invQuatB = {x:0,y:0,z:0,w:1};
+    const square = (x) => x*x;
+
+    return /** @type {SphereWithBoxFn} */function sphereWithBox(sphereACenter, sphereARadius, boxBMin, boxBMax, posB, quatB, scaleB) {
+      // map sphere into boxB space
+      conjugate( invQuatB, quatB );
+      transformQuaternion( vertA, divide( vertA, sub(vertA, sphereACenter, posB), scaleB ), invQuatB );
+      
+      let distanceSq = 
+        (vertA.x < boxBMin.x ? square(boxBMin.x - vertA.x) : vertA.x > boxBMax.x ? square(vertA.x - boxBMax.x) : 0) + 
+        (vertA.y < boxBMin.y ? square(boxBMin.y - vertA.y) : vertA.y > boxBMax.y ? square(vertA.y - boxBMax.y) : 0) + 
+        (vertA.z < boxBMin.z ? square(boxBMin.z - vertA.z) : vertA.z > boxBMax.z ? square(vertA.z - boxBMax.z) : 0);
+      return distanceSq < sphereARadius*sphereARadius
+    }
+  })();
+
   // Breaks a selector string into {type, id, classes, attrs}
   /** @type { (str: string) => {type: string, id: string, classes: string[], attrs: {[key: string]: string}} } */
   function parse$2(str) {
@@ -1456,19 +1613,21 @@
         return ext
       }
 
-      // HACK we force the worldmatrix to identity for the object, so we can get a bounding box
-      // based around the origin
+      // HACK we force the worldmatrix to identity for the object and remmove the parent
+      // so we can get a bounding box based around the origin
       tempPosition.copy(object3D.position);
       tempQuaternion.copy(object3D.quaternion);
       tempScale.copy(object3D.scale);
+      const tempParent = object3D.parent;
 
+      object3D.parent = null;
       object3D.position.set(0,0,0);
       object3D.quaternion.set(0,0,0,1);
       object3D.scale.set(1,1,1);
 
       tempBox3.setFromObject(object3D); // expensive for models
-      // ext.setFromObject(object3D) // expensive for models
 
+      object3D.parent = tempParent;
       object3D.position.copy(tempPosition);
       object3D.quaternion.copy(tempQuaternion);
       object3D.scale.copy(tempScale);
@@ -1731,6 +1890,296 @@
        return path;
    }
 
+  function volume$1(ext) {
+    return (ext.max.x - ext.min.x)*(ext.max.y - ext.min.y)*(ext.max.z - ext.min.z)
+  }
+
+  AFRAME.registerSystem("climb", {
+    schema: {
+      left: { type: "selector" },
+      right: { type: "selector" },
+      startEvent: { default: "triggerdown" },
+      endEvent: { default: "triggerup"},
+      cameraRig: { type: "selector" },
+      enable: { default: true },
+      climbables: { default: "" },
+      debug: { default: false },
+    },
+
+    init() {
+      this.onStartEvent = this.onStartEvent.bind(this);
+      this.onEndEvent = this.onEndEvent.bind(this);
+
+      this.climbables = [];
+      this.isEnabled = false;
+      this.grab = { hand: undefined, target: undefined, position: new THREE.Vector3() };
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      this.grab.hand = undefined;
+
+      if (oldData.startEvent !== data.startEvent || oldData.endEvent !== data.endEvent) {
+        if (this.isEnabled) {
+          this.disable();
+          this.enable();
+        }
+      }
+
+      if (oldData.climbables !== data.climbables) {
+        this.climbables = data.climbables ? document.querySelectorAll(data.climbables) : [];
+      }
+
+      if (oldData.enable !== data.enable) {
+        if (data.enable) {
+          this.enable();
+        } else {
+          this.disable();
+        }
+      }
+    },
+
+    tick: (function() {
+      let deltaPosition = new THREE.Vector3();
+
+      return function tick() {
+        if (this.grab.hand && this.grab.target) {
+          const data = this.data;
+          const rig = data.cameraRig ? data.cameraRig.object3D : undefined;
+      
+          if (rig) {
+            this.grab.hand.object3D.getWorldPosition(deltaPosition).sub(this.grab.position);
+            rig.position.sub(deltaPosition);
+          }
+        }
+      }
+    })(),
+
+    play() {
+      if (this.data.enable) {
+        this.enable();
+      }
+    },
+
+    pause() {
+      this.disable();
+    },
+
+    enable() {
+      if (!this.isEnabled) {
+        this.addListeners(this.data.left);
+        this.addListeners(this.data.right);
+        this.isEnabled = true;
+      }
+    },
+
+    disable() {
+      if (this.isEnabled) {
+        this.grab.hand = undefined;
+        this.removeListeners(this.data.left);
+        this.removeListeners(this.data.right);
+        this.isEnabled = false;
+      }
+    },
+
+    onStartEvent(e) {
+      const data = this.data;
+      if (e.target == data.left) {
+        this.attemptGrab(data.left);
+      } else if (e.target == data.right) {
+        this.attemptGrab(data.right);
+      }
+    },
+
+    onEndEvent(e) {
+      if (e.target == this.grab.hand) {
+        this.grab.hand = undefined;
+      }
+    },
+
+    addListeners(hand) {
+      if (hand) {
+        hand.addEventListener(this.data.startEvent, this.onStartEvent);
+        hand.addEventListener(this.data.endEvent, this.onEndEvent);
+      }
+    },
+
+    removeListeners(hand) {
+      if (hand) {
+        hand.removeEventListener(this.data.startEvent, this.onStartEvent);
+        hand.removeEventListener(this.data.endEvent, this.onEndEvent);
+      }
+    },
+
+    attemptGrab: (function () {
+      const tempA = new THREE.Vector3();
+      const handSphereWorld = new THREE.Vector3();
+
+      return function attemptGrab(hand) {
+        const hand3D = hand.object3D;
+        if (!hand3D) {
+          return
+        }
+    
+        if (!hand3D.boundingSphere || hand3D.boundingSphere.empty()) {
+          this.generateBoundingBox(hand3D, this.data.debug);
+        }
+
+        handSphereWorld.copy(hand3D.boundingSphere.center).applyMatrix4(hand3D.matrixWorld);
+        // console.log("handSphereWorld", handSphereWorld.x, handSphereWorld.y, handSphereWorld.z)
+    
+        const handSphere = hand3D.boundingSphere;
+        let grabbed = undefined;
+        let minScore = Number.MAX_VALUE;
+    
+        for (let climbable of this.climbables) {
+          // console.log("attemptGrab", climbable.id)
+          const climbable3D = climbable.object3D;
+    
+          if (!climbable3D.boundingSphere || climbable3D.boundingSphere.empty()) {
+            // console.log("attemptGrab no sphere")
+            this.generateBoundingBox(climbable3D, this.data.debug);
+          }
+    
+          tempA.copy(climbable3D.boundingSphere.center).applyMatrix4(climbable3D.matrixWorld);
+          
+          if (tempA.distanceTo(handSphereWorld) > climbable3D.boundingSphere.radius + handSphere.radius) {
+            // console.log("attemptGrab too far sphere")
+            continue // spheres not overlapping
+          }
+    
+          if (!sphereWithBox(handSphereWorld, handSphere.radius, climbable3D.boundingBox.min, climbable3D.boundingBox.max, climbable3D.position, climbable3D.quaternion, climbable3D.scale)) {
+            // console.log("attemptGrab too far box")
+            continue
+          }
+    
+          const score = volume$1(climbable3D.boundingBox);
+          if (score < minScore) {
+            minScore = score; // the smallest volume wins
+            grabbed = climbable;
+          }
+        }
+    
+        if (grabbed) {
+          // console.log("grabbed", hand3D.el.id, grabbed.id)
+          this.grab.hand = hand3D.el;
+          this.grab.target = grabbed;
+          this.grab.hand.object3D.getWorldPosition(this.grab.position);
+        }
+      }
+    
+    })(),
+
+    generateBoundingBox(obj3D, showDebug = false) {
+      // cache boundingBox and boundingSphere
+      obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3();
+      obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere();
+      setFromObject3D(obj3D.boundingBox, obj3D);
+
+      if (!obj3D.boundingBox.isEmpty()) {
+        obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere);
+
+        if (showDebug) {
+          obj3D.boundingBoxDebug = new THREE.Box3Helper(obj3D.boundingBox);
+          obj3D.boundingBoxDebug.name = "simpleHandsDebug";
+          obj3D.add(obj3D.boundingBoxDebug);
+        }
+      }
+    },
+
+  });
+
+  // Copyright 2018-2019 harlyq
+  // MIT license
+
+  let cloneID = 0;
+
+  AFRAME.registerComponent("clone-entity", {
+    schema: {
+      type: "selector",
+    },
+    multiple: true,
+
+    update() {
+      const idPostFix = "_clone";
+      const template = this.data;
+      let cloneEl = document.importNode(template instanceof HTMLTemplateElement ? template.content : template, true);
+
+      const makeUniqueIDs = el => {
+        if (el.id) el.id += idPostFix + cloneID;
+        el.children.forEach(makeUniqueIDs);
+      };
+      makeUniqueIDs(cloneEl);
+
+      this.el.appendChild(cloneEl);
+      cloneID++;
+    }
+  });
+
+  // Copyright 2018-2019 harlyq
+  // MIT license
+
+  AFRAME.registerComponent("clone-geometry", {
+    schema: {
+      src: { type: "selector" },
+    },
+
+    init() {
+      this.onObject3DSet = this.onObject3DSet.bind(this); // used for models which may have a delay before loading
+    },
+
+    update(oldData) {
+      if (this.data.src !== oldData.src) {
+        if (oldData instanceof HTMLElement) { oldData.removeEventListener("object3dset", this.onObject3DSet); }
+
+        const template = this.data.src;
+        if (template instanceof HTMLElement && 'object3D' in template) {
+          this.cloneObject3D(template);
+          // @ts-ignore
+          template.addEventListener("object3dset", this.onObject3DSet);
+        }
+      }
+    },
+
+    onObject3DSet(evt) {
+      if (evt.target === this.data.src && evt.detail.type) {
+        this.cloneObject3D(this.data.src);
+      }
+    },
+
+    cloneObject3D(from) {
+      const object3D = this.el.object3D;
+      for (let k in this.el.object3DMap) {
+        this.el.removeObject3D(k);
+      }
+      while (object3D.children.length > 0) {
+        object3D.remove(object3D.children[0]);
+      }
+
+      function getObjectName(obj3D) {
+        for (let k in from.object3DMap) {
+          if (obj3D === from.object3DMap[k]) {
+            return k
+          }
+        }
+        return undefined
+      }
+
+      for (let i = 0; i < from.object3D.children.length; i++) {
+        const child = from.object3D.children[i];
+        const name = getObjectName(child);
+        if (name) {
+          // if the object is in the aframe object map then add it via aframe
+          this.el.setObject3D(name, child.clone());
+        } else {
+          // otherwise add it via threejs
+          object3D.add(child.clone());
+        }
+      }
+    },
+  });
+
   AFRAME.registerComponent("extrude", {
     schema: {
       shape: { default: "" },
@@ -1752,6 +2201,179 @@
       const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
       this.el.setObject3D("mesh", mesh);
     }
+  });
+
+  // @ts-ignore
+  const COLOR_FLOATS_PER_VERTEX = 3;
+  const VERTICES_PER_TRIANGLE = 3;
+
+  function parseIntArray(str) {
+    return typeof str === "string" ? str.split(",").map(s => parseInt(s, 10)) : str
+  }
+
+  AFRAME.registerComponent("face-color", {
+    schema: {
+      color: { type: "color" },
+      faces: { type: "array", parse: parseIntArray },
+      minPosition: { type: "vec3", default: {x:-1e10, y:-1e10, z:-1e10} }, // top left
+      maxPosition: { type: "vec3", default: {x:1e10, y:1e10, z:1e10} }, // bottom right
+      minSlope: { type: "int", default: 0 }, // absolute slope
+      maxSlope: { type: "int", default: 90 }, // absolute slope
+      meshName: { default: "mesh" },
+    },
+    multiple: true,
+
+    init() {
+      this.onObject3DSet = this.onObject3DSet.bind(this);
+      this.el.addEventListener("object3dset", this.onObject3DSet);
+      this.isFirstFrame = true;
+      this.applyingFaceColors = false;
+    },
+
+    remove() {
+      this.el.removeEventListener("object3dset", this.onObject3DSet);
+    },
+
+    update() {
+      if (this.isFirstFrame) {
+        this.applyFaceColors();
+        this.isFirstFrame = false;
+      } else {
+        // if only one of the vertex color components on an element is updated i.e. via the 
+        // Inspector, then need to update all of them in-order so that the colors are applied
+        // correctly
+        const selfComponents = this.el.components;
+        for (let name in selfComponents) {
+          if (name.indexOf("face-color") === 0) {
+            selfComponents[name].applyFaceColors();
+          }
+        }
+      }
+    },
+
+    onObject3DSet(e) {
+      if (e.target === this.el && e.detail.type === this.data.meshName) {
+        this.applyFaceColors();
+      }
+    },
+
+    applyFaceColors() {
+      const data = this.data;
+      const mesh = this.el.getObject3D(data.meshName);
+
+      if (mesh && !this.applyingFaceColors) {
+        let geometry = mesh.geometry;
+        let rebuildMesh = false;
+
+        const materialColor = mesh.material.color;
+        if (materialColor.r < .3 && materialColor.g < .3 && materialColor.b < .3) {
+          console.warn("material color is very dark, face-color will also be dark");
+        }
+
+        if (geometry.isInstancedBufferGeometry) {
+          console.warn("face-color does not support InstancedBufferGeometry");
+          return
+        }
+
+        this.applyingFaceColors = true; // don't reapply colors if we are in the process of applying colors
+
+        if (geometry.isGeometry) {
+          geometry = new THREE.BufferGeometry().copy(geometry);
+          rebuildMesh = true;
+        }
+
+        if (geometry.index) {
+          geometry = geometry.toNonIndexed();
+          rebuildMesh = true;
+        }
+
+        if (!geometry.getAttribute("color")) {
+          const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX).fill(1);
+          geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX));
+        }
+
+        // if (!geometry.getAttribute("color")) {
+        //   this.allocateVertexColors(geometry, mesh.material.color)
+        // }
+
+        const positions = geometry.getAttribute("position");
+        const normals = geometry.getAttribute("normal");
+        const colors = geometry.getAttribute("color");
+
+        // data.min/maxPosition are in the range (0,1), but the X and Z vertices use (-.5,.5)
+        const minX = data.minPosition.x-.5, minY = data.minPosition.y, minZ = data.minPosition.z-.5;
+        const maxX = data.maxPosition.x-.5, maxY = data.maxPosition.y, maxZ = data.maxPosition.z-.5;
+        const col = new THREE.Color(data.color);
+        const EPSILON = 0.00001;
+        const degToRad = THREE.Math.degToRad;
+
+        // minSlope will give the largest cos() and vice versa, use EPSILON to counter rounding errors
+        const maxSlope = Math.cos(degToRad(Math.max(0, data.minSlope))) + EPSILON;
+        const minSlope = Math.cos(degToRad(Math.max(0, data.maxSlope))) - EPSILON;
+        
+        for (let i = 0, n = colors.count, faceIndex = 0; i < n; i += VERTICES_PER_TRIANGLE, faceIndex++) {
+          let paintTriangle = false;
+
+          if (data.faces.includes(faceIndex)) {
+            paintTriangle = true;
+          } else {
+            paintTriangle = true;
+
+            // if any vertex in the triangle fails, then DO NOT paint any of the vertices for this triangle
+            for (let j = 0; j < VERTICES_PER_TRIANGLE; j++) {
+              const k = i + j;
+              const x = positions.getX(k);
+              const y = positions.getY(k);
+              const z = positions.getZ(k);
+              if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) {
+                paintTriangle = false;
+                break
+              }
+
+              const slope = Math.abs(normals.getY(k)); // dot(normal,UP)
+              if (slope < minSlope || slope > maxSlope) {
+                paintTriangle = false;
+                break
+              }  
+            }
+          } 
+
+          if (paintTriangle) {
+            for (let j = 0; j < VERTICES_PER_TRIANGLE; j++) {
+              colors.setXYZ(i+j, col.r, col.g, col.b);
+            }
+          }
+        }
+
+        colors.needsUpdate = true;
+
+        const material = mesh.material;
+        material.vertexColors = THREE.VertexColors;
+        material.color.setRGB(1,1,1);
+
+        if (rebuildMesh) {
+          console.info(`face-color rebuilding mesh '${data.meshName}'`);
+          const newMesh = new THREE.Mesh(geometry, material);
+          this.el.setObject3D(data.meshName, newMesh);
+        }
+
+        this.applyingFaceColors = false;
+      }
+    },
+
+    // allocateVertexColors(geometry, defaultColor) {
+    //   const positions = geometry.getAttribute("position")
+    //   const newColors = new Float32Array(positions.count*COLOR_FLOATS_PER_VERTEX)
+
+    //   for (let i = 0; i < positions.count; i++) {
+    //     const j = i*COLOR_FLOATS_PER_VERTEX
+    //     newColors[j] = defaultColor.r
+    //     newColors[j+1] = defaultColor.g
+    //     newColors[j+2] = defaultColor.b
+    //   }
+
+    //   geometry.addAttribute("color", new THREE.Float32BufferAttribute(newColors, COLOR_FLOATS_PER_VERTEX))
+    // },
   });
 
   // Copyright 2019 harlyq
@@ -1844,6 +2466,7 @@
       numCols: { type: "int", default: 32 },
       heightScale: { default: .2 },
       channels: { default: "rgb", oneOf: Object.keys(CHANNEL_MULTIPLIERS) },
+      smooth: { default: false }
     },
 
     init() {
@@ -1858,7 +2481,7 @@
 
       if (oldData.src !== data.src) {
         this.loadTexture(data.src);
-      } else if (oldData.numRows !== data.numRows || oldData.numCols !== data.numCols) {
+      } else if (oldData.numRows !== data.numRows || oldData.numCols !== data.numCols || oldData.smooth !== data.smooth) {
         this.createHeightfield(this.image);
       } else if (oldData.heightScale !== data.heightScale || oldData.channels !== data.channels) {
         // check the object3D mesh to ensure we still control it
@@ -1898,42 +2521,52 @@
 
       const numRows = this.data.numRows;
       const numCols = this.data.numCols;
+      let geometry;
 
-      // const geometry = new THREE.PlaneBufferGeometry(1, 1, numCols - 1, numRows - 1)
-      const numCells = numCols*numRows;
-      const numVerts = numCells*VERTS_PER_CELL;
-      const geometry = new THREE.BufferGeometry();
-      const vertices = new Float32Array(numVerts*3);
-      const normals = new Float32Array(numVerts*3);
-      const uvs = new Float32Array(numVerts*2);
+      if (this.data.smooth) {
 
-      // (x,y)a--b  triangles are *bad* and *cda*
-      //      |\ |  vertices are *badcda*
-      //      | \|  indices are 0-2=b, 3-5=a, 6-8=d, 9-11=c, 12-14=d, 15-17=a
-      //      c--d  ax=3,15 az=5,17 bx=0 bz=2 cx=9 cz=11 dx=6,12 dz=8,14
+        geometry = new THREE.PlaneBufferGeometry(1, 1, numCols, numRows);
+        geometry.applyMatrix( new THREE.Matrix4().set(1,0,0,0, 0,0,-1,0, 0,-1,0,0, 0,0,0,1) ); // rotate -90 about x
 
-      for (let z = 0; z < numRows; z++) {
-        for (let x = 0; x < numCols; x++) {
-          const i = (z*numCols + x)*VERTS_PER_CELL*3;
-          const j = (z*numCols + x)*VERTS_PER_CELL*2;
-          const minU = x/numCols, maxU = (x+1)/numCols;
-          const minV = z/numRows, maxV = (z+1)/numRows;
+      } else {
 
-          vertices[i+3] = vertices[i+9] = vertices[i+15] = minU - .5; // ax,cx
-          vertices[i+2] = vertices[i+5] = vertices[i+17] = minV - .5; // az,bz
-          vertices[i+0] = vertices[i+6] = vertices[i+12] = maxU - .5; // bx,dx
-          vertices[i+8] = vertices[i+11] = vertices[i+14] = maxV - .5; // cz,dz
-
-          uvs[j+2] = uvs[j+6] = uvs[j+10] = minU;
-          uvs[j+1] = uvs[j+3] = uvs[j+11] = 1 - minV;
-          uvs[j+0] = uvs[j+4] = uvs[j+8] = maxU;
-          uvs[j+5] = uvs[j+7] = uvs[j+9] = 1 - maxV;
+        const numCells = numCols*numRows;
+        const numVerts = numCells*VERTS_PER_CELL;
+        const vertices = new Float32Array(numVerts*3);
+        const normals = new Float32Array(numVerts*3);
+        const uvs = new Float32Array(numVerts*2);
+    
+        geometry = new THREE.BufferGeometry();
+    
+        // (x,y)a--b  triangles are *bad* and *cda*
+        //      |\ |  vertices are *badcda*
+        //      | \|  indices are 0-2=b, 3-5=a, 6-8=d, 9-11=c, 12-14=d, 15-17=a
+        //      c--d  ax=3,15 az=5,17 bx=0 bz=2 cx=9 cz=11 dx=6,12 dz=8,14
+    
+        for (let z = 0; z < numRows; z++) {
+          for (let x = 0; x < numCols; x++) {
+            const i = (z*numCols + x)*VERTS_PER_CELL*3;
+            const j = (z*numCols + x)*VERTS_PER_CELL*2;
+            const minU = x/numCols, maxU = (x+1)/numCols;
+            const minV = z/numRows, maxV = (z+1)/numRows;
+    
+            vertices[i+3] = vertices[i+9] = vertices[i+15] = minU - .5; // ax,cx
+            vertices[i+2] = vertices[i+5] = vertices[i+17] = minV - .5; // az,bz
+            vertices[i+0] = vertices[i+6] = vertices[i+12] = maxU - .5; // bx,dx
+            vertices[i+8] = vertices[i+11] = vertices[i+14] = maxV - .5; // cz,dz
+    
+            uvs[j+2] = uvs[j+6] = uvs[j+10] = minU;
+            uvs[j+1] = uvs[j+3] = uvs[j+11] = 1 - minV;
+            uvs[j+0] = uvs[j+4] = uvs[j+8] = maxU;
+            uvs[j+5] = uvs[j+7] = uvs[j+9] = 1 - maxV;
+          }
         }
-      }
+    
+        geometry.addAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.addAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        geometry.addAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
 
-      geometry.addAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      geometry.addAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-      geometry.addAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      }
 
       const oldMesh = this.el.getObject3D("mesh");
       this.mesh = new THREE.Mesh(geometry, oldMesh ? oldMesh.material : new THREE.MeshBasicMaterial());
@@ -1997,50 +2630,56 @@
         }
       }
 
-      // these values are for cells
-      for (let z = 0; z < numRows; z++) {
-        for (let x = 0; x < numCols; x++) {
-          const i = x + z*(numCols+1); // points
-          const j = x + z*numCols; // cells
-          const k = j*VERTS_PER_CELL; // verts
-          const heightA = heights[i];
-          const heightB = heights[i + 1];
-          const heightC = heights[i + numCols + 1];
-          const heightD = heights[i + numCols + 2];
-          const midHeight = midHeights[j];
-          const minU = x/numCols;
-          const maxU = (x + 1)/numCols;
+      if (this.data.smooth) {
 
-          positions.setY(k, heightB);
-          positions.setY(k+1, heightA);
-          positions.setY(k+3, heightC);
-          positions.setY(k+4, heightD);
+        for (let i = 0; i < positions.count; i++) {
+          positions.setY(i, heights[i]);
+        }
 
-          // cut the square in the direction which is closest to the image midpoint height, this lessens the
-          // ridged values artefact.  Just set the U because the V doesn't change
-          if (Math.abs((heightA + heightD)*.5 - midHeight) > Math.abs((heightC + heightB)*.5 - midHeight)) {
-            // switch to *baccdb*
-            positions.setX(k+2, minU - .5);
-            positions.setY(k+2, heightC);
-            positions.setX(k+5, maxU - .5);
-            positions.setY(k+5, heightB);
-            uvs.setX(k+2, minU);
-            uvs.setX(k+5, maxU);
-          } else {
-            // output as *badcda*
-            positions.setX(k+2, maxU - .5);
-            positions.setY(k+2, heightD);
-            positions.setX(k+5, minU - .5);
-            positions.setY(k+5, heightA);
-            uvs.setX(k+2, maxU);
-            uvs.setX(k+5, minU);
+      } else {
+
+        // these values are for cells
+        for (let z = 0; z < numRows; z++) {
+          for (let x = 0; x < numCols; x++) {
+            const i = x + z*(numCols+1); // points
+            const j = x + z*numCols; // cells
+            const k = j*VERTS_PER_CELL; // verts
+            const heightA = heights[i];
+            const heightB = heights[i + 1];
+            const heightC = heights[i + numCols + 1];
+            const heightD = heights[i + numCols + 2];
+            const midHeight = midHeights[j];
+            const minU = x/numCols;
+            const maxU = (x + 1)/numCols;
+
+            positions.setY(k, heightB);
+            positions.setY(k+1, heightA);
+            positions.setY(k+3, heightC);
+            positions.setY(k+4, heightD);
+
+            // cut the square in the direction which is closest to the image midpoint height, this lessens the
+            // ridged values artefact.  Just set the U because the V doesn't change
+            if (Math.abs((heightA + heightD)*.5 - midHeight) > Math.abs((heightC + heightB)*.5 - midHeight)) {
+              // switch to *baccdb*
+              positions.setX(k+2, minU - .5);
+              positions.setY(k+2, heightC);
+              positions.setX(k+5, maxU - .5);
+              positions.setY(k+5, heightB);
+              uvs.setX(k+2, minU);
+              uvs.setX(k+5, maxU);
+            } else {
+              // output as *badcda*
+              positions.setX(k+2, maxU - .5);
+              positions.setY(k+2, heightD);
+              positions.setX(k+5, minU - .5);
+              positions.setY(k+5, heightA);
+              uvs.setX(k+2, maxU);
+              uvs.setX(k+5, minU);
+            }
           }
         }
-      }
 
-      // for (let i = 0; i < pixels.length; i += 4) {
-      //   positions.setZ(i/4, height*heightScale)
-      // }
+      }
 
       this.mesh.geometry.computeVertexNormals();
 
@@ -6302,11 +6941,230 @@ void main() {
     }
   });
 
+  AFRAME.registerSystem("two-handed-transform", {
+    schema: {
+      left: { type: "selector" },
+      right: { type: "selector" },
+      startEvent: { default: "gripdown" },
+      endEvent: { default: "gripup"},
+      target: { type: "selector" },
+      enable: { default: true },
+    },
+
+    init() {
+      this.onStartEvent = this.onStartEvent.bind(this);
+      this.onEndEvent = this.onEndEvent.bind(this);
+
+      this.isEnabled = false;
+
+      this.left = { hand: undefined, active: false, startPosition: new THREE.Vector3() };
+      this.right = { hand: undefined, active: false, startPosition: new THREE.Vector3() };
+      this.target = { object3D: undefined, startMatrix: new THREE.Matrix4(), startPosition: new THREE.Vector3(), handGap: new THREE.Vector3(), handPivot: new THREE.Vector3(), rotationPivot: new THREE.Vector3() };
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      this.left.hand = data.left;
+      this.left.active = false;
+      this.right.hand = data.right;
+      this.right.active = false;
+
+      if (oldData.enable !== data.enable) {
+        if (data.enable) {
+          this.enable();
+        } else {
+          this.disable();
+        }
+      }
+    },
+
+    play() {
+      if (this.data.enable) {
+        this.enable();
+      }
+    },
+
+    pause() {
+      this.disable();
+    },
+
+    tick() {
+      if (this.left.active !== this.right.active) {
+        this.oneHanded(this.left.active ? this.left : this.right);
+      } else if (this.left.active && this.right.active) {
+        this.twoHanded();
+      }
+    },
+
+    enable() {
+      if (!this.isEnabled) {
+        this.addListeners(this.left.hand);
+        this.addListeners(this.right.hand);
+        this.isEnabled = true;
+      }
+    },
+
+    disable() {
+      if (this.isEnabled) {
+        this.left.active = false;
+        this.right.active = false;
+        this.removeListeners(this.left.hand);
+        this.removeListeners(this.right.hand);
+        this.isEnabled = false;
+      }
+    },
+
+    onStartEvent(e) {
+      if (e.target == this.left.hand) {
+        this.activate(this.left);
+      } else if (e.target == this.right.hand) {
+        this.activate(this.right);
+      }
+    },
+
+    onEndEvent(e) {
+      if (e.target == this.left.hand) {
+        this.deactivate(this.left);
+      } else if (e.target == this.right.hand) {
+        this.deactivate(this.right);
+      }
+    },
+
+    addListeners(hand) {
+      if (hand) {
+        hand.addEventListener(this.data.startEvent, this.onStartEvent);
+        hand.addEventListener(this.data.endEvent, this.onEndEvent);
+      }
+    },
+
+    removeListeners(hand) {
+      if (hand) {
+        hand.removeEventListener(this.data.startEvent, this.onStartEvent);
+        hand.removeEventListener(this.data.endEvent, this.onEndEvent);
+      }
+    },
+
+    activate(side) {
+      side.active = true;
+      this.captureStartPositions();
+    },
+
+    deactivate(side) {
+      side.active = false;
+      this.captureStartPositions();
+    },
+
+    captureStartPositions: (function() {
+      const inverseTargetWorldMatrix = new THREE.Matrix4();
+      const leftPositionWorld = new THREE.Vector3();
+      const rightPositionWorld = new THREE.Vector3();
+
+      return function captureStartPositions() {
+        const target3D = this.data.target ? this.data.target.object3D : undefined;
+        this.target.object3D = target3D;
+
+        if (target3D) {
+          if (this.left.active) {
+            this.left.startPosition.copy(this.left.hand.object3D.position);
+          }
+          if (this.right.active) {
+            this.right.startPosition.copy(this.right.hand.object3D.position);
+          }
+    
+          this.target.startMatrix.copy(target3D.matrix);
+          this.target.startPosition.copy(target3D.position);
+    
+          if (this.right.active && this.left.active) {
+            this.left.hand.object3D.getWorldPosition(leftPositionWorld);
+            this.right.hand.object3D.getWorldPosition(rightPositionWorld);
+            this.target.handGap.copy(rightPositionWorld).sub(leftPositionWorld);
+            this.target.handPivot.copy(this.right.hand.object3D.position).add(this.left.hand.object3D.position).multiplyScalar(0.5);
+
+            // the rotationPivot is in target local space
+            inverseTargetWorldMatrix.getInverse(this.target.object3D.matrixWorld);
+            this.target.rotationPivot.copy(rightPositionWorld).add(leftPositionWorld).multiplyScalar(0.5);
+            this.target.rotationPivot.applyMatrix4(inverseTargetWorldMatrix);
+          }
+        } else {
+          console.warn(`unable to find Object3D for '${this.data.target}'`);
+        }
+      }
+    
+    })(),
+
+    oneHanded: (function() {
+      const tempPosition = new THREE.Vector3();
+
+      return function oneHanded(side) {
+        const target3D = this.target.object3D;
+        if (target3D) {
+          target3D.position.copy( tempPosition.copy(side.hand.object3D.position).sub(side.startPosition).add(this.target.startPosition) );
+        }
+      }
+    })(),
+
+    twoHanded: (function() {
+      const leftPosition = new THREE.Vector3();
+      const rightPosition = new THREE.Vector3();
+      const newHandGap = new THREE.Vector3();
+      const newPosition = new THREE.Vector3();
+      const newTranslate = new THREE.Vector3();
+      const flatNewHandGap = new THREE.Vector3();
+      const flatRigHandGap = new THREE.Vector3();
+      const rightRigHandGap = new THREE.Vector3();
+      const newMatrix = new THREE.Matrix4();
+
+      return function twoHanded() {
+        const target3D = this.target.object3D;
+        if (target3D) {
+          leftPosition.copy(this.left.hand.object3D.position);
+          rightPosition.copy(this.right.hand.object3D.position);
+          newHandGap.copy(rightPosition).sub(leftPosition);
+
+          const scale = newHandGap.length()/this.target.handGap.length();
+
+          flatNewHandGap.copy(newHandGap).y = 0;
+          flatRigHandGap.copy(this.target.handGap).y = 0;
+          rightRigHandGap.set(-flatRigHandGap.z, 0, flatRigHandGap.x);
+          const angle = flatNewHandGap.angleTo(flatRigHandGap)*( rightRigHandGap.dot(flatNewHandGap) > 0 ? -1 : 1 );
+
+          newTranslate.copy(rightPosition).add(leftPosition).multiplyScalar(0.5).sub(this.target.handPivot);
+
+          const c = Math.cos(angle);
+          const s = Math.sin(angle);
+          const px = this.target.rotationPivot.x, pz = this.target.rotationPivot.z;
+
+          newMatrix.set(
+            c*scale  ,0     ,s*scale ,-c*scale*(px) - s*scale*(pz) + px,
+            0        ,scale ,0       ,0,
+            -s*scale ,0     ,c*scale , s*scale*(px) - c*scale*(pz) + pz,
+            0        ,0     ,0       ,1);
+    
+          newMatrix.premultiply(this.target.startMatrix);
+          newMatrix.decompose(newPosition, target3D.quaternion, target3D.scale);
+
+          // position is applied independently because we don't want it to be influenced by the scaling in the startMatrix
+          newPosition.add(newTranslate);
+          target3D.position.copy(newPosition);
+        }
+      }
+    })(),
+  });
+
+  // @ts-ignore
+  const COLOR_FLOATS_PER_VERTEX$1 = 3;
+
+  function parseIntArray$1(str) {
+    return typeof str === "string" ? str.split(",").map(s => parseInt(s, 10)) : str
+  }
+
   AFRAME.registerComponent("vertex-color", {
     schema: {
       color: { type: "color" },
-      minVertex: { type: "vec3", default: {x:-1e10, y:-1e10, z:-1e10} }, // top left
-      maxVertex: { type: "vec3", default: {x:1e10, y:1e10, z:1e10} }, // bottom right
+      verts: { type: "array", parse: parseIntArray$1 },
+      minPosition: { type: "vec3", default: {x:-1e10, y:-1e10, z:-1e10} }, // top left
+      maxPosition: { type: "vec3", default: {x:1e10, y:1e10, z:1e10} }, // bottom right
       minSlope: { type: "int", default: 0 }, // absolute slope
       maxSlope: { type: "int", default: 90 }, // absolute slope
       meshName: { default: "mesh" },
@@ -6355,25 +7213,25 @@ void main() {
         const materialColor = mesh.material.color;
 
         material.vertexColors = THREE.VertexColors;
+
         if (materialColor.r < .3 && materialColor.g < .3 && materialColor.b < .3) {
           console.warn("material color is very dark, vertex-color will also be dark");
         }
 
         console.assert(geometry.isBufferGeometry, "vertex-color only supports buffer geometry");
 
-        const positions = geometry.getAttribute("position");
-        const normals = geometry.getAttribute("normal");
-        let colors = geometry.getAttribute("color");
-
-        if (positions.count > 0 && !colors) {
-          const whiteColors = new Float32Array(positions.count*3).fill(1);
-          geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, 3));
-          colors = geometry.getAttribute("color");
+        if (!geometry.getAttribute("color")) {
+          const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX$1).fill(1);
+          geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX$1));
         }
 
-        // data.min/maxVertex are in the range (0,1), but the X and Z vertices use (-.5,.5)
-        const minX = data.minVertex.x-.5, minY = data.minVertex.y, minZ = data.minVertex.z-.5;
-        const maxX = data.maxVertex.x-.5, maxY = data.maxVertex.y, maxZ = data.maxVertex.z-.5;
+        const positions = geometry.getAttribute("position");
+        const normals = geometry.getAttribute("normal");
+        const colors = geometry.getAttribute("color");
+
+        // data.min/maxPosition are in the range (0,1), but the X and Z vertices use (-.5,.5)
+        const minX = data.minPosition.x-.5, minY = data.minPosition.y, minZ = data.minPosition.z-.5;
+        const maxX = data.maxPosition.x-.5, maxY = data.maxPosition.y, maxZ = data.maxPosition.z-.5;
         const col = new THREE.Color(data.color);
         const EPSILON = 0.00001;
         const degToRad = THREE.Math.degToRad;
@@ -6381,34 +7239,26 @@ void main() {
         // minSlope will give the largest cos() and vice versa, use EPSILON to counter rounding errors
         const maxSlope = Math.cos(degToRad(Math.max(0, data.minSlope))) + EPSILON;
         const minSlope = Math.cos(degToRad(Math.max(0, data.maxSlope))) - EPSILON;
-        const vertsPerTriangle = geometry.getIndex() ? 1 : 3;
 
-        for (let i = 0, n = colors.count; i < n; i += vertsPerTriangle) {
-          let paintVertex = true;
+        for (let i = 0, n = colors.count; i < n; i++) {
 
-          // if any vertex in the triangle fails, then don't paint any of the vertices for this triangle
-          for (let j = 0; j < vertsPerTriangle; j++) {
-            const k = i + j;
-            const x = positions.getX(k);
-            const y = positions.getY(k);
-            const z = positions.getZ(k);
-            if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) {
-              paintVertex = false;
-              break
-            }
-
-            const slope = Math.abs(normals.getY(k)); // dot(normal,UP)
-            if (slope < minSlope || slope > maxSlope) {
-              paintVertex = false;
-              break
-            }  
+          if (data.verts.length > 0 && !data.verts.includes(i)) {
+            continue
           }
 
-          if (paintVertex) {
-            for (let j = 0; j < vertsPerTriangle; j++) {
-              colors.setXYZ(i+j, col.r, col.g, col.b);
-            }
+          const x = positions.getX(i);
+          const y = positions.getY(i);
+          const z = positions.getZ(i);
+          if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) {
+            continue
           }
+
+          const slope = Math.abs(normals.getY(i)); // dot(normal,UP)
+          if (slope < minSlope || slope > maxSlope) {
+            continue
+          }  
+
+          colors.setXYZ(i, col.r, col.g, col.b);
         }
 
         colors.needsUpdate = true;
