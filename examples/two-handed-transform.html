@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Two-Handed Transform Examples</title>
+    <!--script src="https://aframe.io/releases/0.9.0/aframe.min.js"></script-->
+    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+  </head>
+  <body>
+    <a-scene id="scene" two-handed-transform="left: #leftHand; right: #rightHand; startEvent: trackpaddown; endEvent: trackpadup; target: #diaorama">
+      <a-entity id="cameraRig">
+        <a-camera id="camera"></a-camera>
+        <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
+        <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
+      </a-entity>
+      <a-entity id="diaorama">
+        <a-box id="red" position="0 0 -10" color="red"></a-box>
+        <a-box id="blue" position="5 0 -10" color="blue"></a-box>
+        <a-box id="green" position="-5 0 0" color="green"></a-box>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>

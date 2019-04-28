@@ -7,7 +7,9 @@
     <script src="../dist/aframe-harlyq-components.js"></script>
   </head>
   <body>
-    <a-scene id="scene" arm-swinger="left: #leftHand; right: #rightHand; startEvent: triggerdown; endEvent: triggerup; cameraRig: #cameraRig; scaling: .3">
+    <a-scene id="scene" 
+      arm-swinger="left: #leftHand; right: #rightHand; startEvent: trackpaddown; endEvent: trackpadup; cameraRig: #cameraRig; scaling: .3" 
+      climb="left: #leftHand; right: #rightHand; startEvent: triggerdown; endEvent: triggerup; cameraRig: #cameraRig; climbables: a-box; debug: true">
       <a-entity id="cameraRig">
         <a-camera id="camera"></a-camera>
         <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
