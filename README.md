@@ -22,3 +22,6 @@ or individual components in ESM format
 `import "aframe-harlyq-components/components/aframe-wait-set-component/index.js"`
 
 Documentation for each component is available under the components' directory.
+
+Examples are available at:
+https://github.com/harlyq/aframe-harlyq-components/tree/master/examples
