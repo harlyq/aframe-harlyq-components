@@ -22,6 +22,8 @@ none
 https://harlyq.github.io/aframe-harlyq-components/examples/heightfield.html
 ### instance
 https://harlyq.github.io/aframe-harlyq-components/examples/mesh-particles.html
+### instance-pool
+https://harlyq.github.io/aframe-harlyq-components/examples/mesh-particles.html
 ### keyframe
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 
