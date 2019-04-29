@@ -70,3 +70,8 @@ AFRAME.registerComponent("instance", {
     this.blockIndex = undefined
   }
 })
+
+AFRAME.registerPrimitive("a-instance", {
+  defaultComponents: { instance: {} },
+  mappings: { src: "instance.src", color: "instance.color", dynamic: "instance.dynamic" },
+})

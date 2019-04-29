@@ -12,7 +12,7 @@
 
       </a-assets>
       <a-box id="box" instance-pool="size: 10000" material="transparent:true"></a-box>
-      <a-entity instance="src:#box; color: cyan; dynamic: true" scale=".1 .1 .1" animation="property: position; from: 10 4 -10; to: -10 4 -10; loop: true; dur: 40000"></a-entity>
+      <a-instance src="#box" color="cyan" dynamic="true" scale=".1 .1 .1" animation="property: position; from: 10 4 -10; to: -10 4 -10; loop: true; dur: 40000"></a-instance>
       <a-entity id="radial" position="0 0 -15" 
         mesh-particles="instancePools: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1,1; radialAcceleration: -1,-1; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
       <a-entity id="fountain" position="-5 0 -15">
