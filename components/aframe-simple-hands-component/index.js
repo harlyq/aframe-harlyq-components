@@ -115,7 +115,7 @@ AFRAME.registerComponent("simple-hands", {
   
           let obj3D = el.object3D  
           if (!obj3D.boundingSphere || !obj3D.boundingBox || obj3D.boundingBox.isEmpty()) {
-            this.generateBoundingBox(obj3D)
+            this.generateOrientedBoundingBox(obj3D)
           }
   
           if (obj3D.boundingBox.isEmpty()) { 
@@ -156,11 +156,11 @@ AFRAME.registerComponent("simple-hands", {
     }
   })(),
 
-  generateBoundingBox(obj3D) {
+  generateOrientedBoundingBox(obj3D) {
     // cache boundingBox and boundingSphere
     obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3()
     obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere()
-    threeHelper.setFromObject3D(obj3D.boundingBox, obj3D)
+    threeHelper.setOBBFromObject3D(obj3D.boundingBox, obj3D)
 
     if (!obj3D.boundingBox.isEmpty()) {
       obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere)

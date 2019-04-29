@@ -133,7 +133,7 @@ AFRAME.registerSystem("climb", {
       }
   
       if (!hand3D.boundingSphere || hand3D.boundingSphere.empty()) {
-        this.generateBoundingBox(hand3D, this.data.debug)
+        this.generateOrientedBoundingBox(hand3D, this.data.debug)
       }
 
       handSphereWorld.copy(hand3D.boundingSphere.center).applyMatrix4(hand3D.matrixWorld)
@@ -149,7 +149,7 @@ AFRAME.registerSystem("climb", {
   
         if (!climbable3D.boundingSphere || climbable3D.boundingSphere.empty()) {
           // console.log("attemptGrab no sphere")
-          this.generateBoundingBox(climbable3D, this.data.debug)
+          this.generateOrientedBoundingBox(climbable3D, this.data.debug)
         }
   
         tempA.copy(climbable3D.boundingSphere.center).applyMatrix4(climbable3D.matrixWorld)
@@ -181,11 +181,11 @@ AFRAME.registerSystem("climb", {
   
   })(),
 
-  generateBoundingBox(obj3D, showDebug = false) {
+  generateOrientedBoundingBox(obj3D, showDebug = false) {
     // cache boundingBox and boundingSphere
     obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3()
     obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere()
-    threeHelper.setFromObject3D(obj3D.boundingBox, obj3D)
+    threeHelper.setOBBFromObject3D(obj3D.boundingBox, obj3D)
 
     if (!obj3D.boundingBox.isEmpty()) {
       obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere)
