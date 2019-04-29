@@ -6,7 +6,7 @@ const FLOATS_PER_SCALE = 3
 const BLOCK_INDEX = 0
 const BLOCK_SIZE = 1
 
-AFRAME.registerComponent("instance", {
+AFRAME.registerComponent("instance-pool", {
   schema: {
     size: { default: 1000 },
     patchShader: { default: true },

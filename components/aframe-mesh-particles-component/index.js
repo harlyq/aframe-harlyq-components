@@ -113,7 +113,7 @@ const CUSTOM_PARSER = {
 AFRAME.registerComponent("mesh-particles", {
   schema: {
     duration: { default: -1 },
-    instances: { default: "" },
+    instancePools: { default: "" },
     spawnRate: { default: "1" },
     lifeTime: { default: "1" },
     position: { default: "" },
@@ -143,7 +143,7 @@ AFRAME.registerComponent("mesh-particles", {
   init() {
     this.spawnID = 0
     this.spawnCount = 0
-    this.instances = []
+    this.instancePools = []
     this.instanceIndices = []
     this.particles = []
     this.customData = {}
@@ -209,25 +209,25 @@ AFRAME.registerComponent("mesh-particles", {
       this.spawnRate = attribute.randomize(this.spawnRateRule, this.lcg.random) // How do we keep this in-sync?
     }
 
-    if (data.instances !== oldData.instances || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
+    if (data.instancePools !== oldData.instancePools || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
       this.spawnID = 0
       this.releaseInstances()
 
-      this.instances = data.instances ? 
-        [].slice.call(document.querySelectorAll(data.instances)).map(el => el.components ? el.components["instance"] : undefined).filter(x => x) :
-        this.el.components["instance"] ? [this.el.components["instance"]] : []
+      this.instancePools = data.instancePools ? 
+        [].slice.call(document.querySelectorAll(data.instancePools)).map(el => el.components ? el.components["instance-pool"] : undefined).filter(x => x) :
+        this.el.components["instance-pool"] ? [this.el.components["instance-pool"]] : []
 
-      if (this.instances.length === 0) {
-        if (data.instances) {
-          warn(`no instances specified with: '${data.instances}'`)
+      if (this.instancePools.length === 0) {
+        if (data.instancePools) {
+          warn(`no 'instance-pool' on the entities: '${data.instancePools}'`)
         } else {
-          warn(`no 'instance' component on this element`)
+          warn(`no 'instance-pool' component on this element`)
         }
       } else {
-        // this.instanceBlocks = this.instances.map(inst => inst.requestBlock(this.maxParticles))
-        // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
-        this.instanceIndices = this.instances.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instances.length)) )
-        this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
+        // this.instanceBlocks = this.instancePools.map(inst => inst.requestBlock(this.maxParticles))
+        // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
+        this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instancePools.length)) )
+        this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
       }
     }
 
@@ -236,7 +236,7 @@ AFRAME.registerComponent("mesh-particles", {
   tick(time, deltaTime) {
     const dt = Math.min(0.1, deltaTime*0.001) // cap the dt to help when we are debugging
 
-    if ((this.duration < 0 || time - this.startTime < this.duration) && this.instances.length > 0) {
+    if ((this.duration < 0 || time - this.startTime < this.duration) && this.instancePools.length > 0) {
       this.spawnCount += this.spawnRate*dt
 
       if (this.spawnCount > 1) {
@@ -252,7 +252,7 @@ AFRAME.registerComponent("mesh-particles", {
   },
 
   releaseInstances() {
-    this.instances.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]))
+    this.instancePools.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]))
     this.instanceIndices.length = 0
     this.particles = []
     this.spawnID = 0
@@ -269,13 +269,13 @@ AFRAME.registerComponent("mesh-particles", {
 
   instanceFromID(spawnID) {
     const particleID = (spawnID % this.maxParticles)
-    const instanceIndex = spawnID % this.instances.length
-    const instance = this.instances[instanceIndex]
+    const instanceIndex = spawnID % this.instancePools.length
+    const instance = this.instancePools[instanceIndex]
     if (this.instanceIndices[instanceIndex] === undefined) {
       return [undefined, undefined, undefined]
     }
 
-    const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instances.length
+    const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instancePools.length
     return [instance, instanceID, particleID]
   },
 

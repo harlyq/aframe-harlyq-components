@@ -1596,9 +1596,9 @@
     });
   }
 
-  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetFromObject3DFn */
-  /** @type {SetFromObject3DFn} */
-  const setFromObject3D = (function() {
+  /** @typedef {<T extends Extent>(out: T, object3D: object) => T} SetOBBFromObject3DFn */
+  /** @type {SetOBBFromObject3DFn} */
+  const setOBBFromObject3D = (function() {
     // @ts-ignore
     let tempPosition = new THREE.Vector3();
     // @ts-ignore
@@ -1608,7 +1608,7 @@
     // @ts-ignore
     let tempBox3 = new THREE.Box3();
 
-    return /** @type {SetFromObject3DFn} */function setFromObject3D(ext, object3D) {
+    return /** @type {SetOBBFromObject3DFn} */function setOBBFromObject3D(ext, object3D) {
       if (object3D.children.length === 0) {
         return ext
       }
@@ -2023,7 +2023,7 @@
         }
     
         if (!hand3D.boundingSphere || hand3D.boundingSphere.empty()) {
-          this.generateBoundingBox(hand3D, this.data.debug);
+          this.generateOrientedBoundingBox(hand3D, this.data.debug);
         }
 
         handSphereWorld.copy(hand3D.boundingSphere.center).applyMatrix4(hand3D.matrixWorld);
@@ -2039,7 +2039,7 @@
     
           if (!climbable3D.boundingSphere || climbable3D.boundingSphere.empty()) {
             // console.log("attemptGrab no sphere")
-            this.generateBoundingBox(climbable3D, this.data.debug);
+            this.generateOrientedBoundingBox(climbable3D, this.data.debug);
           }
     
           tempA.copy(climbable3D.boundingSphere.center).applyMatrix4(climbable3D.matrixWorld);
@@ -2071,11 +2071,11 @@
     
     })(),
 
-    generateBoundingBox(obj3D, showDebug = false) {
+    generateOrientedBoundingBox(obj3D, showDebug = false) {
       // cache boundingBox and boundingSphere
       obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3();
       obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere();
-      setFromObject3D(obj3D.boundingBox, obj3D);
+      setOBBFromObject3D(obj3D.boundingBox, obj3D);
 
       if (!obj3D.boundingBox.isEmpty()) {
         obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere);
@@ -2695,7 +2695,7 @@
   const BLOCK_INDEX = 0;
   const BLOCK_SIZE = 1;
 
-  AFRAME.registerComponent("instance", {
+  AFRAME.registerComponent("instance-pool", {
     schema: {
       size: { default: 1000 },
       patchShader: { default: true },
@@ -3731,7 +3731,7 @@
   AFRAME.registerComponent("mesh-particles", {
     schema: {
       duration: { default: -1 },
-      instances: { default: "" },
+      instancePools: { default: "" },
       spawnRate: { default: "1" },
       lifeTime: { default: "1" },
       position: { default: "" },
@@ -3761,7 +3761,7 @@
     init() {
       this.spawnID = 0;
       this.spawnCount = 0;
-      this.instances = [];
+      this.instancePools = [];
       this.instanceIndices = [];
       this.particles = [];
       this.customData = {};
@@ -3827,25 +3827,25 @@
         this.spawnRate = randomize(this.spawnRateRule, this.lcg.random); // How do we keep this in-sync?
       }
 
-      if (data.instances !== oldData.instances || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
+      if (data.instancePools !== oldData.instancePools || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
         this.spawnID = 0;
         this.releaseInstances();
 
-        this.instances = data.instances ? 
-          [].slice.call(document.querySelectorAll(data.instances)).map(el => el.components ? el.components["instance"] : undefined).filter(x => x) :
-          this.el.components["instance"] ? [this.el.components["instance"]] : [];
+        this.instancePools = data.instancePools ? 
+          [].slice.call(document.querySelectorAll(data.instancePools)).map(el => el.components ? el.components["instance-pool"] : undefined).filter(x => x) :
+          this.el.components["instance-pool"] ? [this.el.components["instance-pool"]] : [];
 
-        if (this.instances.length === 0) {
-          if (data.instances) {
-            warn(`no instances specified with: '${data.instances}'`);
+        if (this.instancePools.length === 0) {
+          if (data.instancePools) {
+            warn(`no 'instance-pool' on the entities: '${data.instancePools}'`);
           } else {
-            warn(`no 'instance' component on this element`);
+            warn(`no 'instance-pool' component on this element`);
           }
         } else {
-          // this.instanceBlocks = this.instances.map(inst => inst.requestBlock(this.maxParticles))
-          // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`) })
-          this.instanceIndices = this.instances.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instances.length)) );
-          this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instances[i].el.id}'`); });
+          // this.instanceBlocks = this.instancePools.map(inst => inst.requestBlock(this.maxParticles))
+          // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
+          this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instancePools.length)) );
+          this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`); });
         }
       }
 
@@ -3854,7 +3854,7 @@
     tick(time, deltaTime) {
       const dt = Math.min(0.1, deltaTime*0.001); // cap the dt to help when we are debugging
 
-      if ((this.duration < 0 || time - this.startTime < this.duration) && this.instances.length > 0) {
+      if ((this.duration < 0 || time - this.startTime < this.duration) && this.instancePools.length > 0) {
         this.spawnCount += this.spawnRate*dt;
 
         if (this.spawnCount > 1) {
@@ -3870,7 +3870,7 @@
     },
 
     releaseInstances() {
-      this.instances.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]));
+      this.instancePools.forEach((instance, i) => instance.releaseBlock(this.instanceIndices[i]));
       this.instanceIndices.length = 0;
       this.particles = [];
       this.spawnID = 0;
@@ -3887,13 +3887,13 @@
 
     instanceFromID(spawnID) {
       const particleID = (spawnID % this.maxParticles);
-      const instanceIndex = spawnID % this.instances.length;
-      const instance = this.instances[instanceIndex];
+      const instanceIndex = spawnID % this.instancePools.length;
+      const instance = this.instancePools[instanceIndex];
       if (this.instanceIndices[instanceIndex] === undefined) {
         return [undefined, undefined, undefined]
       }
 
-      const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instances.length;
+      const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instancePools.length;
       return [instance, instanceID, particleID]
     },
 
@@ -4848,7 +4848,7 @@ vec2 worley(const vec2 P, const float jitter) {
     
             let obj3D = el.object3D;  
             if (!obj3D.boundingSphere || !obj3D.boundingBox || obj3D.boundingBox.isEmpty()) {
-              this.generateBoundingBox(obj3D);
+              this.generateOrientedBoundingBox(obj3D);
             }
     
             if (obj3D.boundingBox.isEmpty()) { 
@@ -4889,11 +4889,11 @@ vec2 worley(const vec2 P, const float jitter) {
       }
     })(),
 
-    generateBoundingBox(obj3D) {
+    generateOrientedBoundingBox(obj3D) {
       // cache boundingBox and boundingSphere
       obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3();
       obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere();
-      setFromObject3D(obj3D.boundingBox, obj3D);
+      setOBBFromObject3D(obj3D.boundingBox, obj3D);
 
       if (!obj3D.boundingBox.isEmpty()) {
         obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere);
