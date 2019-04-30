@@ -24,7 +24,7 @@ AFRAME.registerComponent("instance-pool", {
     this.freeBlocks = []
 
     this.onSetObject3D = this.onSetObject3D.bind(this)
-    this.patchInstancesIntoShader = this.patchInstancesIntoShader.bind(this)
+    this.onBeforeCompile = this.onBeforeCompile.bind(this)
 
     this.el.addEventListener("setobject3d", this.onSetObject3D)
   },
@@ -80,10 +80,10 @@ AFRAME.registerComponent("instance-pool", {
       // insert the instance logic into whatever standard shader the user has provided
       if (Array.isArray(mesh.material)) {
         instancedMaterial = mesh.material.map(x => x.clone())
-        instancedMaterial.forEach(x => x.onBeforeCompile = this.patchInstancesIntoShader)
+        instancedMaterial.forEach(x => x.onBeforeCompile = this.onBeforeCompile(x.onBeforeCompile))
       } else {
         instancedMaterial = mesh.material.clone()
-        instancedMaterial.onBeforeCompile = this.patchInstancesIntoShader
+        instancedMaterial.onBeforeCompile = this.onBeforeCompile(instancedMaterial.onBeforeCompile)
       }
     }
 
@@ -116,56 +116,64 @@ AFRAME.registerComponent("instance-pool", {
     this.occupiedBlocks = []
   },
 
-  patchInstancesIntoShader(shader) {
-    let vertexShader = shader.vertexShader
-    let fragmentShader = shader.fragmentShader
+  onBeforeCompile(oldOnBeforeCompileFn) {
+    const oldFunction = oldOnBeforeCompileFn
 
-    vertexShader = vertexShader.replace('void main()', `
-    attribute vec3 instancePosition;
-    attribute vec4 instanceQuaternion;
-    attribute vec4 instanceColor;
-    attribute vec3 instanceScale;
+    return function onBeforeCompile(shader) {
+      if (oldFunction) {
+        oldFunction(shader)
+      }
 
-    varying vec4 vInstanceColor;
-
-    vec3 applyQuaternion( const vec3 v, const vec4 q ) 
-    {
-      return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
-    }
-
-    void main()`)
-
-    vertexShader = vertexShader.replace('#include <color_vertex>', `
-    #include <color_vertex>
-    vInstanceColor = instanceColor;`)
-
-    vertexShader = vertexShader.replace('#include <begin_vertex>', `
-    vec3 transformed = applyQuaternion( position*instanceScale, instanceQuaternion ) + instancePosition;`)
-
-    vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
-    vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal/instanceScale, -instanceQuaternion );
-    
-    #ifdef FLIP_SIDED
-      transformedNormal = - transformedNormal;
-    #endif
-
-    #ifdef USE_TANGENT
-      vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent/instanceScale, -instanceQuaternion );
+      let vertexShader = shader.vertexShader
+      let fragmentShader = shader.fragmentShader
+  
+      vertexShader = vertexShader.replace('void main()', `
+      attribute vec3 instancePosition;
+      attribute vec4 instanceQuaternion;
+      attribute vec4 instanceColor;
+      attribute vec3 instanceScale;
+  
+      varying vec4 vInstanceColor;
+  
+      vec3 applyQuaternion( const vec3 v, const vec4 q ) 
+      {
+        return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
+      }
+  
+      void main()`)
+  
+      vertexShader = vertexShader.replace('#include <color_vertex>', `
+      #include <color_vertex>
+      vInstanceColor = instanceColor;`)
+  
+      vertexShader = vertexShader.replace('#include <begin_vertex>', `
+      vec3 transformed = applyQuaternion( position*instanceScale, instanceQuaternion ) + instancePosition;`)
+  
+      vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
+      vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal/instanceScale, -instanceQuaternion );
+      
       #ifdef FLIP_SIDED
-        transformedTangent = - transformedTangent;
+        transformedNormal = - transformedNormal;
       #endif
-    #endif`)
-
-    fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
-    #include <color_pars_fragment>
-    varying vec4 vInstanceColor;`)
-
-    fragmentShader = fragmentShader.replace('#include <color_fragment>', `
-    #include <color_fragment>
-    diffuseColor *= vInstanceColor;`)
-
-    shader.vertexShader = vertexShader
-    shader.fragmentShader = fragmentShader
+  
+      #ifdef USE_TANGENT
+        vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent/instanceScale, -instanceQuaternion );
+        #ifdef FLIP_SIDED
+          transformedTangent = - transformedTangent;
+        #endif
+      #endif`)
+  
+      fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
+      #include <color_pars_fragment>
+      varying vec4 vInstanceColor;`)
+  
+      fragmentShader = fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      diffuseColor *= vInstanceColor;`)
+  
+      shader.vertexShader = vertexShader
+      shader.fragmentShader = fragmentShader
+    }
   },
 
   reserveBlock(requestedSize) {

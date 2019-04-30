@@ -236,7 +236,7 @@
         procedural-texture__gaussian="shader: #gaussianshader; canvas: #gaussian; backgroundColor: black; fillColor: yellow"
         procedural-texture__blur="shader: #blurshader; canvas: #blur; image: #altbrick; resolution: 128 128; sigma: 2"
         procedural-texture__worley="shader: #worleyshader; canvas: #worley; innerColor: white; outerColor: red; scale: 5; jitter: .7"
-        procedural-texture__terrase="shader: #terraseshader; canvas: #terrase; image: #fire; resolution: 128 128; kernel: 9"
+        procedural-texture__terrase="shader: #terraseshader; canvas: #terrase; image: #fire; resolution: 128 128"
         procedural-texture__test="shader: #testshader; canvas: #test;"
       >
       </a-entity>
@@ -253,7 +253,7 @@
       <a-box id="blurbox" position="4 4 -5" material="src:#blur;"></a-box>
       <a-box id="worleybox" position="-4 4 -5" material="src:#worley;"></a-box>
       <a-box id="terrasebox" position="-6 4 -5" material="src:#terrase;"></a-box>
-      <a-box id="testbox" position="0 2 -5" material="src:#test;"></a-box>
+      <a-box id="testbox" position="0 2 -5" material="src:#test;" uv-transform="wrapS: mirroredRepeat; repeat: 1 1; rotation: 15; offset: 1 4; center: .9 .9" keyframe="uv-transform.repeat2: 1 1,2 2,.2 .2; uv-transform.offset: 0 0,4 4; uv-transform.rotation2: 15,100,15; duration: 5.5"></a-box>
       <a-box id="gaussianshaderbox" position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
 
       <a-sphere id="voronoisphere" scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
