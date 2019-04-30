@@ -226,7 +226,7 @@ AFRAME.registerComponent("mesh-particles", {
       } else {
         // this.instanceBlocks = this.instancePools.map(inst => inst.requestBlock(this.maxParticles))
         // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
-        this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instancePools.length)) )
+        this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.ceil( this.maxParticles / this.instancePools.length)) )
         this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
       }
     }
@@ -275,7 +275,7 @@ AFRAME.registerComponent("mesh-particles", {
       return [undefined, undefined, undefined]
     }
 
-    const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instancePools.length
+    const instanceID = this.instanceIndices[instanceIndex] + Math.floor(particleID/this.instancePools.length)
     return [instance, instanceID, particleID]
   },
 

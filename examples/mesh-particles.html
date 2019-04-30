@@ -12,6 +12,7 @@
 
       </a-assets>
       <a-box id="box" instance-pool="size: 10000" material="transparent:true"></a-box>
+      <a-sphere id="sphere" instance-pool="size: 100" material="transparent:true"></a-sphere>
       <a-instance src="#box" color="cyan" dynamic="true" scale=".1 .1 .1" animation="property: position; from: 10 4 -10; to: -10 4 -10; loop: true; dur: 40000"></a-instance>
       <a-entity id="radial" position="0 0 -15" 
         mesh-particles="instancePools: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1,1; radialAcceleration: -1,-1; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
@@ -29,6 +30,8 @@
         mesh-particles="instancePools: #box; spawnRate: 8..10; radialType: circlexz; radialPosition: 1; scale: .3; velocity: 0 1 0,0 1 0; angularVelocity: 0 20 0,0 40 0; lifeTime: 2; color: purple; radialAcceleration: -.2..-.3; opacity: 1,0"></a-entity>
       <a-entity id="atoms" position="-10 0 -15" 
         mesh-particles="instancePools: #box; spawnRate: 1; radialType: sphere; radialPosition: 1; scale: .1; color: red,orange,yellow,white; orbitalVelocity: 305..260; lifeTime: 10"></a-entity>
+      <a-entity id="multiple" position="-15 0 -15" 
+        mesh-particles="instancePools: #box,#sphere; spawnRate: 60; position: -.5 1 -.2.. .5 1 .2; scale: 0,.2; color: red|blue; acceleration: 0 -1 0; lifeTime: 3"></a-entity>
     </a-scene>
   </body>
 </html>
