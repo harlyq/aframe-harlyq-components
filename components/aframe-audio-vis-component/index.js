@@ -17,11 +17,17 @@ AFRAME.registerSystem("audio-vis", {
   },
 
   init: function () {
-    this.context = new AudioContext()
+    this.context = undefined
     this.analysers = {}
   },
 
   getOrCreateAnalyser: function() {
+    if (!this.context) {
+      // only create if needed to avoid the warning:
+      // The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://goo.gl/7K7WLu
+      this.context = new AudioContext()
+    }
+
     const srcEl = this.data.src
     const srcName = elementName(srcEl)
     if (this.analysers[srcName]) { return this.analysers[srcName]}
