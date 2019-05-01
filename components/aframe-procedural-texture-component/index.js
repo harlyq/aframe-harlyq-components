@@ -117,11 +117,30 @@ AFRAME.registerComponent("procedural-texture", {
       if (!this.scene) {
         this.setupScene(this.canvas, this.shaderProgram)
       }
-      this.renderScene(data)
+
+      this.updateUniforms(this.uniforms, data)
+      this.renderScene()
 
       threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.canvas)
       this.system.updateProceduralTexturesUsingThisCanvas(this.canvas)
       this.canvas.dispatchEvent(new CustomEvent("loaded", {bubbles: false}));
+    }
+
+    if (this.usesComponentTime()) {
+      this.el.sceneEl.addBehavior(this) // can be called multiple times
+    }
+  },
+
+  usesComponentTime() {
+    return "time" in this.uniforms && !("time" in this.attrValue)
+  },
+
+  tick(time) {
+    if (!this.usesComponentTime()) {
+      this.el.sceneEl.removeBehavior(this)
+    } else {
+      this.uniforms.time.value = time*0.001
+      this.renderScene()
     }
   },
 
@@ -131,11 +150,11 @@ AFRAME.registerComponent("procedural-texture", {
     this.camera.position.z = 1;
     
     this.uniforms = this.parseShaderUniforms(shader)
-    const fullFragmentShader = proceduralFragmentShader + shader
+    const fullFragmentShader = shader.replace(/#include\s*<procedural-ext>/, PROCEDURAL_EXT)
 
     var shaderMaterial = new THREE.RawShaderMaterial( {
       uniforms: this.uniforms,
-      vertexShader: proceduralVertexShader,
+      vertexShader: PROCEDURAL_VERTEX_SHADER,
       fragmentShader: fullFragmentShader,
     } );
   
@@ -145,9 +164,7 @@ AFRAME.registerComponent("procedural-texture", {
     this.ctx = canvas.getContext("2d")
   },
   
-  renderScene(data) {
-    this.updateUniforms(this.uniforms, data)
-
+  renderScene() {
     const canvas = this.ctx.canvas
     const width = canvas.width
     const height = canvas.height
@@ -316,7 +333,7 @@ AFRAME.registerComponent("procedural-texture", {
   }, 
 })
 
-const proceduralVertexShader = `
+export const PROCEDURAL_VERTEX_SHADER = `
 precision highp float;
 
 attribute vec3 position;
@@ -329,7 +346,7 @@ void main()
   gl_Position = vec4( position, 1.0 );
 }`
 
-const proceduralFragmentShader = `
+export const PROCEDURAL_EXT = `
 precision highp float;
 precision highp int;
 

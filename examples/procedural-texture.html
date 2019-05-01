@@ -6,11 +6,11 @@
     <!--script src="../../aframe/aframe-0.9.0.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="cloudshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform vec4 skyColor;
       uniform vec4 cloudColor;
       uniform float resolution;
       uniform float threshold;
-
       varying vec2 vUv;
 
       void main() {
@@ -20,9 +20,9 @@
       }
     </script>
     <script id="woodshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform float ampScale;
       uniform vec4 woodColor;
-
       varying vec2 vUv;
 
       void main(void) {
@@ -32,12 +32,12 @@
       }
     </script>
     <script id="fireshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform float time;
       uniform vec3 colors[6];
       uniform vec2 speed;
       uniform float shift;
       uniform float alphaThreshold;
-
       varying vec2 vUv;
 
       void main() {
@@ -51,11 +51,11 @@
       }    
     </script>
     <script id="brickshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform float numberOfBricksHeight;
       uniform float numberOfBricksWidth;
       uniform vec4 brickColor;
       uniform vec4 jointColor;
-
       varying vec2 vUv;
 
       void main(void)
@@ -69,6 +69,7 @@
       }    
     </script>
     <script id="marbleshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform float numberOfTilesHeight;
       uniform float numberOfTilesWidth;
       uniform float detailA;
@@ -76,7 +77,6 @@
       uniform float amplitude;
       uniform vec4 marbleColor;
       uniform vec4 jointColor;
-
       varying vec2 vUv;
 
       const vec3 tileSize = vec3(1.1,1.0,1.1);
@@ -93,10 +93,10 @@
       }
     </script>
     <script id="checkerboardshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform float numberOfCheckers;
       uniform vec4 colorA;
       uniform vec4 colorB;
-
       varying vec2 vUv;
 
       void main()
@@ -107,11 +107,11 @@
       }
     </script>
     <script id="voronoishader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform float amplitude;
       uniform float phase;
       uniform vec4 innerColor;
       uniform vec4 outerColor;
-
       varying vec2 vUv;
 
       void main()
@@ -122,11 +122,11 @@
       }
     </script>
     <script id="altbrickshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform vec4 brickColor;
       uniform vec4 jointColor;
       uniform float numberOfBricksWidth;
       uniform float numberOfBricksHeight;
-
       varying vec2 vUv;
 
       void main()
@@ -141,10 +141,10 @@
       }
     </script>
     <script id="blurshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform sampler2D image;
       uniform vec2 resolution;
       uniform float sigma;
-
       varying vec2 vUv;
 
       void main()
@@ -153,11 +153,11 @@
       }
     </script>
     <script id="worleyshader" type="x-shader/x-fragment">
+      #include <procedural-ext>
       uniform vec4 innerColor;
       uniform vec4 outerColor;
       uniform float jitter;
       uniform float scale;
-
       varying vec2 vUv;
 
       void main()
@@ -167,9 +167,9 @@
       }
     </script>
     <script id="terraseshader" type="x-shader/x-fragment">
+      #include  <procedural-ext>
       uniform sampler2D image;
       uniform vec2 resolution;
-
       varying vec2 vUv;
 
       void main()
@@ -178,11 +178,11 @@
       }
     </script>
     <script id="testshader" type="x-shader/x-fragment">
+      #include<procedural-ext>
       uniform float rotation;
       uniform vec2 center;
       uniform vec2 scale;
       uniform vec2 translation;
-
       varying vec2 vUv;
 
       void main()
@@ -232,7 +232,7 @@
       <a-box id="voronoibox" position="-6 0 -5" material="src:#voronoi"></a-box>
       <a-box id="cloudbox" position="-4 0 -5" material="src:#cloud"></a-box>
       <a-box id="woodbox" position="-2 0 -5" material="src:#wood"></a-box>
-      <a-box id="firebox" position="0 0 -5" material="src:#fire"></a-box>
+      <a-box id="firebox" position="0 0 -5" material="src:#fire" texture-updater></a-box>
       <a-box id="brickbox" position="2 0 -5" material="src:#brick"></a-box>
       <a-box id="marblebox" position="4 0 -5" material="src:#marble"></a-box>
       <a-box id="checkerboardbox" position="6 0 -5" material="src:#checkerboard"></a-box>
@@ -245,6 +245,7 @@
 
       <a-box id="gaussianshaderbox" position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white">
         <script id="gaussianshader" type="x-shader/x-fragment">
+          #include <procedural-ext>
           uniform vec4 backgroundColor;
           uniform vec4 fillColor;    
           varying vec2 vUv;
