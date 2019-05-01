@@ -140,18 +140,6 @@
         gl_FragColor = color;
       }
     </script>
-    <script id="gaussianshader" type="x-shader/x-fragment">
-      uniform vec4 backgroundColor;
-      uniform vec4 fillColor;
-
-      varying vec2 vUv;
-
-      void main()
-      {
-        vec4 color = mix(backgroundColor, fillColor, gaussian(vUv));
-        gl_FragColor = color;
-      }
-    </script>
     <script id="blurshader" type="x-shader/x-fragment">
       uniform sampler2D image;
       uniform vec2 resolution;
@@ -208,7 +196,7 @@
     </script>
   </head>
   <body>
-    <a-scene>
+    <a-scene background="color: grey">
       <a-assets>
         <canvas id="cloud" width="128" height="128"></canvas>
         <canvas id="wood" width="1024" height="1024"></canvas>
@@ -228,7 +216,7 @@
         procedural-texture__voronoi="shader: #voronoishader; canvas: #voronoi; amplitude: 5; phase: 1; innerColor: rgba(0,0,0,0); outerColor: black"
         procedural-texture__cloud="shader: #cloudshader; canvas: #cloud; skyColor: rgba(0,0,255,1); cloudColor: white; resolution: 0; threshold: 0"
         procedural-texture__wood="shader: #woodshader; canvas: #wood; ampScale: 10.5; woodColor: #4B2513"
-        procedural-texture__fire="shader: #fireshader; canvas: #fire; shift: .8; alphaThreshold: 0; time: 0; speed: .5 .3; colors: rgb(127,0,255), rgb(230,0,255), rgb(51,0,255), rgb(255,230,255), rgb(25,25,255), rgb(230,230,255)"
+        procedural-texture__fire="shader: #fireshader; canvas: #fire; shift: .8; alphaThreshold: 0; speed: .5 .3; colors: rgb(127,0,255), rgb(230,0,255), rgb(51,0,255), rgb(255,230,255), rgb(25,25,255), rgb(230,230,255)"
         procedural-texture__brick="shader: #brickshader; canvas: #brick; numberOfBricksHeight: 5; numberOfBricksWidth: 4; brickColor: black; jointColor: white"
         procedural-texture__marble="shader: #marbleshader; canvas: #marble; numberOfTilesHeight: 2; numberOfTilesWidth: 2; amplitude: 5; detailA: 0.5; detailB: 6; marbleColor: lightgray; jointColor: black"
         procedural-texture__checkerboard="shader: #checkerboardshader; canvas: #checkerboard; numberOfCheckers: 4; colorA: teal; colorB: brown"
@@ -244,7 +232,7 @@
       <a-box id="voronoibox" position="-6 0 -5" material="src:#voronoi"></a-box>
       <a-box id="cloudbox" position="-4 0 -5" material="src:#cloud"></a-box>
       <a-box id="woodbox" position="-2 0 -5" material="src:#wood"></a-box>
-      <a-box id="firbox" position="0 0 -5" material="src:#fire"></a-box>
+      <a-box id="firebox" position="0 0 -5" material="src:#fire"></a-box>
       <a-box id="brickbox" position="2 0 -5" material="src:#brick"></a-box>
       <a-box id="marblebox" position="4 0 -5" material="src:#marble"></a-box>
       <a-box id="checkerboardbox" position="6 0 -5" material="src:#checkerboard"></a-box>
@@ -253,8 +241,27 @@
       <a-box id="blurbox" position="4 4 -5" material="src:#blur;"></a-box>
       <a-box id="worleybox" position="-4 4 -5" material="src:#worley;"></a-box>
       <a-box id="terrasebox" position="-6 4 -5" material="src:#terrase;"></a-box>
-      <a-box id="testbox" position="0 2 -5" material="src:#test;" uv-transform="wrapS: mirroredRepeat; repeat: 1 1; rotation: 15; offset: 1 4; center: .9 .9" keyframe="uv-transform.repeat2: 1 1,2 2,.2 .2; uv-transform.offset: 0 0,4 4; uv-transform.rotation2: 15,100,15; duration: 5.5"></a-box>
-      <a-box id="gaussianshaderbox" position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white"></a-box>
+      <a-box id="testbox" position="0 2 -5" material="src:#test;" uv-transform="wrapS: mirroredRepeat; repeat: 1 1; rotation: 15; offset: 1 4; center: .9 .9" keyframe="uv-transform.offset: 0 0,4 4; uv-transform.rotation: 15,100,15; duration: 5.5"></a-box>
+
+      <a-box id="gaussianshaderbox" position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: #gaussianshader; backgroundColor: blue; fillColor: white">
+        <script id="gaussianshader" type="x-shader/x-fragment">
+          uniform vec4 backgroundColor;
+          uniform vec4 fillColor;    
+          varying vec2 vUv;
+          void main() {
+            gl_FragColor = mix(backgroundColor, fillColor, gaussian(vUv));
+          }
+        </script>
+      </a-box>
+
+      <a-box id="animatedtexture" position="6 4 -5" material="src:#animatedsvg" texture-updater>
+        <img id="animatedsvg" crossorigin="anonymous" width="128" height="128" src='data:image/svg+xml;utf8,
+          <svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" version="1.1">
+            <rect x="10" y="10" width="100" height="100" cursor="move">
+              <animate attributeType="XML" attributeName="x" from="-100" to="120" dur="10s" repeatCount="indefinite"/>
+            </rect>
+          </svg>'>
+      </a-box>
 
       <a-sphere id="voronoisphere" scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
       <a-sphere id="cloudsphere" scale="0.5 0.5 0.5" position="-4 2 -5" material="src:#cloud;"></a-sphere>

@@ -30,7 +30,6 @@ https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
-
 ### lathe
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
 ### materialx
@@ -52,17 +51,16 @@ https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
+### texture-updater
+https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
 ### timer-emit
 https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
 ### two-handed-transform
 https://harlyq.github.io/aframe-harlyq-components/examples/two-handed-transform.html
-
 ### uv-transform
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
-
 ### vertex-color
 https://harlyq.github.io/aframe-harlyq-components/examples/heightfield.html
-
 ### wait-add-remove
 https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
 ### wait-emit
