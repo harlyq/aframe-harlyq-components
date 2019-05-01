@@ -191,11 +191,17 @@
     },
 
     init: function () {
-      this.context = new AudioContext();
+      this.context = undefined;
       this.analysers = {};
     },
 
     getOrCreateAnalyser: function() {
+      if (!this.context) {
+        // only create if needed to avoid the warning:
+        // The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://goo.gl/7K7WLu
+        this.context = new AudioContext();
+      }
+
       const srcEl = this.data.src;
       const srcName = elementName(srcEl);
       if (this.analysers[srcName]) { return this.analysers[srcName]}
@@ -2760,6 +2766,11 @@
     }
   });
 
+  AFRAME.registerPrimitive("a-instance", {
+    defaultComponents: { instance: {} },
+    mappings: { src: "instance.src", color: "instance.color", dynamic: "instance.dynamic" },
+  });
+
   const FLOATS_PER_COLOR = 4;
   const FLOATS_PER_POSITION = 3;
   const FLOATS_PER_QUATERNION = 4;
@@ -2786,7 +2797,7 @@
       this.freeBlocks = [];
 
       this.onSetObject3D = this.onSetObject3D.bind(this);
-      this.patchInstancesIntoShader = this.patchInstancesIntoShader.bind(this);
+      this.onBeforeCompile = this.onBeforeCompile.bind(this);
 
       this.el.addEventListener("setobject3d", this.onSetObject3D);
     },
@@ -2842,10 +2853,10 @@
         // insert the instance logic into whatever standard shader the user has provided
         if (Array.isArray(mesh.material)) {
           instancedMaterial = mesh.material.map(x => x.clone());
-          instancedMaterial.forEach(x => x.onBeforeCompile = this.patchInstancesIntoShader);
+          instancedMaterial.forEach(x => x.onBeforeCompile = this.onBeforeCompile(x.onBeforeCompile));
         } else {
           instancedMaterial = mesh.material.clone();
-          instancedMaterial.onBeforeCompile = this.patchInstancesIntoShader;
+          instancedMaterial.onBeforeCompile = this.onBeforeCompile(instancedMaterial.onBeforeCompile);
         }
       }
 
@@ -2878,56 +2889,64 @@
       this.occupiedBlocks = [];
     },
 
-    patchInstancesIntoShader(shader) {
-      let vertexShader = shader.vertexShader;
-      let fragmentShader = shader.fragmentShader;
+    onBeforeCompile(oldOnBeforeCompileFn) {
+      const oldFunction = oldOnBeforeCompileFn;
 
-      vertexShader = vertexShader.replace('void main()', `
-    attribute vec3 instancePosition;
-    attribute vec4 instanceQuaternion;
-    attribute vec4 instanceColor;
-    attribute vec3 instanceScale;
+      return function onBeforeCompile(shader) {
+        if (oldFunction) {
+          oldFunction(shader);
+        }
 
-    varying vec4 vInstanceColor;
-
-    vec3 applyQuaternion( const vec3 v, const vec4 q ) 
-    {
-      return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
-    }
-
-    void main()`);
-
-      vertexShader = vertexShader.replace('#include <color_vertex>', `
-    #include <color_vertex>
-    vInstanceColor = instanceColor;`);
-
-      vertexShader = vertexShader.replace('#include <begin_vertex>', `
-    vec3 transformed = applyQuaternion( position*instanceScale, instanceQuaternion ) + instancePosition;`);
-
-      vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
-    vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal/instanceScale, -instanceQuaternion );
+        let vertexShader = shader.vertexShader;
+        let fragmentShader = shader.fragmentShader;
     
-    #ifdef FLIP_SIDED
-      transformedNormal = - transformedNormal;
-    #endif
-
-    #ifdef USE_TANGENT
-      vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent/instanceScale, -instanceQuaternion );
+        vertexShader = vertexShader.replace('void main()', `
+      attribute vec3 instancePosition;
+      attribute vec4 instanceQuaternion;
+      attribute vec4 instanceColor;
+      attribute vec3 instanceScale;
+  
+      varying vec4 vInstanceColor;
+  
+      vec3 applyQuaternion( const vec3 v, const vec4 q ) 
+      {
+        return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
+      }
+  
+      void main()`);
+    
+        vertexShader = vertexShader.replace('#include <color_vertex>', `
+      #include <color_vertex>
+      vInstanceColor = instanceColor;`);
+    
+        vertexShader = vertexShader.replace('#include <begin_vertex>', `
+      vec3 transformed = applyQuaternion( position*instanceScale, instanceQuaternion ) + instancePosition;`);
+    
+        vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
+      vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal/instanceScale, -instanceQuaternion );
+      
       #ifdef FLIP_SIDED
-        transformedTangent = - transformedTangent;
+        transformedNormal = - transformedNormal;
       #endif
-    #endif`);
-
-      fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
-    #include <color_pars_fragment>
-    varying vec4 vInstanceColor;`);
-
-      fragmentShader = fragmentShader.replace('#include <color_fragment>', `
-    #include <color_fragment>
-    diffuseColor *= vInstanceColor;`);
-
-      shader.vertexShader = vertexShader;
-      shader.fragmentShader = fragmentShader;
+  
+      #ifdef USE_TANGENT
+        vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent/instanceScale, -instanceQuaternion );
+        #ifdef FLIP_SIDED
+          transformedTangent = - transformedTangent;
+        #endif
+      #endif`);
+    
+        fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
+      #include <color_pars_fragment>
+      varying vec4 vInstanceColor;`);
+    
+        fragmentShader = fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      diffuseColor *= vInstanceColor;`);
+    
+        shader.vertexShader = vertexShader;
+        shader.fragmentShader = fragmentShader;
+      }
     },
 
     reserveBlock(requestedSize) {
@@ -3917,7 +3936,7 @@
         } else {
           // this.instanceBlocks = this.instancePools.map(inst => inst.requestBlock(this.maxParticles))
           // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
-          this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.floor( this.maxParticles / this.instancePools.length)) );
+          this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.ceil( this.maxParticles / this.instancePools.length)) );
           this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`); });
         }
       }
@@ -3966,7 +3985,7 @@
         return [undefined, undefined, undefined]
       }
 
-      const instanceID = this.instanceIndices[instanceIndex] + particleID/this.instancePools.length;
+      const instanceID = this.instanceIndices[instanceIndex] + Math.floor(particleID/this.instancePools.length);
       return [instance, instanceID, particleID]
     },
 
@@ -5092,6 +5111,7 @@ vec2 worley(const vec2 P, const float jitter) {
     }) )
   };
 
+  // @ts-ignore
   const toLowerCase$1 = x => x.toLowerCase();
 
   // console.assert(AFRAME.utils.deepEqual(parseVecRange("", [1,2,3]), [1,2,3,1,2,3]))
@@ -6845,6 +6865,28 @@ void main() {
   #include <fog_fragment>
 }`;
 
+  AFRAME.registerComponent('texture-updater', {
+    schema: {
+      maps: { default: "map" },
+      meshName: { default: "mesh" },
+    },
+
+    update() {
+      this.maps = this.data.maps.split(",").map(x => x.trim());
+    },
+
+    tick() {
+      const mesh = this.el.getObject3D(this.data.meshName);
+      if (mesh && mesh.material) {
+        for (let map of this.maps) {
+          if (mesh.material[map]) {
+            mesh.material[map].needsUpdate = true;
+          }
+        }
+      }
+    },
+  });
+
   // Copyright 2018-2019 harlyq
   // MIT license
 
@@ -7223,6 +7265,93 @@ void main() {
         }
       }
     })(),
+  });
+
+  // @ts-ignore
+  function toLowerCase$2(str) { return str.toLowerCase() }
+
+  const WRAPPING_MAP = {
+    "repeat": THREE.RepeatWrapping,
+    "clamptoedge": THREE.ClampToEdgeWrapping,
+    "mirroredrepeat": THREE.MirroredRepeatWrapping,
+  };
+
+  AFRAME.registerComponent("uv-transform", {
+    schema: {
+      offset: { type: "vec2" },
+      repeat: { type: "vec2", default: {x:1, y:1} },
+      rotation: { type: "number" },
+      center: { type: "vec2", default: {x:.5, y:.5} },
+      meshName: { default: "mesh" },
+      wrapS: { default: "repeat", oneOf: ["repeat", "clampToEdge", "mirroredRepeat"], parse: toLowerCase$2},
+      wrapT: { default: "repeat", oneOf: ["repeat", "clampToEdge", "mirroredRepeat"], parse: toLowerCase$2},
+      maps: { type: "string", default: "map" }
+    },
+
+    multiple: true,
+
+    init() {
+      this.onObject3DSet = this.onObject3DSet.bind(this);
+
+      this.el.addEventListener("object3dset", this.onObject3DSet);
+    },
+
+    remove() {
+      this.el.removeEventListener("object3dset", this.onObject3DSet);
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      if (oldData.rotation !== data.rotation) {
+        this.rotation = THREE.Math.degToRad(data.rotation);
+      }
+
+      if (oldData.wrapS !== data.wrapS || oldData.wrapT !== data.wrapT) {
+        this.wrapS = WRAPPING_MAP[data.wrapS] || THREE.RepeatWrapping;
+        this.wrapT = WRAPPING_MAP[data.wrapT] || THREE.RepeatWrapping;
+      }
+
+      if (oldData.maps !== data.maps) {
+        this.maps = data.maps.split(",").map(x => x.trim());
+      }
+
+      this.updateUVs();
+    },
+
+    onObject3DSet(e) {
+      if (e.target === this.el && e.detail.type === this.data.meshName) {
+        this.updateUVs();
+      }
+    },
+
+    updateUVs() {
+      const data = this.data;
+      const offset = data.offset;
+      const repeat = data.repeat;
+      const rotation = this.rotation;
+      const center = data.center;
+      const wrapS = this.wrapS;
+      const wrapT = this.wrapT;
+
+      function setElements(map) {
+        if (map) {
+          map.wrapS = wrapS;
+          map.wrapT = wrapT;
+          map.offset.copy(offset);
+          map.repeat.copy(repeat);
+          map.center.copy(center);
+          map.rotation = rotation;
+        }
+      }
+
+      const mesh = this.el.getObject3D(this.data.meshName);
+      if (mesh && mesh.material) {
+        for (let map of this.maps) {
+          setElements(mesh.material[map]);
+        }
+      }
+    }
   });
 
   // @ts-ignore
