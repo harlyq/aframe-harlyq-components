@@ -64,6 +64,10 @@ AFRAME.registerComponent('materialx', {
   },
 
   updateSchema: function (data) {
+    if (typeof data === "string") {
+      error(`invalid properties, expected format <property>:<value>; '${data}'`)
+    }
+    
     var currentShader;
     var newShader;
     var schema;

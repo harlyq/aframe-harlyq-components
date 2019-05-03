@@ -17,7 +17,6 @@ AFRAME.registerComponent("simple-hands", {
     radius: {default: 0.05},
     watch: {default: true},
     bubble: {default: true},
-    debug: {default: false},
   },
 
   init() {
@@ -74,7 +73,7 @@ AFRAME.registerComponent("simple-hands", {
 
     if (!AFRAME.utils.deepEqual(data.offset, oldData.offset) || data.radius !== oldData.radius) {
 
-      if (data.debug) {
+      if (this.el.hasAttribute("debug")) {
         if (this.sphereDebug) {
           this.el.object3D.remove( this.sphereDebug )
         }
@@ -115,7 +114,7 @@ AFRAME.registerComponent("simple-hands", {
   
           let obj3D = el.object3D  
           if (!obj3D.boundingSphere || !obj3D.boundingBox || obj3D.boundingBox.isEmpty()) {
-            this.generateOrientedBoundingBox(obj3D)
+            this.generateOrientedBoundingBox(obj3D, this.el.hasAttribute("debug"))
           }
   
           if (obj3D.boundingBox.isEmpty()) { 
@@ -156,7 +155,7 @@ AFRAME.registerComponent("simple-hands", {
     }
   })(),
 
-  generateOrientedBoundingBox(obj3D) {
+  generateOrientedBoundingBox(obj3D, debug) {
     // cache boundingBox and boundingSphere
     obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3()
     obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere()
@@ -165,7 +164,7 @@ AFRAME.registerComponent("simple-hands", {
     if (!obj3D.boundingBox.isEmpty()) {
       obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere)
 
-      if (this.data.debug) {
+      if (debug) {
         let tempBox = new THREE.Box3()
         tempBox.copy(obj3D.boundingBox)
         obj3D.boundingBoxDebug = new THREE.Box3Helper(tempBox)

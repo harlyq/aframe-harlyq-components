@@ -13,6 +13,7 @@
       <audio id="music" src="../../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay></audio>
       <a-entity procedural-texture="canvas: #blob; shader: #blobshader" visible="false">
         <script id="blobshader" type="x-shader/x-fragment">
+          precision highp float;
           varying vec2 vUv;
           void main() {
             gl_FragColor = mix(vec4(0.), vec4(1.), 1. - smoothstep(.2, .5, length(vUv - .5)));

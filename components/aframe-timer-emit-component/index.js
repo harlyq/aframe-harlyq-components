@@ -23,6 +23,10 @@ AFRAME.registerComponent("timer-emit", {
   },
 
   updateSchema(newData) {
+    if (typeof newData !== "object") {
+      console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
+    }
+    
     const originalSchema = AFRAME.components["timer-emit"].schema
     let newSchema = {}
 

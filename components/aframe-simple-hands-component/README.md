@@ -2,6 +2,8 @@
 
 **simple-hands** offers hover and grab events and can be used on entities with a **tracked-controls** component.  The hover events use sphere to object aligned bounding box checks, selecting the smallest object if multiple objects overlap.
 
+If the **debug** component is on this entity then show a wireframe around the collision sphere and boxes around each of the objects that are subject to collision checks
+
 e.g.
 ```html
 <a-entity vive-controls="hand: left" simple-hands="objects: .special; offset: 1 1 0; radius: 0.01"></a-entity>
@@ -20,11 +22,6 @@ e.g.
 **bubble** : boolean = `true`
 
 emitted events will bubble up the entity hierarchy
-
----
-**debug** : boolean = `false`
-
-show a wireframe around the collision sphere and boxes around each of the objects that are subject to collision checks
 
 ---
 **objects** : string = ""

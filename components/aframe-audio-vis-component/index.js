@@ -111,10 +111,14 @@ AFRAME.registerComponent("audio-vis", {
     this.analyser = this.system.getOrCreateAnalyser()
   },
 
-  updateSchema: function (data) {
+  updateSchema: function (newData) {
+    if (typeof newData !== "object") {
+      console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
+    }
+    
     let newRules = {}
 
-    for (let key in data) {
+    for (let key in newData) {
       if (!(key in this.schema)) {
         newRules[key] = { type: "string", }
       }

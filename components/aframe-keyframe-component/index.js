@@ -70,6 +70,10 @@ AFRAME.registerComponent("keyframe", {
   },
 
   updateSchema(newData) {
+    if (typeof newData !== "object") {
+      console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
+    }
+    
     const originalSchema = AFRAME.components[this.name].schema
     let newSchema = {} // everything that has changed from the ORIGINAL schema
 

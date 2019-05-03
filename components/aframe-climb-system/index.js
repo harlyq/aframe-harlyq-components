@@ -13,7 +13,6 @@ AFRAME.registerSystem("climb", {
     cameraRig: { type: "selector" },
     enable: { default: true },
     climbables: { default: "" },
-    debug: { default: false },
   },
 
   init() {
@@ -131,9 +130,10 @@ AFRAME.registerSystem("climb", {
       if (!hand3D) {
         return
       }
+      const debug = this.el.hasAttribute("debug")
   
       if (!hand3D.boundingSphere || hand3D.boundingSphere.empty()) {
-        this.generateOrientedBoundingBox(hand3D, this.data.debug)
+        this.generateOrientedBoundingBox(hand3D, debug)
       }
 
       handSphereWorld.copy(hand3D.boundingSphere.center).applyMatrix4(hand3D.matrixWorld)
@@ -149,7 +149,7 @@ AFRAME.registerSystem("climb", {
   
         if (!climbable3D.boundingSphere || climbable3D.boundingSphere.empty()) {
           // console.log("attemptGrab no sphere")
-          this.generateOrientedBoundingBox(climbable3D, this.data.debug)
+          this.generateOrientedBoundingBox(climbable3D, debug)
         }
   
         tempA.copy(climbable3D.boundingSphere.center).applyMatrix4(climbable3D.matrixWorld)

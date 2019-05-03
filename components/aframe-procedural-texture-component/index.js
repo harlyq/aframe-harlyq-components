@@ -66,6 +66,10 @@ AFRAME.registerComponent("procedural-texture", {
   },
 
   updateSchema(newData) {
+    if (typeof newData !== "object") {
+      console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
+    }
+    
     if (!this.data || this.data.shader !== newData.shader) {
       this.shaderProgram = ""
       this.uniforms = {}
