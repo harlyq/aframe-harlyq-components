@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SVG UI Examples</title>
+    <!--script src="https://aframe.io/releases/0.9.0/aframe.js"></script-->
+    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+    <script id="ui_template" type="x-template">
+      <svg id="svg1" viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg" version="1.1">
+        <g id="two">
+          <circle id="circle1" cx="50" cy="50" r="30" cursor="move" fill="${_col}"/>
+        </g>
+      </svg>
+    </script>
+    <script id="ui_custom" type="x-template">
+      <svg id="svg2" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" version="1.1">
+        <rect x="0" y="0" width="120" height="120" stroke="cyan"/>
+        ${_boxes.split(",").map(box => box.trim()).map( (box,i) => {
+          const yPos = 18+30*i
+          return `
+            <text x="20" y="${yPos+15}" fill="cyan">check ${box}</text>
+            <rect id="${box}" x="80" y="${yPos}" width="20" height="20" stroke="cyan" fill="${box==_checked ? 'teal' : 'black'}"/>
+          `
+        }).join("")}
+        <text x="2" y="115" fill="cyan">${_time}</text>
+      </svg>
+    </script>
+  </head>
+  <body>
+    <a-scene id="scene" background2="color: black" store__a="_checked: A">
+      <a-entity laser-controls="hand: left" raycaster="objects: [svg-ui]; far: 8" line="color: cyan; opacity: 0.75"></a-entity>
+      <a-plane position="0 2 -5" 
+        svg-ui="template: #ui_template; selectable: true; clickSelector: g; _col: purple"
+      ></a-plane>
+      <a-plane id="counter" position="-2 2 -5" 
+        svg-ui="template: #ui_custom; selectable: true; clickSelector: rect; bubbles: true; _boxes: A,B,C; _checked:; _time: 0"
+        store-bind__1="store: #scene; from: store__a._checked; to: svg-ui._checked"
+        wait-set__1="event: svg-ui-click; target: a-scene; store__a._checked: $event.detail.clickTarget.id"
+        wait-set__2="event: test-tick; svg-ui._time: $event.detail.count"
+        material="transparent: true"
+      ></a-plane>
+    </a-scene>
+    <script>
+      const counterEl = document.getElementById("counter")
+      setInterval(mark, 5) // faster than the animationFrame
+      
+      function mark() {
+        counterEl.emit("test-tick", {count: Date.now()}) // use a tick because setAttribute() doesn't like components with kebab-case
+      }
+    </script>
+  </body>
+</html>
