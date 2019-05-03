@@ -125,12 +125,8 @@ AFRAME.registerComponent("wait-set", {
       if (!event) {
         console.log(`value of $event but no event received`)
       } else {
-        result = utils.getWithPath(event, parts.slice(1))
-        if (typeof result === "object") {
-          console.log(`'${value}' generates a group of values, it must be a single value e.g. $event.target.id`)
-        }
+        result = attribute.stringify( utils.getWithPath(event, parts.slice(1)) )
       }
-
     }
 
     return result
