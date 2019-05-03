@@ -2,6 +2,8 @@
 
 **wait-set**  is useful for setting properties after an **event** has been received. It can set an arbitrary number of properties on one or more **target** elements, with fixed or random values
 
+If the **debug** component is also on this entity then log the properties that are set to the console
+
 This component can appear multiple times on a single entity
 
 e.g.

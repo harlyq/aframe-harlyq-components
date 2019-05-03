@@ -1,6 +1,6 @@
 // Copyright 2018-2019 harlyq
 // MIT license
-import { aframeHelper, attribute, pseudorandom } from "harlyq-helpers"
+import { aframeHelper, attribute, pseudorandom, utils } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or event
@@ -21,7 +21,7 @@ AFRAME.registerComponent("wait-set", {
     this.setProperties = this.setProperties.bind(this)
     this.startDelay = this.startDelay.bind(this)
 
-    this.eventTargetEl = undefined
+    this.event = undefined
     this.rules = {}
     this.sources = []
 
@@ -36,6 +36,10 @@ AFRAME.registerComponent("wait-set", {
   },
 
   updateSchema(newData) {
+    if (typeof newData !== "object") {
+      console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
+    }
+    
     const originalSchema = AFRAME.components[this.name].schema
     let newSchema = {}
 
@@ -91,22 +95,45 @@ AFRAME.registerComponent("wait-set", {
   },
 
   startDelay(e) {
-    // console.log("wait-set:startDelay", e.target.id, this.data.event)
-    this.eventTargetEl = e ? e.target : undefined
+    this.event = e
     this.waitTimer.start(this.data.delay, this.setProperties)
   },
 
   setProperties() {
-    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, this.eventTargetEl)
+    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, this.event ? this.event.target : undefined)
 
     for (let el of elements) {
       for (let prop in this.rules) {
         let rule = this.rules[prop]
 
         const value = attribute.stringify( attribute.randomize(rule, this.lcg.random) )
-        // console.log("wait-set:setProperties", el.id, prop, value)
-        aframeHelper.setProperty(el, prop, value)
+        const processedValue = this.processValue(value, this.event)
+        if (this.el.hasAttribute("debug")) {
+          console.log("wait-set:setProperties", "id=", el.id, "property=", prop, "value=", value, "$event=", this.event)
+        }
+
+        aframeHelper.setProperty(el, prop, processedValue)
       }
     }
   },
+
+  processValue(value, event) {
+    let result = value
+
+    if (value.indexOf("$event") === 0) {
+      const parts = value.split(".")
+      if (!event) {
+        console.log(`value of $event but no event received`)
+      } else {
+        result = utils.getWithPath(event, parts.slice(1))
+        if (typeof result === "object") {
+          console.log(`'${value}' generates a group of values, it must be a single value e.g. $event.target.id`)
+        }
+      }
+
+    }
+
+    return result
+  }
+
 })
