@@ -14,6 +14,11 @@ waits `1.5` seconds after the event `start` has been received on this component'
 
 ## Properties
 
+**debug**: boolean = `false`
+
+if true show debugging information when properties are set
+
+---
 **delay** : number = `0`
 
 wait for this many seconds before sending **outEvent**.  If **inEvent** is specified, then only start the delay once **inEvent** is received

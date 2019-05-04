@@ -24,6 +24,11 @@ e.g.
 emitted events will bubble up the entity hierarchy
 
 ---
+**debug**: boolean = `false`
+
+if true, show debug bounding boxes around objects that are tested for overlap
+
+---
 **objects** : string = ""
 
 a selector to filter the objects to be tested for overlap

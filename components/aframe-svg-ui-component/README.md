@@ -30,6 +30,11 @@ If true, events bubble up through the hierarchy, otherwise they only appear on t
 A selector which defines the svg elements that will generate `svg-ui-click` events.  The clicks work by capturing a `click` event received on the object and then using a **raycaster** component (which has this entity in it's **objects** list) to determine where the object was clicked.  Both `click` event and **raycaster** component are automatically provided when using a **cursor** component
 
 ---
+**debug**: boolean = `false`
+
+If true, show debugging information about clicks, hovers and SVG strings
+
+---
 **hoverSelector**: string = ""
 
 A selector which defines the svg elements that will generate `svg-ui-enter` and `svg-ui-leave` events.  There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is hovering.  The **raycaster** component is provided automatically when using a **cursor** component

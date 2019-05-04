@@ -5,6 +5,7 @@ AFRAME.registerComponent("svg-ui", {
     hoverSelector: { default: "" },
     resolution: { type: "vec2", default: {x: 512, y:512} },
     bubbles: { default: false },
+    debug: { default: false },
   },
 
   // copy new properties to the schema so they will appear in the Inspector
@@ -127,7 +128,7 @@ AFRAME.registerComponent("svg-ui", {
     if (this.templateContent) {
 
       const generatedContent = this.processTemplate(this.templateContent)
-      if (this.el.hasAttribute("debug")) {
+      if (this.data.debug) {
         console.log(generatedContent)
       }
 
@@ -239,7 +240,7 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   onRaycasterIntersected(e) {
-    if (this.el.hasAttribute("debug")) {
+    if (this.data.debug) {
       console.log("onRaycasterIntersected")
     }
     this.raycaster = e.detail.el
@@ -247,15 +248,14 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   onRaycasterIntersectedCleared(e) {
-    if (this.el.hasAttribute("debug")) {
+    if (this.data.debug) {
       console.log("onRaycasterIntersectedCleared")
     }
     this.raycaster = undefined
   },
 
   onClick(e) {
-    const debug = this.el.hasAttribute("debug")
-    if (debug) {
+    if (this.data.debug) {
       console.log("click", this.el.id)
     }
 
@@ -263,7 +263,7 @@ AFRAME.registerComponent("svg-ui", {
       const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
 
       if (intersection) {
-        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, this.data.clickSelector, debug)
+        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, this.data.clickSelector, this.data.debug)
 
         if (hitElements && hitElements.length > 0) {
           this.sendEvent("svg-ui-click", { uiTarget: hitElements[0] })
@@ -273,7 +273,7 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   sendEvent(name, details) {
-    if (this.el.hasAttribute("debug")) {
+    if (this.data.debug) {
       console.log("emit", name, details)
     }
 

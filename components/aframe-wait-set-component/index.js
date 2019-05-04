@@ -14,6 +14,7 @@ AFRAME.registerComponent("wait-set", {
     target: { default: "" },
     targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
     seed: { type: "int", default: -1 },
+    debug: { default: false },
   },
   multiple: true,
 
@@ -108,7 +109,7 @@ AFRAME.registerComponent("wait-set", {
 
         const value = attribute.stringify( attribute.randomize(rule, this.lcg.random) )
         const processedValue = this.processValue(value, this.event)
-        if (this.el.hasAttribute("debug")) {
+        if (this.data.debug) {
           console.log("wait-set:setProperties", "id=", el.id, "property=", prop, "value=", value, "$event=", this.event)
         }
 

@@ -17,6 +17,7 @@ AFRAME.registerComponent("simple-hands", {
     radius: {default: 0.05},
     watch: {default: true},
     bubble: {default: true},
+    debug: {default: false},
   },
 
   init() {
@@ -73,7 +74,7 @@ AFRAME.registerComponent("simple-hands", {
 
     if (!AFRAME.utils.deepEqual(data.offset, oldData.offset) || data.radius !== oldData.radius) {
 
-      if (this.el.hasAttribute("debug")) {
+      if (data.debug) {
         if (this.sphereDebug) {
           this.el.object3D.remove( this.sphereDebug )
         }
@@ -114,7 +115,7 @@ AFRAME.registerComponent("simple-hands", {
   
           let obj3D = el.object3D  
           if (!obj3D.boundingSphere || !obj3D.boundingBox || obj3D.boundingBox.isEmpty()) {
-            this.generateOrientedBoundingBox(obj3D, this.el.hasAttribute("debug"))
+            this.generateOrientedBoundingBox(obj3D, data.debug)
           }
   
           if (obj3D.boundingBox.isEmpty()) { 
