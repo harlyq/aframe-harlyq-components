@@ -61,9 +61,13 @@ AFRAME.registerComponent("svg-ui", {
     const data = this.data
 
     if (oldData.template !== data.template) {
-      // TODO support svg files, e.g. url(file.svg) or <a-asset-item id="an_svg_file" src="file.svg"/>
-      const templateEl = data.template ? document.querySelector(data.template) : undefined
-      this.templateContent = templateEl ? templateEl.textContent.trim() : data.template.trim()
+      const match = data.template && data.template.match(/url\((.+)\)/)
+      if (match) {
+        this.loadSVG(match[1])
+      } else {
+        const templateEl = data.template ? document.querySelector(data.template) : undefined
+        this.templateContent = templateEl ? templateEl.textContent.trim() : data.template.trim()
+      }
     }
 
     if (this.isFirstTime) {
@@ -154,6 +158,21 @@ AFRAME.registerComponent("svg-ui", {
     if (mesh) {
       mesh.material.map = this.texture
     }
+  },
+
+  loadSVG(filename) {
+    const fileLoader = new THREE.FileLoader()
+    fileLoader.load(
+      filename, 
+      (data) => {
+        this.templateContent = data
+        this.updateSVGTexture()
+      },
+      () => {},
+      (err) => {
+        console.error(`unable to load: ${filename} `, err)
+      }
+    )
   },
 
   processTemplate(str) {

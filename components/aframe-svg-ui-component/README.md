@@ -42,7 +42,8 @@ The resolution of the texture onto which the SVG is generated. The lower the res
 ---
 **template**: string = ""
 
-An SVG string or a reference to a **script** element which contains the SVG string.  This string is treated as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), and all attributes on the component are available to the template. This is useful for dynamically updating the SVG, as any changes to the attributes will regenerate the SVG texture
+An SVG string, reference to a **script** element which contains the SVG string, or a `url(<filename>)` which contains the svg text.  This string is treated as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), and all attributes on the component are available to the template. This is useful for dynamically updating the SVG, as any changes to the attributes will regenerate the SVG texture.  If the svg contains any animation add a **texture-updater** component, to ensure the changes are re-rendered every frame.
+
 
 ---
 **\<attribute\>**: string = ""
