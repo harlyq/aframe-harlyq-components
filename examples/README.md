@@ -51,6 +51,12 @@ https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
+### store
+https://harlyq.github.io/aframe-harlyq-components/examples/sv-ui.html
+### store-bind
+https://harlyq.github.io/aframe-harlyq-components/examples/sv-ui.html
+### svg-ui
+https://harlyq.github.io/aframe-harlyq-components/examples/sv-ui.html
 ### texture-updater
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
 ### timer-emit

@@ -32,6 +32,9 @@ AFRAME.registerComponent('store', {
 
   init() {
     this.binds = []
+    this.firstTime = true
+
+    this.loadStorage()
     this.el.emit("store-loaded", { store: this, name: this.attrName })
   },
 
@@ -42,6 +45,49 @@ AFRAME.registerComponent('store', {
       const key = bind.key
       if (data[key] !== oldData[key]) {
         aframeHelper.setProperty(bind.target, bind.prop, data[key])
+      }
+    }
+
+    if (!this.firstTime) {
+      this.saveStorage()
+    }
+
+    this.firstTime = false
+  },
+
+  loadStorage() {
+    const originalSchema = AFRAME.components[this.name].schema
+    const data = this.data
+    if (data.type === "temporary") { return }
+
+    for (let key in this.data) {
+      if (!(key in originalSchema)) {
+        let value = null
+        if (data.type === "local") {
+          value = localStorage.getItem(key)
+        } else if (data.type === "session") {
+          value = sessionStorage.getItem(key)
+        }
+
+        if (value !== null) {
+          data[key] = value
+        }
+      }
+    }
+  },
+
+  saveStorage() {
+    const originalSchema = AFRAME.components[this.name].schema
+    const data = this.data
+    if (data.type === "temporary") { return }
+
+    for (let key in this.data) {
+      if (!(key in originalSchema)) {
+        if (data.type === "local") {
+          localStorage.setItem(key, data[key])
+        } else if (data.type === "session") {
+          sessionStorage.setItem(key, data[key])
+        }
       }
     }
   },
