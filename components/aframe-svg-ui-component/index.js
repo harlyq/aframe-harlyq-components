@@ -2,6 +2,7 @@ AFRAME.registerComponent("svg-ui", {
   schema: {
     template: { default: "" },
     clickSelector: { default: "" },
+    hoverSelector: { default: "" },
     resolution: { type: "vec2", default: {x: 512, y:512} },
     bubbles: { default: false },
   },
@@ -31,19 +32,12 @@ AFRAME.registerComponent("svg-ui", {
     this.isFirstTime = true
     this.hasUIListeners = false
     this.raycaster = undefined
-    this.hoverInfos = []
+    this.hoverEls = []
     this.onSetObject3D = this.onSetObject3D.bind(this)
     this.onRaycasterIntersected = this.onRaycasterIntersected.bind(this)
     this.onRaycasterIntersectedCleared = this.onRaycasterIntersectedCleared.bind(this)
     this.onClick = this.onClick.bind(this)
 
-    // TESTING HACK
-    this.tick = AFRAME.utils.throttleTick(this.tick, 1000, this)
-    this.raycaster2 = new THREE.Raycaster()
-    this.onMouseDown = this.onMouseDown.bind(this)
-    window.addEventListener("mousedown", this.onMouseDown)
-
-    // this.el.setAttribute("material", "side", "double")
     this.el.addEventListener("setobject3d", this.onSetObject3D)
   },
 
@@ -61,19 +55,6 @@ AFRAME.registerComponent("svg-ui", {
 
   pause() {
     this.removeUIListeners()
-  },
-
-  onMouseDown(e) { // TESTING HACK
-    const x = 2*e.clientX/window.innerWidth - 1
-    const y = -2*e.clientY/window.innerHeight + 1
-    const mesh = this.el.getObject3D("mesh")
-
-    this.raycaster2.setFromCamera( {x, y}, this.el.sceneEl.camera )
-    const intersects = this.raycaster2.intersectObject( mesh, true )
-
-    for (let intersect of intersects) {
-      console.log("hit", this.calcElementsFromWorldPosition(mesh, intersect.point), intersect.point)
-    }
   },
 
   update(oldData) {
@@ -95,19 +76,16 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   tick() {
-    // if (!this.raycaster) {
-    //   // this.el.sceneEl.removeBehavior(this)
-    // } else {
-    //   const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
-    //   if (intersection) {
-    //     this.updateHover(intersection.point)
-    //   }
-    // }
+    if (!this.raycaster) {
+      this.el.sceneEl.removeBehavior(this)
+    } else {
+      this.updateHover()
+    }
   },
 
   isSelectable() {
     const data = this.data
-    return data.clickSelector
+    return data.clickSelector || data.hoverSelector
   },
 
   addUIListeners() {
@@ -135,13 +113,7 @@ AFRAME.registerComponent("svg-ui", {
     this.imageEl.width = data.resolution.x
     this.imageEl.height = data.resolution.y
     
-    const texture = this.texture = new THREE.Texture(this.imageEl) // VideoTexture??
-    // texture.generateMipmaps = false;
-
-    // this.imageEl.addEventListener("load", () => {
-    //   texture.needsUpdate = true
-    // })
-    
+    this.texture = new THREE.Texture(this.imageEl)
 
     this.updateSVGTexture()
     this.showSVGTextureOnMesh()
@@ -151,23 +123,25 @@ AFRAME.registerComponent("svg-ui", {
     if (this.templateContent) {
 
       const generatedContent = this.processTemplate(this.templateContent)
+      if (this.el.hasAttribute("debug")) {
+        console.log(generatedContent)
+      }
 
       if (this.isSelectable()) {
         if (!this.proxyEl) {
           this.proxyEl = document.createElement("div")
+          this.proxyEl.style.position = "absolute"
+          this.proxyEl.style.top = "0"
+          this.proxyEl.style.left = "0"
+          this.proxyEl.style.zIndex = "-999"
           document.body.appendChild(this.proxyEl)
         }
 
         this.proxyEl.innerHTML = generatedContent
-        this.proxyEl.style.position = "absolute"
-        this.proxyEl.style.top = "0"
-        this.proxyEl.style.left = "0"
-        this.proxyEl.style.zIndex = "-999"
         this.proxySVGEl = this.proxyEl.children[0]
         this.proxySVGEl.setAttribute("width", this.data.resolution.x)
         this.proxySVGEl.setAttribute("height", this.data.resolution.y)
-        this.proxyRect = this.proxySVGEl.getBoundingClientRect() 
-  
+        this.proxyRect = this.proxySVGEl.getBoundingClientRect()   
       }
 
       this.imageEl.src = 'data:image/svg+xml;utf8,' + generatedContent
@@ -192,7 +166,7 @@ AFRAME.registerComponent("svg-ui", {
   calcElementsFromWorldPosition: (function () {
     let localPos = new THREE.Vector3()
 
-    return function calcElementsFromWorldPosition(mesh, worldPos, debug = false) {
+    return function calcElementsFromWorldPosition(mesh, worldPos, selector, debug) {
       localPos.copy(worldPos)
       mesh.worldToLocal(localPos)
 
@@ -200,35 +174,63 @@ AFRAME.registerComponent("svg-ui", {
       const y = this.proxyRect.top + this.proxyRect.height*(0.5 - localPos.y)
 
       // only show elements that are part of this panel's svg
-      const elements = document.elementsFromPoint(x,y).filter(el => hasAncestor(el, this.proxySVGEl))
+      let elements = document.elementsFromPoint(x,y).filter(el => hasAncestor(el, this.proxySVGEl))
 
       if (debug) {
         console.log("hitElements", x, y, elements)
+      }
+
+      if (selector) {
+        elements = elements.map(el => findMatchingAncestor(el, selector)).filter(a => a)
+        if (debug) {
+          console.log("selectedElements", elements)
+        }  
       }
 
       return elements
     }
   })(),
 
-  // updateHover(worldPos) {
-  //   const overEls = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), worldPos).filter(el => el.matches(this.data.hovers))
-  //   for (let hoverInfo of this.hoverInfos) {
-  //     if (!overEls.includes(hoverInfo.el)) {
+  updateHover() {
+    if (this.raycaster) {
+      const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
 
-  //     }
-  //   }
-  // },
+      if (intersection) {
+        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, this.data.hoverSelector, false)
+
+        for (let el of this.hoverEls) {
+          if (!hitElements.includes(el)) {
+            this.sendEvent("svg-ui-leave", { uiTarget: el })
+          }
+        }
+
+        for (let el of hitElements) {
+          if (!this.hoverEls.includes(el)) {
+            this.sendEvent("svg-ui-enter", { uiTarget: el })
+          }
+        }
+
+        this.hoverEls = hitElements
+      }
+    }
+  },
 
   onSetObject3D(e) {
     this.showSVGTextureOnMesh()
   },
 
   onRaycasterIntersected(e) {
+    if (this.el.hasAttribute("debug")) {
+      console.log("onRaycasterIntersected")
+    }
     this.raycaster = e.detail.el
-    // this.el.sceneEl.addBehavior(this)
+    this.el.sceneEl.addBehavior(this)
   },
 
   onRaycasterIntersectedCleared(e) {
+    if (this.el.hasAttribute("debug")) {
+      console.log("onRaycasterIntersectedCleared")
+    }
     this.raycaster = undefined
   },
 
@@ -240,27 +242,24 @@ AFRAME.registerComponent("svg-ui", {
 
     if (this.raycaster) {
       const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
+
       if (intersection) {
-        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, debug)
-
-        const clickSelector = this.data.clickSelector
-        if (clickSelector) {
-          hitElements = hitElements.map(el => findMatchingAncestor(el, clickSelector)).filter(x => x)
-        }
-
-        if (debug) {
-          console.log("chosen", hitElements)
-        }
+        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, this.data.clickSelector, debug)
 
         if (hitElements && hitElements.length > 0) {
-          if (debug) {
-            console.log("emit", "svg-ui-click", {clickTarget: hitElements[0]})
-          }
-          this.el.emit("svg-ui-click", {clickTarget: hitElements[0]}, this.data.bubbles)
+          this.sendEvent("svg-ui-click", { uiTarget: hitElements[0] })
         }
       }
     }
   },
+
+  sendEvent(name, details) {
+    if (this.el.hasAttribute("debug")) {
+      console.log("emit", name, details)
+    }
+
+    this.el.emit(name, details, this.data.bubbles)
+  }
 })
 
 function hasAncestor(node, ancestor) {
