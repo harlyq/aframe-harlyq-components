@@ -3,7 +3,7 @@
      xmlns="http://www.w3.org/2000/svg">
   
   <rect x="10" y="10" width="100" height="100" fill="${_col}">
-    <animate attributeType="XML" attributeName="x" from="-100" to="120"
+    <animate attributeType="XML" attributeName="x" from="-50" to="120"
         dur="10s" repeatCount="indefinite"/>
   </rect>
 </svg>

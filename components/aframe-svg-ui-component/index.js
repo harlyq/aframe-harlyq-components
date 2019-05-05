@@ -1,6 +1,8 @@
 import { domHelper, aframeHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("svg-ui", {
+  dependencies: ['material'],
+
   schema: {
     template: { default: "" },
     clickSelector: { default: "" },
@@ -159,7 +161,9 @@ AFRAME.registerComponent("svg-ui", {
   showSVGTextureOnMesh() {
     const mesh = this.el.getObject3D("mesh")
     if (mesh) {
-      mesh.material.map = this.texture
+      if (!Array.isArray(mesh.material)) {
+        mesh.material.map = this.texture
+      }
     }
   },
 
@@ -171,15 +175,15 @@ AFRAME.registerComponent("svg-ui", {
     return result.replace(/#/g, '%23') // patch all # because they represent a fragment identifier when using data:image
   },
 
-  calcElementsFromWorldPosition: (function () {
-    let localPos = new THREE.Vector3()
+  calcElementsFromUV: (function () {
+    let transformedUV = new THREE.Vector2()
 
-    return function calcElementsFromWorldPosition(mesh, worldPos, selector, debug) {
-      localPos.copy(worldPos)
-      mesh.worldToLocal(localPos)
+    return function calcElementsFromUV(uv, selector, debug) {
+      transformedUV.copy(uv)
+      this.texture.transformUv(transformedUV)
 
-      const x = this.proxyRect.left + this.proxyRect.width*(localPos.x + 0.5)
-      const y = this.proxyRect.top + this.proxyRect.height*(0.5 - localPos.y)
+      const x = this.proxyRect.left + this.proxyRect.width*transformedUV.x
+      const y = this.proxyRect.top + this.proxyRect.height*transformedUV.y
 
       // only show elements that are part of this panel's svg
       let elements = document.elementsFromPoint(x,y).filter(el => domHelper.hasAncestor(el, this.proxySVGEl))
@@ -204,7 +208,7 @@ AFRAME.registerComponent("svg-ui", {
       const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
 
       if (intersection) {
-        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, this.data.hoverSelector, false)
+        let hitElements = this.calcElementsFromUV(intersection.uv, this.data.hoverSelector, false)
 
         for (let el of this.hoverEls) {
           if (!hitElements.includes(el)) {
@@ -249,9 +253,9 @@ AFRAME.registerComponent("svg-ui", {
 
     if (this.raycaster) {
       const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
-
+      console.log(intersection)
       if (intersection) {
-        let hitElements = this.calcElementsFromWorldPosition(this.el.getObject3D("mesh"), intersection.point, this.data.clickSelector, this.data.debug)
+        let hitElements = this.calcElementsFromUV(intersection.uv, this.data.clickSelector, this.data.debug)
 
         if (hitElements && hitElements.length > 0) {
           this.sendEvent("svg-ui-click", { uiTarget: hitElements[0] })
