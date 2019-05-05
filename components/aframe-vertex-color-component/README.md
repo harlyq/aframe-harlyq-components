@@ -4,15 +4,15 @@ Defines vertex colors for the current geometry.  A vertex is coloured only if it
 
 Note that the final object color is the material color multiplied by the vertex color, so to ensure the true vertex colors are shown, set the material color to white.  If the vertex-color is not applied, then it will default to white (which will be multiplied by the material color to determine the final color).
 
-Vertex colors are useful for merged geometry, because the colors are preserved after the merger.
+When using a-frame **geometry** and **vertex-color** ensure `skipCache: true` is set on the geometry, otherwise different entities will share the same geometry, and thus the same vertex colors
+
+This component can appear multiple times on a single entity
 
 e.g.
 ```html
 <a-box vertex-color="color: blue"></a-box>
 ```
 Uses vertex colors to make the box blue
-
-This component can appear multiple times on a single entity
 
 ## Properties
 

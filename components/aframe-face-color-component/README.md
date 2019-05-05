@@ -6,7 +6,7 @@ Note that the final object color is the material color multiplied by the face co
 
 Face colors only work on non-indexed buffer geometry.  If the geometry is indexed or is not buffer geometry then it will be replaced by a non-indexed buffer geometry version.
 
-Faces colors are useful for merged geometry, because the colors are preserved after the merger.
+When using a-frame **geometry** and **face-color** ensure `skipCache: true` is set on the geometry, otherwise different entities will share the same geometry, and thus the same face colors
 
 For **face-color** all vertices on a face are assigned the same color, whilst **vertex-color** sets the color of individual vertices (which will be blended across the triangle)
 
