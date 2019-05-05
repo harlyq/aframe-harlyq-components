@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Prefab examples</title>
+    <!--script src="https://aframe.io/releases/0.9.1/aframe.min.js"></script-->
+    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+    <script id="box" type="x-template">
+      <a-box color="${_col}" keyframe="position: ,${_offset}; direction: alternate; easing: ease-sine"></a-box>
+    </script>
+    <script id="tree" type="x-template">
+      <a-entity position="0 .7 0" material="color: ${_leafCol}" geometry="primitive: cone; height:.3; radiusTop:0; radiusBottom:.3; segmentsHeight:1; segmentsRadial:6" wait-set="rotation:-5 0 -5..5 0 5;"></a-entity>
+      <a-entity position="0 .4 0" material="color: ${_leafCol}" geometry="primitive: cone; height:.4; radiusTop:.2; radiusBottom:.5; segmentsHeight:1; segmentsRadial:6" wait-set="rotation:-5 0 -5..5 0 5"></a-entity>
+      <a-entity position="0 .2 0" material="color: ${_leafCol}" geometry="primitive: cone; height:.4; radiusTop:.2; radiusBottom:.6; segmentsHeight:1; segmentsRadial:6" wait-set="rotation:-5 0 -5..5 0 5"></a-entity>
+      <a-entity position="0 0 0" material="color: ${_trunkCol}" geometry="primitive: cylinder; height:.7; radius:.15a; segmentsHeight:1; segmentsRadial:6"></a-entity>
+    </script>
+  </head>
+  <body>
+    <a-scene stats>
+      <a-entity prefab="template: #box; _col: orange; _offset: .5 .5 .5" position="0 0 -5"></a-entity>
+      <a-entity prefab="template: #box; _col: teal; _offset: -.5 0 0" position="2 0 -5"></a-entity>
+      <a-entity position="-2 0 -5" merge-geometry>
+        <a-entity prefab="template: #tree; _trunkCol: brown; _leafCol: green;" position=".5 0 -1"></a-entity>
+        <a-entity prefab="template: #tree; _trunkCol: brown; _leafCol: gold;" position="0 0 0"></a-entity>
+        <a-entity prefab="template: #tree; _trunkCol: brown; _leafCol: darkgreen;" position="-1 0 .5"></a-entity>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
