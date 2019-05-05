@@ -1,3 +1,5 @@
+import { domHelper, aframeHelper } from "harlyq-helpers"
+
 AFRAME.registerComponent("svg-ui", {
   schema: {
     template: { default: "" },
@@ -30,7 +32,7 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   init() {
-    this.isFirstTime = true
+    this.firstTime = true
     this.hasUIListeners = false
     this.raycaster = undefined
     this.hoverEls = []
@@ -61,23 +63,23 @@ AFRAME.registerComponent("svg-ui", {
   update(oldData) {
     const data = this.data
 
-    if (oldData.template !== data.template) {
-      const match = data.template && data.template.match(/url\((.+)\)/)
-      if (match) {
-        this.loadSVG(match[1])
-      } else {
-        const templateEl = data.template ? document.querySelector(data.template) : undefined
-        this.templateContent = templateEl ? templateEl.textContent.trim() : data.template.trim()
-      }
+    if (this.firstTime) {
+      this.createSVGTexture()
     }
 
-    if (this.isFirstTime) {
-      this.createSVGTexture()
-      this.isFirstTime = false
-    } else {
+    if (oldData.template !== data.template) {
+      aframeHelper.loadTemplate(data.template, (text) => {
+        this.templateContent = text
+        this.updateSVGTexture()
+      })
+    }
+
+    if (!this.firstTime) {
       this.updateSVGTexture()
     }
+
     this.addUIListeners()
+    this.firstTime = false
   },
 
   tick() {
@@ -161,26 +163,12 @@ AFRAME.registerComponent("svg-ui", {
     }
   },
 
-  loadSVG(filename) {
-    const fileLoader = new THREE.FileLoader()
-    fileLoader.load(
-      filename, 
-      (data) => {
-        this.templateContent = data
-        this.updateSVGTexture()
-      },
-      () => {},
-      (err) => {
-        console.error(`unable to load: ${filename} `, err)
-      }
-    )
-  },
-
   processTemplate(str) {
     const templateArgs = Object.keys(this.data).concat("return `" + str + "`")
     const fn = new Function(...templateArgs)
     // @ts-ignore
-    return fn(...Object.values(this.data))
+    const result = fn(...Object.values(this.data))
+    return result.replace(/#/g, '%23') // patch all # because they represent a fragment identifier when using data:image
   },
 
   calcElementsFromWorldPosition: (function () {
@@ -194,14 +182,14 @@ AFRAME.registerComponent("svg-ui", {
       const y = this.proxyRect.top + this.proxyRect.height*(0.5 - localPos.y)
 
       // only show elements that are part of this panel's svg
-      let elements = document.elementsFromPoint(x,y).filter(el => hasAncestor(el, this.proxySVGEl))
+      let elements = document.elementsFromPoint(x,y).filter(el => domHelper.hasAncestor(el, this.proxySVGEl))
 
       if (debug) {
         console.log("hitElements", x, y, elements)
       }
 
       if (selector) {
-        elements = elements.map(el => findMatchingAncestor(el, selector)).filter(a => a)
+        elements = elements.map(el => domHelper.findMatchingAncestor(el, selector)).filter(a => a)
         if (debug) {
           console.log("selectedElements", elements)
         }  
@@ -280,20 +268,4 @@ AFRAME.registerComponent("svg-ui", {
     this.el.emit(name, details, this.data.bubbles)
   }
 })
-
-function hasAncestor(node, ancestor) {
-  let parent = node
-  while (parent && ancestor !== parent) {
-    parent = parent.parentNode
-  }
-  return !!parent
-}
-
-function findMatchingAncestor(node, selector) {
-  let parent = node
-  while (parent && 'matches' in parent && !parent.matches(selector)) {
-    parent = parent.parentNode
-  }
-  return parent && 'matches' in parent ? parent : undefined
-}
 

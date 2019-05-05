@@ -2,8 +2,8 @@
 <html>
   <head>
     <title>SVG UI Examples</title>
-    <!--script src="https://aframe.io/releases/0.9.0/aframe.js"></script-->
-    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="https://aframe.io/releases/0.9.0/aframe.js"></script>
+    <!--script src="../../aframe/aframe-0.9.0.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="ui_template" type="x-template">
       <svg id="svg1" viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg" version="1.1">
@@ -46,10 +46,13 @@
         material="transparent: true"
       ></a-plane>
       <a-plane position="2 2 -5" svg-ui="template: url(animated-square.svg); _col: orange;" texture-updater></a-plane>
+      <a-plane position="0 0 -5" svg-ui='debug: true; _col: #245; template: <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect x="5" y="5" width="80" height="60" rx="5" fill="${_col}"/></svg>;'></a-plane>
     </a-scene>
     <script>
       const counterEl = document.getElementById("counter")
-      setInterval(mark, 5) // faster than the animationFrame
+      if (counterEl) {
+        setInterval(mark, 5) // more often than the animationFrame
+      }
       
       function mark() {
         counterEl.emit("test-tick", {count: Date.now()}) // use a tick because setAttribute() doesn't like components with kebab-case
