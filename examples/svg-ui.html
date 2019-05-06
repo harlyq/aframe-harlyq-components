@@ -34,10 +34,11 @@
     <a-scene id="scene" background2="color: grey" store__a="type: session; _checked: A">
       <a-entity laser-controls="hand: right" raycaster="objects: [svg-ui]; far: 20" line="color: cyan; opacity: 0.75"></a-entity>
       <a-plane position="0 2 -5" 
+        material="transparent: true;" 
         svg-ui="template: #ui_template; clickSelector: g; _col: purple"
       ></a-plane>
       <a-entity id="counter" position="0 0 -10" 
-        material="transparent: true; color: white; side: back"
+        material="transparent: false; color: white; side: back"
         geometry="primitive: sphere; radius: 8; phiStart: -180; phiLength: 180; thetaStart: 40; thetaLength: 100"
         svg-ui="template: #ui_custom; clickSelector: rect; hoverSelector: rect[id]; bubbles: true; _boxes: A,B,C; _checked:; _hover:; _time: 0;"
         uv-transform="repeat: -1 1"
@@ -47,8 +48,8 @@
         wait-set__3="event: svg-ui-enter; svg-ui._hover: $event.detail.uiTarget.id;"
         wait-set__4="event: svg-ui-leave; svg-ui._hover: none"
       ></a-entity>
-      <a-plane position="2 2 -5" svg-ui="template: url(animated-square.svg); _col: orange;" texture-updater></a-plane>
-      <a-plane position="0 0 -5" svg-ui='_col: #245; template: <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect x="5" y="5" width="80" height="60" rx="5" fill="${_col}"/></svg>;'></a-plane>
+      <a-plane position="2 2 -5" material="transparent: true" svg-ui="template: url(animated-square.svg); _col: orange;" texture-updater></a-plane>
+      <a-plane position="0 0 -5" material="transparent: true" svg-ui='_col: #245; template: <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect x="5" y="5" width="80" height="60" rx="5" fill="${_col}"/></svg>;'></a-plane>
     </a-scene>
     <script>
       const counterEl = document.getElementById("counter")

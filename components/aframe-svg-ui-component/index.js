@@ -1,8 +1,6 @@
 import { domHelper, aframeHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("svg-ui", {
-  dependencies: ['material'],
-
   schema: {
     template: { default: "" },
     clickSelector: { default: "" },
@@ -251,15 +249,11 @@ AFRAME.registerComponent("svg-ui", {
       console.log("click", this.el.id)
     }
 
-    if (this.raycaster) {
-      const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
-      console.log(intersection)
-      if (intersection) {
-        let hitElements = this.calcElementsFromUV(intersection.uv, this.data.clickSelector, this.data.debug)
+    if (e.detail.intersection) {
+      let hitElements = this.calcElementsFromUV(e.detail.intersection.uv, this.data.clickSelector, this.data.debug)
 
-        if (hitElements && hitElements.length > 0) {
-          this.sendEvent("svg-ui-click", { uiTarget: hitElements[0] })
-        }
+      if (hitElements && hitElements.length > 0) {
+        this.sendEvent("svg-ui-click", { uiTarget: hitElements[0] })
       }
     }
   },

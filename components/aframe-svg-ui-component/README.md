@@ -27,7 +27,7 @@ If true, events bubble up through the hierarchy, otherwise they only appear on t
 ---
 **clickSelector**: string = ""
 
-A selector which defines the svg elements that will generate `svg-ui-click` events.  The clicks work by capturing a `click` event received on the object and then using a **raycaster** component (which has this entity in it's **objects** list) to determine where the object was clicked.  Both `click` event and **raycaster** component are automatically provided when using a **cursor** component
+A selector which defines the svg elements that will generate `svg-ui-click` events.  The clicks work by capturing a `click` event received on the object to determine where the object was clicked.  The `click` event is automatically provided when using a **cursor** component
 
 ---
 **debug**: boolean = `false`
