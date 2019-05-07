@@ -16,7 +16,7 @@ e.g.
   wait-set="event: svg-ui-click; svg-ui._col=red"
 ></a-plane>
 ```
-The last controls setup a `yellow` laser in the `right` hand which intersects any objects with an `svg-ui` template less than `5`m from the controller.  The UI is placed upon an `a-plane` and uses the template described in `#ui_template`.  This template is an svg rectangle with a circle near the middle, who's color is determined by the `_col` variable.  The **_col** variable is set to `blue` on the `svg-ui` component, and the component will generate `svg-ui-click` events whenever the user clicks on elements that match the `circle` **clickSelector**.  The **wait-set** takes the **svg-ui-click** events and sets the **svg-ui._col** to `red`, which will force a rebuild of the template and show a red circle on the UI texture
+The last controls setup a `yellow` laser in the `right` hand which intersects any objects with an `svg-ui` template less than `5`m from the controller.  The UI is placed upon an `a-plane` and uses the template described in `#ui_template`.  This template is an svg rectangle with a circle near the middle, who's color is determined by the `${_col}` template expression.  The **_col** variable is set to `blue` on the `svg-ui` component, and the component will generate `svg-ui-click` events whenever the user clicks on elements that match the `circle` **clickSelector**.  The **wait-set** takes the **svg-ui-click** events and sets the **svg-ui._col** to `red`, which will force a rebuild of the template and show a red circle on the UI texture
 
 ## Properties
 
@@ -47,7 +47,9 @@ The resolution of the texture onto which the SVG is generated. The lower the res
 ---
 **template**: string = ""
 
-An SVG string, reference to a **script** element which contains the SVG string, or a `url(<filename>)` which contains the svg text.  This string is treated as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), and all attributes on the component are available to the template. This is useful for dynamically updating the SVG, as any changes to the attributes will regenerate the SVG texture.  If the svg contains any animation add a **texture-updater** component, to ensure the changes are re-rendered every frame.  If errors occur in the template, then reloading the page with the browser's developer tools active may provide more insight into the problem.
+An SVG string, reference to a **script** element which contains the SVG string, or a `url(<filename>)` which contains the svg text.  This string represents the SVG but is processed as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), so all attributes on the component are available to the template. This is useful for dynamically updating the SVG, as any changes to the attributes will regenerate the SVG texture.  If the svg contains any animation add a **texture-updater** component (may not work with Firefox), to ensure the changes are re-rendered every frame.  If errors occur in the template, then reloading the page with the browser's developer tools active may provide more insight into the problem. The SVG texture is more sensitive to malformed SVG than the SVG in html (so the interaction svg may appear, but the svg texture is black), so check for invalid keywords and use double rather than single quotes
+
+Setting `type="x-template"` in the **script** element will prevent the browser from trying to execute the text and generating an error, although not having the type usually provides auto-completion in the editor
 
 ---
 **\<attribute\>**: string = ""

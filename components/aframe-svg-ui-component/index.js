@@ -5,6 +5,8 @@ AFRAME.registerComponent("svg-ui", {
     template: { default: "" },
     clickSelector: { default: "" },
     hoverSelector: { default: "" },
+    touchSelector: { default: "" },
+    touchDistance: { default: 0.07 },
     resolution: { type: "vec2", default: {x: 512, y:512} },
     bubbles: { default: false },
     debug: { default: false },
@@ -32,16 +34,18 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   init() {
-    this.firstTime = true
     this.hasUIListeners = false
     this.raycaster = undefined
     this.hoverEls = []
+    this.touchEls = []
     this.onSetObject3D = this.onSetObject3D.bind(this)
     this.onRaycasterIntersected = this.onRaycasterIntersected.bind(this)
     this.onRaycasterIntersectedCleared = this.onRaycasterIntersectedCleared.bind(this)
     this.onClick = this.onClick.bind(this)
 
     this.el.addEventListener("setobject3d", this.onSetObject3D)
+
+    this.createSVGTexture()
   },
 
   remove() {
@@ -63,36 +67,35 @@ AFRAME.registerComponent("svg-ui", {
   update(oldData) {
     const data = this.data
 
-    if (this.firstTime) {
-      this.createSVGTexture()
-    }
-
     if (oldData.template !== data.template) {
       aframeHelper.loadTemplate(data.template, (text) => {
         this.templateContent = text
+        this.createSVGFunction(text)
         this.updateSVGTexture()
       })
-    }
+      
+    } else if (this.templateContent) {
+      if (Object.keys(oldData) !== Object.keys(data)) {
+        this.createSVGFunction(this.templateContent)
+      }
 
-    if (!this.firstTime) {
       this.updateSVGTexture()
     }
 
     this.addUIListeners()
-    this.firstTime = false
   },
 
   tick() {
     if (!this.raycaster) {
       this.el.sceneEl.removeBehavior(this)
     } else {
-      this.updateHover()
+      this.updateHoverAndTouch()
     }
   },
 
   isSelectable() {
     const data = this.data
-    return data.clickSelector || data.hoverSelector
+    return data.clickSelector || data.hoverSelector || data.touchSelector
   },
 
   addUIListeners() {
@@ -141,18 +144,20 @@ AFRAME.registerComponent("svg-ui", {
           this.proxyEl.style.top = "0"
           this.proxyEl.style.left = "0"
           this.proxyEl.style.zIndex = "-999"
+
           document.body.appendChild(this.proxyEl)
         }
 
         this.proxyEl.innerHTML = generatedContent
+
         this.proxySVGEl = this.proxyEl.children[0]
         this.proxySVGEl.setAttribute("width", this.data.resolution.x)
         this.proxySVGEl.setAttribute("height", this.data.resolution.y)
-        this.proxyRect = this.proxySVGEl.getBoundingClientRect()   
       }
 
       this.imageEl.src = 'data:image/svg+xml;utf8,' + generatedContent
       this.texture.needsUpdate = true
+      this.oldContent = generatedContent
     }
   },
 
@@ -165,12 +170,17 @@ AFRAME.registerComponent("svg-ui", {
     }
   },
 
-  processTemplate(str) {
+  createSVGFunction(str) {
     const templateArgs = Object.keys(this.data).concat("return `" + str + "`")
-    const fn = new Function(...templateArgs)
-    // @ts-ignore
-    const result = fn(...Object.values(this.data))
-    return result.replace(/#/g, '%23') // patch all # because they represent a fragment identifier when using data:image
+    this.svgTextFunction = new Function(...templateArgs)
+  },
+
+  processTemplate(str) {
+    if (this.svgTextFunction) {
+      // @ts-ignore
+      const result = this.svgTextFunction(...Object.values(this.data))
+      return result.replace(/#/g, '%23') // patch all # because they represent a fragment identifier when using data:image
+    }
   },
 
   calcElementsFromUV: (function () {
@@ -180,8 +190,8 @@ AFRAME.registerComponent("svg-ui", {
       transformedUV.copy(uv)
       this.texture.transformUv(transformedUV)
 
-      const x = this.proxyRect.left + this.proxyRect.width*transformedUV.x
-      const y = this.proxyRect.top + this.proxyRect.height*transformedUV.y
+      const x = this.data.resolution.x*transformedUV.x
+      const y = this.data.resolution.y*transformedUV.y
 
       // only show elements that are part of this panel's svg
       let elements = document.elementsFromPoint(x,y).filter(el => domHelper.hasAncestor(el, this.proxySVGEl))
@@ -201,27 +211,52 @@ AFRAME.registerComponent("svg-ui", {
     }
   })(),
 
-  updateHover() {
+  updateHoverAndTouch() {
+    let hoverElements = []
+    let touchElements = []
+
     if (this.raycaster) {
       const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
 
       if (intersection) {
-        let hitElements = this.calcElementsFromUV(intersection.uv, this.data.hoverSelector, false)
+        hoverElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.hoverSelector, false) )
 
-        for (let el of this.hoverEls) {
-          if (!hitElements.includes(el)) {
-            this.sendEvent("svg-ui-leave", { uiTarget: el })
-          }
+        if (intersection.distance < this.data.touchDistance) {
+          touchElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.touchSelector, this.data.debug) )
         }
-
-        for (let el of hitElements) {
-          if (!this.hoverEls.includes(el)) {
-            this.sendEvent("svg-ui-enter", { uiTarget: el })
-          }
-        }
-
-        this.hoverEls = hitElements
       }
+    }
+
+    if (hoverElements.length > 0) {
+      for (let el of this.hoverEls) {
+        if (!hoverElements.includes(el)) {
+          this.sendEvent("svg-ui-leave", { uiTarget: el, elements: hoverElements })
+        }
+      }
+  
+      for (let el of hoverElements) {
+        if (!this.hoverEls.includes(el)) {
+          this.sendEvent("svg-ui-enter", { uiTarget: el, elements: hoverElements })
+        }
+      }
+  
+      this.hoverEls = hoverElements
+    }
+
+    if (touchElements.length > 0) {
+      for (let el of this.touchEls) {
+        if (!touchElements.includes(el)) {
+          this.sendEvent("svg-ui-touchend", { uiTarget: el, elements: touchElements })
+        }
+      }
+  
+      for (let el of touchElements) {
+        if (!this.touchEls.includes(el)) {
+          this.sendEvent("svg-ui-touchstart", { uiTarget: el, elements: touchElements })
+        }
+      }
+  
+      this.touchEls = touchElements
     }
   },
 

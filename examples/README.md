@@ -52,19 +52,23 @@ https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
 ### store
-https://harlyq.github.io/aframe-harlyq-components/examples/sv-ui.html
+https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### store-bind
-https://harlyq.github.io/aframe-harlyq-components/examples/sv-ui.html
+https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### svg-ui
-https://harlyq.github.io/aframe-harlyq-components/examples/sv-ui.html
+https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### texture-updater
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### timer-emit
 https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
 ### two-handed-transform
 https://harlyq.github.io/aframe-harlyq-components/examples/two-handed-transform.html
 ### uv-transform
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### vertex-color
 https://harlyq.github.io/aframe-harlyq-components/examples/heightfield.html
 ### wait-add-remove
@@ -75,3 +79,5 @@ none
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
