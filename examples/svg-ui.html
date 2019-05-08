@@ -45,8 +45,8 @@
         store-bind__1="store: #scene; from: store__a._checked; to: svg-ui._checked"
         wait-set__1="event: svg-ui-click; target: a-scene; store__a._checked: $event.detail.uiTarget.id"
         wait-set__2="event: test-tick; svg-ui._time: $event.detail.count;"
-        wait-set__3="event: svg-ui-enter; svg-ui._hover: $event.detail.uiTarget.id;"
-        wait-set__4="event: svg-ui-leave; svg-ui._hover: none"
+        wait-set__3="event: svg-ui-hoverenter; svg-ui._hover: $event.detail.uiTarget.id;"
+        wait-set__4="event: svg-ui-hoverleave; svg-ui._hover: none"
       ></a-entity>
       <a-plane position="2 2 -5" material="transparent: true" svg-ui="template: url(animated-square.svg); _col: orange;" texture-updater></a-plane>
       <a-plane position="0 0 -5" material="transparent: true" svg-ui='_col: #245; template: <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect x="5" y="5" width="80" height="60" rx="5" fill="${_col}"/></svg>;'></a-plane>

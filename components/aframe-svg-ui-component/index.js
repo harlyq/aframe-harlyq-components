@@ -272,13 +272,13 @@ AFRAME.registerComponent("svg-ui", {
     if (hoverElements.length > 0) {
       for (let el of this.hoverEls) {
         if (!hoverElements.includes(el)) {
-          this.sendEvent("svg-ui-leave", { uiTarget: el, elements: hoverElements })
+          this.sendEvent("svg-ui-hoverleave", { uiTarget: el, elements: hoverElements })
         }
       }
   
       for (let el of hoverElements) {
         if (!this.hoverEls.includes(el)) {
-          this.sendEvent("svg-ui-enter", { uiTarget: el, elements: hoverElements })
+          this.sendEvent("svg-ui-hoverenter", { uiTarget: el, elements: hoverElements })
         }
       }
   
