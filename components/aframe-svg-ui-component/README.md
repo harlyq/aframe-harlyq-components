@@ -12,7 +12,7 @@ e.g.
     <circle cx="50" cy="50" r="30" cursor="move" fill="${_col}"/>
   </svg>
 </script>
-<a-plane position="0 0 -2" svg-ui="template: #ui_template; clickSelector: circle; _col=blue"
+<a-plane position="0 0 -2" svg-ui="template: #ui_template; clickSelectors: circle; _col=blue"
   wait-set="event: svg-ui-click; svg-ui._col=red"
 ></a-plane>
 ```
@@ -25,7 +25,7 @@ The last controls setup a `yellow` laser in the `right` hand which intersects an
 If true, events bubble up through the hierarchy, otherwise they only appear on this entity (slightly more efficient)
 
 ---
-**clickSelector**: string = ""
+**clickSelectors**: string = ""
 
 A selector which defines the svg elements that will generate `svg-ui-click` events.  The clicks work by capturing a `click` event received on the object to determine where the object was clicked.  The `click` event is automatically provided when using a **cursor** component
 
@@ -35,9 +35,9 @@ A selector which defines the svg elements that will generate `svg-ui-click` even
 If true, show debugging information about clicks, hovers and SVG strings
 
 ---
-**hoverSelector**: string = ""
+**hoverSelectors**: string = ""
 
-A selector which defines the svg elements that will generate `svg-ui-enter` and `svg-ui-leave` events.  There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is hovering.  The **raycaster** component is provided automatically when using a **cursor** component
+A selector which defines the svg elements that will generate `svg-ui-hoverenter` and `svg-ui-hoverleave` events.  There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is hovering.  The **raycaster** component is provided automatically when using a **cursor** component
 
 ---
 **resolution**: vec2 = `{x: 512, y:512}`
@@ -50,6 +50,16 @@ The resolution of the texture onto which the SVG is generated. The lower the res
 An SVG string, reference to a **script** element which contains the SVG string, or a `url(<filename>)` which contains the svg text.  This string represents the SVG but is processed as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), so all attributes on the component are available to the template. This is useful for dynamically updating the SVG, as any changes to the attributes will regenerate the SVG texture.  If the svg contains any animation add a **texture-updater** component (may not work with Firefox), to ensure the changes are re-rendered every frame.  If errors occur in the template, then reloading the page with the browser's developer tools active may provide more insight into the problem. The SVG texture is more sensitive to malformed SVG than the SVG in html (so the interaction svg may appear, but the svg texture is black), so check for invalid keywords and use double rather than single quotes
 
 Setting `type="x-template"` in the **script** element will prevent the browser from trying to execute the text and generating an error, although not having the type usually provides auto-completion in the editor
+
+---
+**touchDistance**: string = ""
+
+Maximum distance (m) for registering a touch for the **touchSelectors**
+
+---
+**touchSelectors**: string = ""
+
+Selectors to define elements for touches, and generate `svg-ui-touchstart` and `svg-ui-touchend`.  Touches occur when the distance between the **raycaster** origin and contact point are less than **touchDistance**. There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is touching.
 
 ---
 **\<attribute\>**: string = ""

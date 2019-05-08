@@ -35,12 +35,12 @@
       <a-entity laser-controls="hand: right" raycaster="objects: [svg-ui]; far: 20" line="color: cyan; opacity: 0.75"></a-entity>
       <a-plane position="0 2 -5" 
         material="transparent: true;" 
-        svg-ui="template: #ui_template; clickSelector: g; _col: purple"
+        svg-ui="template: #ui_template; clickSelectors: g; _col: purple"
       ></a-plane>
       <a-entity id="counter" position="0 0 -10" 
         material="transparent: false; color: white; side: back"
         geometry="primitive: sphere; radius: 8; phiStart: -180; phiLength: 180; thetaStart: 40; thetaLength: 100"
-        svg-ui="template: #ui_custom; clickSelector: rect; hoverSelector: rect[id]; bubbles: true; _boxes: A,B,C; _checked:; _hover:; _time: 0;"
+        svg-ui="template: #ui_custom; clickSelectors: rect; hoverSelectors: rect[id]; bubbles: true; _boxes: A,B,C; _checked:; _hover:; _time: 0;"
         uv-transform="repeat: -1 1"
         store-bind__1="store: #scene; from: store__a._checked; to: svg-ui._checked"
         wait-set__1="event: svg-ui-click; target: a-scene; store__a._checked: $event.detail.uiTarget.id"

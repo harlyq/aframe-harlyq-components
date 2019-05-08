@@ -6,9 +6,9 @@ const SVG_HTML_HEIGHT = 256
 AFRAME.registerComponent("svg-ui", {
   schema: {
     template: { default: "" },
-    clickSelector: { default: "" },
-    hoverSelector: { default: "" },
-    touchSelector: { default: "" },
+    clickSelectors: { default: "" },
+    hoverSelectors: { default: "" },
+    touchSelectors: { default: "" },
     touchDistance: { default: 0.07 },
     resolution: { type: "vec2", default: {x: 512, y:512} },
     bubbles: { default: false },
@@ -98,7 +98,7 @@ AFRAME.registerComponent("svg-ui", {
 
   isSelectable() {
     const data = this.data
-    return data.clickSelector || data.hoverSelector || data.touchSelector
+    return data.clickSelectors || data.hoverSelectors || data.touchSelectors
   },
 
   addUIListeners() {
@@ -261,10 +261,10 @@ AFRAME.registerComponent("svg-ui", {
       const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
 
       if (intersection) {
-        hoverElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.hoverSelector, false) )
+        hoverElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.hoverSelectors, false) )
 
         if (intersection.distance < this.data.touchDistance) {
-          touchElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.touchSelector, this.data.debug) )
+          touchElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.touchSelectors, this.data.debug) )
         }
       }
     }
@@ -327,7 +327,7 @@ AFRAME.registerComponent("svg-ui", {
     }
 
     if (e.detail.intersection) {
-      let hitElements = this.calcElementsFromUV(e.detail.intersection.uv, this.data.clickSelector, this.data.debug)
+      let hitElements = this.calcElementsFromUV(e.detail.intersection.uv, this.data.clickSelectors, this.data.debug)
 
       if (hitElements && hitElements.length > 0) {
         this.sendEvent("svg-ui-click", { uiTarget: hitElements[0] })
