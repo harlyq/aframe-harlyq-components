@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Drum Keyboard Examples</title>
+    <!--script src="https://aframe.io/releases/0.9.1/aframe.js"></script-->
+    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+  </head>
+  <body>
+    <a-scene>
+      <a-entity id="cameraRig">
+        <a-camera></a-camera>
+        <a-entity2 id="left_hand" vive-controls="hand: left" simple-hands="toolSelector: [tool]; offset: 0 -.03 0; debug: true"></a-entity>
+        <a-entity id="right_hand" laser-controls2="hand: right" vive-controls="hand: right" raycaster2="objects: [svg-ui]" simple-hands="toolSelector: [tool]; offset: 0 -.03 0; debug: true"></a-entity>
+      </a-entity>
+      <a-logger position="0 0 -5"></a-logger>
+      <a-entity id="keyboard" position="0 1 -.5">
+
+        <script id="keyboard_svg" type2="x-template">${(function () {
+          const LAYOUT = { 
+            "us-lower": ["1234567890-=", "qwertyuiop[]\\", "asdfghjkl;'", "zxcvbnm,./"],
+            "us-upper": ["!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?"] 
+          }
+          const keys = LAYOUT[_layout].map(rowOfKeys => rowOfKeys.split(""))
+          const offsetX = 2
+          const offsetY = 2
+          const r = 8
+          const rowHeight = r*3
+          const colInterval = r*3
+          const textOffsetX = r
+          const textOffsetY = r
+  
+          return `<svg viewBox="0 0 320 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">${ 
+            keys.map((rowOfKeys,row) => rowOfKeys.map((key,col) => {
+              const colOffset = r*(13 - rowOfKeys.length)
+              const x = offsetX + col*colInterval + textOffsetX + colOffset
+              const y = offsetY + row*rowHeight + textOffsetY + r
+              const cx = offsetX + col*colInterval + colOffset
+              const cy = offsetY + row*rowHeight
+  
+              return `
+                <rect id="${key}" x="${cx}" y="${cy}" width="${colInterval}" height="${rowHeight}" fill="${_hoverKeys.includes(key) ? _hoverCol : 'black'}"></rect>
+                <text x="${x}" y="${y}" fill="${_keyCol}">${key}</text>
+              `
+            })).flat().join("")
+          }</svg>`})()}
+        </script>
+
+        <script id="stick" type2="x-template">
+          <a-box scale=".2 .02 .02" color="cyan"></a-box>
+          <a-entity position=".15 0 0">
+            <a-entity raycaster="objects: #keyboard_plane; direction: 0 -1 0; far: .2; showLine: true" line="color: red;"></a-entity>
+            <a-sphere scale=".03 .03 .03" color="teal"></a-sphere>
+          </a-entity>
+        </script>
+        
+        <a-plane id="keyboard_plane" scale="1.2 0.5 1" rotation="-60 0 0 " 
+          svg-ui='debug2: true; resolution: 1024 1024; template: #keyboard_svg; touchSelector: rect; _hoverCol:#022; _keyCol:cyan; _layout:us-lower; _hoverKeys:1234;'
+          wait-set="event: svg-ui-touchstart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
+        >
+        </a-plane>
+        <!-- each stick contains a raycaster which will interact with the hoverSelector on the keyboard_plane -->
+        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.05" position="0 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
+    </a-entity>
+    </a-scene>
+  </body>
+</html>
