@@ -1,5 +1,8 @@
 import { domHelper, aframeHelper } from "harlyq-helpers"
 
+const SVG_HTML_WIDTH = 256
+const SVG_HTML_HEIGHT = 256
+
 AFRAME.registerComponent("svg-ui", {
   schema: {
     template: { default: "" },
@@ -122,8 +125,39 @@ AFRAME.registerComponent("svg-ui", {
     this.imageEl = document.createElement("img")
     this.imageEl.width = data.resolution.x
     this.imageEl.height = data.resolution.y
-    
-    this.texture = new THREE.Texture(this.imageEl)
+    this.imageEl.isReady = true
+
+    const texture = this.texture = new THREE.Texture(this.imageEl)
+    const self = this
+
+    // steps for successful update the texture
+    // - imageEl.src = <new svg>
+    // - imageEl.onload
+    // - texture.needsUpdate = true
+    // - texture.onUpdate
+    // - image.isReady = true
+    // - if new content, goto beginning
+
+    // steps for failed update
+    // - imageEl.src = <new svg>
+    // - imageEl.onerror
+    // - image.isReady = true
+    // - if new content, goto beginning
+
+    this.imageEl.onload = () => {
+      texture.needsUpdate = true
+    }
+
+    this.imageEl.onerror = () => {
+      console.error("invalid svg", this.lastContent)
+      texture.image.isReady = true
+      self.updatePendingContent()
+    }
+
+    texture.onUpdate = () => {
+      texture.image.isReady = true
+      self.updatePendingContent()
+    }
 
     this.updateSVGTexture()
     this.showSVGTextureOnMesh()
@@ -151,13 +185,21 @@ AFRAME.registerComponent("svg-ui", {
         this.proxyEl.innerHTML = generatedContent
 
         this.proxySVGEl = this.proxyEl.children[0]
-        this.proxySVGEl.setAttribute("width", this.data.resolution.x)
-        this.proxySVGEl.setAttribute("height", this.data.resolution.y)
+        this.proxySVGEl.setAttribute("width", SVG_HTML_WIDTH)
+        this.proxySVGEl.setAttribute("height", SVG_HTML_HEIGHT)
       }
 
-      this.imageEl.src = 'data:image/svg+xml;utf8,' + generatedContent
-      this.texture.needsUpdate = true
-      this.oldContent = generatedContent
+      this.pendingContent = generatedContent
+      this.updatePendingContent()
+    }
+  },
+
+  updatePendingContent() {
+    if (this.imageEl.isReady && this.pendingContent) {
+      this.imageEl.src = 'data:image/svg+xml;utf8,' + this.pendingContent
+      this.imageEl.isReady = false
+      this.lastContent = this.pendingContent
+      this.pendingContent = undefined
     }
   },
 
@@ -179,7 +221,7 @@ AFRAME.registerComponent("svg-ui", {
     if (this.svgTextFunction) {
       // @ts-ignore
       const result = this.svgTextFunction(...Object.values(this.data))
-      return result.replace(/#/g, '%23') // patch all # because they represent a fragment identifier when using data:image
+      return result.replace(/%/g, "%25").replace(/#/g, '%23') // patch all # and % because they are special characters for data:image
     }
   },
 
@@ -190,8 +232,8 @@ AFRAME.registerComponent("svg-ui", {
       transformedUV.copy(uv)
       this.texture.transformUv(transformedUV)
 
-      const x = this.data.resolution.x*transformedUV.x
-      const y = this.data.resolution.y*transformedUV.y
+      const x = SVG_HTML_WIDTH*transformedUV.x
+      const y = SVG_HTML_HEIGHT*transformedUV.y
 
       // only show elements that are part of this panel's svg
       let elements = document.elementsFromPoint(x,y).filter(el => domHelper.hasAncestor(el, this.proxySVGEl))
