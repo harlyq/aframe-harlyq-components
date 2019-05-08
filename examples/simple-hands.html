@@ -7,8 +7,8 @@
     <script src="../dist/aframe-harlyq-components.js"></script>
   </head>
   <body>
-    <a-scene background2="color: grey">
-      <a-entity vive-controls="hand: right" simple-hands="debug: true; offset: 0 -.03 0; grabSelector: a-box; toolSelector: [tool]"></a-entity>
+    <a-scene background2="color: grey" simple-hands="debug: true; rightSelector: #righthand; offset: 0 -.03 0; grabSelectors: a-box; toolSelectors: [tool]">
+      <a-entity id="righthand" vive-controls="hand: right"></a-entity>
       <a-logger position="0 0 -5"></a-logger>
       <a-box id="red" position="0 1.2 -.5" scale=".1 .1 .1" color="red"></a-box>
       <a-box id="blue" position=".4 1.2 -.45" scale=".15 .15 .15" color="blue"></a-box>

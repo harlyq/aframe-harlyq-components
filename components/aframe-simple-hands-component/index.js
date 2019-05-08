@@ -1,23 +1,16 @@
-// Copyright 2019 harlyq
-// MIT license
-
-import { proximity } from "harlyq-helpers"
-import { extent } from "harlyq-helpers"
-import { threeHelper } from "harlyq-helpers"
+import { proximity, extent, threeHelper } from "harlyq-helpers"
 
 const TOO_MANY_ENTITIES_WARNING = 100
 
-/**
- * Based on donmccurdy/aframe-extras/sphere-collider.js
- *
- * Implement bounding sphere collision detection for entities
- */
+// inspired by donmccurdy/aframe-extras/sphere-collider.js
 AFRAME.registerComponent("simple-hands", {
   schema: {
-    grabSelector: { default: "" },
-    toolSelector: { default: "" },
-    offset: { type: "vec3" },
-    radius: { default: 0.05 },
+    grabSelectors: { default: "" },
+    toolSelectors: { default: "" },
+    colliderOffset: { type: "vec3" },
+    colliderRadius: { default: 0.05 },
+    leftSelector: { default: "" },
+    rightSelector: { default: "" },
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
     toolStart: { default: "triggerdown" },
@@ -29,45 +22,77 @@ AFRAME.registerComponent("simple-hands", {
 
   init() {
     this.observer = null
-    this.state = {}
+    this.state = {
+      left: {
+        name: "hover",
+        hand: undefined,
+        hasListeners: false,
+        colliderDebug: undefined,
+      }, 
+      right: {
+        name: "hover",
+        hand: undefined,
+        hasListeners: false,
+        colliderDebug: undefined,
+      } 
+    }
+
     this.grabEls = []
     this.toolEls = []
-    this.sphereDebug = undefined
     
     this.onSceneChanged = this.onSceneChanged.bind(this)
     this.onGrabStartEvent = this.onGrabStartEvent.bind(this)
     this.onGrabEndEvent = this.onGrabEndEvent.bind(this)
     this.onToolStartEvent = this.onToolStartEvent.bind(this)
     this.onToolEndEvent = this.onToolEndEvent.bind(this)
+    this.onSceneLoaded = this.onSceneLoaded.bind(this)
 
-    this.setState("hover")
+    this.setMode(this.state.left, "hover")
+    this.setMode(this.state.right, "hover")
+
+    this.el.sceneEl.addEventListener("loaded", this.onSceneLoaded)
   },
 
   remove() {
+    this.el.sceneEl.removeEventListener("loaded", this.onSceneLoaded)
+    this.hideColliderDebug()
+
     if (this.observer) {
       this.observer.disconnect()
       this.observer = null
     }
-
-    this.pause()
   },
 
   play() {
-    const sceneEl = this.el.sceneEl
-    const data = this.data
-
-    this.el.addEventListener(data.grabStart, this.onGrabStartEvent);
-    this.el.addEventListener(data.grabEnd, this.onGrabEndEvent);
-    this.el.addEventListener(data.toolStart, this.onToolStartEvent);
-    this.el.addEventListener(data.toolEnd, this.onToolEndEvent);
+    this.addListeners(this.state.left)
+    this.addListeners(this.state.right)
   },
 
   pause() {
-    const data = this.data
-    this.el.removeEventListener(data.grabStart, this.onGrabStartEvent);
-    this.el.removeEventListener(data.grabEnd, this.onGrabEndEvent);
-    this.el.removeEventListener(data.toolStart, this.onToolStartEvent);
-    this.el.removeEventListener(data.toolEnd, this.onToolEndEvent);
+    this.removeListeners(this.state.left)
+    this.removeListeners(this.state.right)
+  },
+
+  addListeners(side) {
+    if (side.hand && !side.hasListeners) {
+      const data = this.data
+      side.hand.addEventListener(data.grabStart, this.onGrabStartEvent);
+      side.hand.addEventListener(data.grabEnd, this.onGrabEndEvent);
+      side.hand.addEventListener(data.toolStart, this.onToolStartEvent);
+      side.hand.addEventListener(data.toolEnd, this.onToolEndEvent);
+      side.hasListeners = true
+    }
+  },
+
+  removeListeners(side) {
+    if (side.hand && side.hasListeners) {
+      const data = this.data
+      side.hand.removeEventListener(data.grabStart, this.onGrabStartEvent);
+      side.hand.removeEventListener(data.grabEnd, this.onGrabEndEvent);
+      side.hand.removeEventListener(data.toolStart, this.onToolStartEvent);
+      side.hand.removeEventListener(data.toolEnd, this.onToolEndEvent);
+      side.hasListeners = false
+    }
   },
 
   /**
@@ -76,40 +101,33 @@ AFRAME.registerComponent("simple-hands", {
   update(oldData) {
     const data = this.data
 
-    if (oldData.grabSelector !== data.grabSelector || oldData.toolSelector !== data.toolSelector) {
+    if (oldData.grabSelectors !== data.grabSelectors || 
+      oldData.toolSelectors !== data.toolSelectors || 
+      oldData.leftSelector !== data.leftSelector || 
+      oldData.rightSelector !== data.rightSelector) {
       this.gatherElements()
     }
 
-    if (!AFRAME.utils.deepEqual(data.offset, oldData.offset) || data.radius !== oldData.radius) {
-
-      if (data.debug) {
-        if (this.sphereDebug) {
-          this.el.object3D.remove( this.sphereDebug )
-        }
-        let sphereGeo = new THREE.SphereBufferGeometry(data.radius, 6, 6)
-        sphereGeo.translate(data.offset.x, data.offset.y, data.offset.z)
-        let wireGeo = new THREE.WireframeGeometry(sphereGeo)
-        this.sphereDebug = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({color: 0xffff00}) )
-        this.el.object3D.add(this.sphereDebug)
-      }
-  
-    }
-
-    if (oldData.watch !== data.watch && data.watch) {
-      this.observer = new MutationObserver(this.onSceneChanged)
-      this.observer.observe(this.el.sceneEl, {childList: true, subtree: true})
+    if (!AFRAME.utils.deepEqual(data.colliderOffset, oldData.colliderOffset) || data.colliderRadius !== oldData.colliderRadius) {
+      this.hideColliderDebug(this.state.left)
+      this.hideColliderDebug(this.state.right)
+      this.showColliderDebug(this.state.left)
+      this.showColliderDebug(this.state.right)
     }
   },
 
   tick() {
-    if (this.state.name === "hover") {
-      this.updateHover(this.state)
+    if (this.state.left.name === "hover" && this.state.left.hand) {
+      this.updateHover(this.state.left)
+    }
+    if (this.state.right.name === "hover" && this.state.right.hand) {
+      this.updateHover(this.state.right)
     }
   },
 
-  setState(newState) {
-    if (this.state.name !== newState) {
-      this.state.name = newState
+  setMode(side, newState) {
+    if (side.name !== newState) {
+      side.name = newState
     }
   },
 
@@ -166,24 +184,40 @@ AFRAME.registerComponent("simple-hands", {
 
   gatherElements() {
     const data = this.data
+    const sceneEl = this.el.sceneEl
 
-    const grabEls = data.grabSelector ? this.el.sceneEl.querySelectorAll(data.grabSelector) : undefined
+    const grabEls = data.grabSelectors ? sceneEl.querySelectorAll(data.grabSelectors) : undefined
     this.grabEls = grabEls ? grabEls : []
 
     if (this.grabEls.length > TOO_MANY_ENTITIES_WARNING) {
-      console.warn(`many entities in grabSelector (${this.grabEls.length}), performance may be affected`)
+      console.warn(`many entities in grabSelectors (${this.grabEls.length}), performance may be affected`)
     }
 
-    const toolEls = data.toolSelector ? this.el.sceneEl.querySelectorAll(data.toolSelector) : undefined
+    const toolEls = data.toolSelectors ? sceneEl.querySelectorAll(data.toolSelectors) : undefined
     this.toolEls = toolEls ? toolEls : []
 
     if (this.toolEls.length > TOO_MANY_ENTITIES_WARNING) {
-      console.warn(`many entities in toolSelector (${this.toolEls.length}), performance may be affected`)
+      console.warn(`many entities in toolSelectors (${this.toolEls.length}), performance may be affected`)
     }
 
-    // if (this.toolEls.length === 0 && this.grabEls.length === 0) {
-    //   console.warn(`no tool or grab selected`)
-    // }
+    const leftHand = data.leftSelector ? sceneEl.querySelector(data.leftSelector) : undefined
+    const rightHand = data.rightSelector ? sceneEl.querySelector(data.rightSelector) : undefined
+
+    if (leftHand !== this.state.left.hand) {
+      this.removeListeners(this.state.left)
+      this.hideColliderDebug(this.state.right)
+      this.state.left.hand = leftHand
+      this.addListeners(this.state.left)
+      this.showColliderDebug(this.state.left)
+  }
+
+    if (rightHand !== this.state.right.hand) {
+      this.removeListeners(this.state.right)
+      this.hideColliderDebug(this.state.right)
+      this.state.right.hand = rightHand
+      this.addListeners(this.state.right)
+      this.showColliderDebug(this.state.right)
+    }
   },
 
   generateOrientedBoundingBox(obj3D, debugColor) {
@@ -208,14 +242,14 @@ AFRAME.registerComponent("simple-hands", {
     const yellow = new THREE.Color('yellow')
     const blue = new THREE.Color('blue')
 
-    return function updateHover(state) {
+    return function updateHover(side) {
       const data = this.data
-      const handObject3D = this.el.object3D
-      const handRadius = data.radius
+      const handObject3D = side.hand.object3D
+      const handRadius = data.colliderRadius
       let newHoverEl = undefined
       let newHoverType = undefined
       
-      handOffset.copy(data.offset).applyMatrix4(handObject3D.matrixWorld)
+      handOffset.copy(data.colliderOffset).applyMatrix4(handObject3D.matrixWorld)
 
       // prefer tools to grab targets
       newHoverEl = this.findOverlapping(handOffset, handRadius, this.toolEls, data.debug ? blue : undefined)
@@ -227,25 +261,65 @@ AFRAME.registerComponent("simple-hands", {
 
       // if (newHoverEl) console.log("closest", newHoverEl.id)
 
-      if (state.target && state.target !== newHoverEl) {
-        this.sendEvent(state.target, "hoverend")
+      if (side.target && side.target !== newHoverEl) {
+        this.sendEvent(side.hand, side.target, "hoverend")
       }
-      if (newHoverEl && newHoverEl !== state.target) {
-        this.sendEvent(newHoverEl, "hoverstart")
+      if (newHoverEl && newHoverEl !== side.target) {
+        this.sendEvent(side.hand, newHoverEl, "hoverstart")
       } 
-      state.target = newHoverEl
-      state.targetType = newHoverEl ? newHoverType : undefined
+      side.target = newHoverEl
+      side.targetType = newHoverEl ? newHoverType : undefined
     }
   })(),
 
-  sendEvent(targetEl, eventName) {
+  hideColliderDebug(side) {
+    if (side.colliderDebug) {
+      side.hand.object3D.remove( side.colliderDebug )
+    }
+  },
+
+  showColliderDebug(side) {
+    const data = this.data
+    if (side.hand && data.debug) {
+      const sphereGeo = new THREE.SphereBufferGeometry(data.colliderRadius, 6, 6)
+      sphereGeo.translate(data.colliderOffset.x, data.colliderOffset.y, data.colliderOffset.z)
+      const wireGeo = new THREE.WireframeGeometry(sphereGeo)
+      side.colliderDebug = new THREE.LineSegments( wireGeo, new THREE.LineBasicMaterial({color: 0xffff00}) )
+      side.hand.object3D.add(side.colliderDebug)
+    }
+  },
+
+  determineSide(el) {
+    return (this.state.left.hand === el) ? this.state.left : (this.state.right.hand === el) ? this.state.right : undefined
+  },
+
+  sendEvent(handEl, targetEl, eventName) {
     const bubble = this.data.bubble
     if (this.data.debug) {
       console.log(eventName, targetEl.id)
     }
 
-    targetEl.emit(eventName, { hand: this.el }, bubble)
-    this.el.emit(eventName, { hand: this.el, target: targetEl }, bubble)
+    targetEl.emit(eventName, { hand: handEl }, bubble)
+    handEl.emit(eventName, { hand: handEl, target: targetEl }, bubble)
+  },
+
+  onSceneLoaded() {
+    // only observe once the scene is loaded, this is better than doing it in the update()
+    // where we would be spammed by the observer while the scene loads
+    this.gatherElements()
+
+    if (this.data.watch) {
+      this.observer = new MutationObserver(this.onSceneChanged)
+      this.observer.observe(this.el.sceneEl, {childList: true, subtree: true})
+    }
+
+    const data = this.data
+    if (!this.state.left.hand && !this.state.right.hand) { 
+      console.warn(`unable to find left (${data.leftSelector}) or right (${data.rightSelector}) hands`) 
+    }
+    if (this.grabEls.length === 0 && this.toolEls.length === 0) {
+      console.warn(`no grab (${data.grabSelectors}) or tool (${data.toolSelectors}) elements`)
+    }
   },
 
   onSceneChanged() {
@@ -253,34 +327,38 @@ AFRAME.registerComponent("simple-hands", {
   },
 
   onGrabStartEvent(e) {
-    if (this.state.name === "hover" && this.state.target && this.state.targetType === "grab") {
-      this.sendEvent(this.state.target, "hoverend")
-      this.setState("grab")
-      this.sendEvent(this.state.target, "grabstart")
+    const side = this.determineSide(e.target)
+    if (side && side.name === "hover" && side.target && side.targetType === "grab") {
+      this.sendEvent(side.hand, side.target, "hoverend")
+      this.setMode(side, "grab")
+      this.sendEvent(side.hand, side.target, "grabstart")
     }
   },
 
   onGrabEndEvent(e) {
-    if (this.state.name === "grab" && this.state.target) {
-      this.sendEvent(this.state.target, "grabend")
-      this.setState("hover")
-      this.state.target = undefined
+    const side = this.determineSide(e.target)
+    if (side.name === "grab" && side.target) {
+      this.sendEvent(side.hand, side.target, "grabend")
+      this.setMode(side, "hover")
+      side.target = undefined
     }
   },
 
   onToolStartEvent(e) {
-    if (this.state.name === "hover" && this.state.target && this.state.targetType === "tool") {
-      this.sendEvent(this.state.target, "hoverend")
-      this.setState("tool")
-      this.sendEvent(this.state.target, "toolequipped")
+    const side = this.determineSide(e.target)
+    if (side.name === "hover" && side.target && side.targetType === "tool") {
+      this.sendEvent(side.hand, side.target, "hoverend")
+      this.setMode(side, "tool")
+      this.sendEvent(side.hand, side.target, "toolequipped")
     }
   },
 
   onToolEndEvent(e) {
-    if (this.state.name === "tool" && this.state.target) {
-      this.sendEvent(this.state.target, "tooldropped")
-      this.setState("hover")
-      this.state.target = undefined
+    const side = this.determineSide(e.target)
+    if (side.name === "tool" && side.target) {
+      this.sendEvent(side.hand, side.target, "tooldropped")
+      this.setMode(side, "hover")
+      side.target = undefined
     }
   },
 })

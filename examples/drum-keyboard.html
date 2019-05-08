@@ -8,10 +8,10 @@
   </head>
   <body>
     <a-scene>
-      <a-entity id="cameraRig">
+      <a-entity id="cameraRig" simple-hands="toolSelectors: [tool]; leftSelector: #left_hand; rightSelector: #right_hand; colliderOffset: 0 -.03 0; debug: true">
         <a-camera></a-camera>
-        <a-entity2 id="left_hand" vive-controls="hand: left" simple-hands="toolSelector: [tool]; offset: 0 -.03 0; debug: true"></a-entity>
-        <a-entity id="right_hand" laser-controls2="hand: right" vive-controls="hand: right" raycaster2="objects: [svg-ui]" simple-hands="toolSelector: [tool]; offset: 0 -.03 0; debug: true"></a-entity>
+        <a-entity id="left_hand" vive-controls="hand: left" ></a-entity>
+        <a-entity id="right_hand" vive-controls="hand: right"></a-entity>
       </a-entity>
       <a-logger position="0 0 -5"></a-logger>
       <a-entity id="keyboard" position="0 1 -.5">
@@ -47,20 +47,22 @@
         </script>
 
         <script id="stick" type2="x-template">
-          <a-box scale=".2 .02 .02" color="cyan"></a-box>
+          <a-box scale=".25 .01 .01" color="cyan"></a-box>
           <a-entity position=".15 0 0">
+            <!-- raycaster is separate because we don't want the apply the sphere's scaling to the debug line -->
             <a-entity raycaster="objects: #keyboard_plane; direction: 0 -1 0; far: .2; showLine: true" line="color: red;"></a-entity>
             <a-sphere scale=".03 .03 .03" color="teal"></a-sphere>
           </a-entity>
         </script>
         
-        <a-plane id="keyboard_plane" scale="1.2 0.5 1" rotation="-60 0 0 " 
-          svg-ui='debug2: true; resolution: 1024 1024; template: #keyboard_svg; touchSelector: rect; _hoverCol:#022; _keyCol:cyan; _layout:us-lower; _hoverKeys:1234;'
-          wait-set="event: svg-ui-touchstart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
+        <a-plane id="keyboard_plane" scale="0.9 0.4 1" rotation="-60 0 0 " 
+          svg-ui='debug2: true; resolution: 1024 1024; template: #keyboard_svg; touchSelectors: rect; _hoverCol:#022; _keyCol:cyan; _layout:us-lower; _hoverKeys:1234;'
+          wait-set="event: svg-ui-touchStart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
         >
         </a-plane>
         <!-- each stick contains a raycaster which will interact with the hoverSelector on the keyboard_plane -->
-        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.05" position="0 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
+        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07" position="0 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
+        <a-entity id="right_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07" position=".1 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
     </a-entity>
     </a-scene>
   </body>
