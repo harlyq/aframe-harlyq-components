@@ -1,0 +1,216 @@
+// @ts-ignore
+const LOGGER_COLORS = {
+  "error": "red",
+  "warn": "yellow",
+  "log": "white",
+  "info": "grey",
+}
+
+AFRAME.registerSystem("logger", {
+  init() {
+    this.loggers = []
+    this.isLogging = false
+    this.oldLog = console.log
+    this.oldError = console.error
+    this.oldWarn = console.warn
+    this.oldInfo = console.info
+
+    console.log = (...args) => {
+      this.sendToLogger("log", args.join(" "))
+      this.oldLog(...args)
+    }
+    console.error = (...args) => {
+      this.sendToLogger("error", args.join(" "))
+      this.oldError(...args)
+    }
+    console.warn = (...args) => {
+      this.sendToLogger("warn", args.join(" "))
+      this.oldWarn(...args)
+    }
+    console.info = (...args) => {
+      this.sendToLogger("info", args.join(" "))
+      this.oldInfo(...args)
+    }
+  },
+
+  remove() {
+    console.log = this.oldLog
+    console.error = this.oldError
+    console.warn = this.oldWarn
+    console.info = this.oldInfo
+  },
+
+  sendToLogger(type, msg) {
+    if (!this.isLogging) {
+      this.isLogging = true
+      for (let cons of this.loggers) {
+        cons.showMessage(type, msg)
+      }
+      this.isLogging = false
+    }
+  },
+
+  registerLogger(comp) {
+    this.loggers.push(comp)
+  },
+
+  unregisterLogger(comp) {
+    this.loggers.splice( this.loggers.indexOf(comp), 1 )
+  },
+})
+
+AFRAME.registerComponent("logger", {
+  schema: {
+    maxLines: { default: 20 },
+    offset: { type: "vec2", default: {x:2, y:2} },
+    lineHeight: { default: 12 },
+    columnWidth: { default: 40 },
+    width: { default: 350 },
+    types: { type: "array", default: ["log", "error", "warn"] },
+    filter: { default: "" },
+  },
+
+  init() {
+    this.dirty = true
+    this.messages = []
+    this.onSetObject3D = this.onSetObject3D.bind(this)
+
+    this.system.registerLogger(this)
+
+    this.createTexture()
+
+    this.el.addEventListener("setobject3d", this.onSetObject3D)
+
+    // let count = 0x20
+    // let str = ""
+    // setInterval(() => {
+    //   str += String.fromCharCode(count++)
+    //   console.info(str)
+    //   console.log(str)
+    // },100)
+  },
+
+  remove() {
+    this.el.removeEventListener("setobject3d", this.onSetObject3D)
+
+    this.system.unregisterLogger(this)
+  },
+
+  update(oldData) {
+    const data = this.data
+    if (oldData.filter !== data.filter) {
+      this.filter = data.filter ? new RegExp(data.filter) : undefined
+    }
+  },
+
+  tick() {
+    const imageEl = this.imageEl
+
+    if (this.dirty && imageEl.isReady) {
+      const data = this.data
+      const w = data.width
+      const h = (data.maxLines + 1)*data.lineHeight
+
+      function sanitizeMessage(str) {
+        str = str.replace(/[^\x20-\x7E\n\t]/g, "") // ignore characters not in this set
+        return str.replace(/[&<>'"]/g, (m) => m === "&" ? "&amp;" : m === "<" ? "&lt;" : m === ">" ? "&gt;" : m === "'" ? "&apos;" : "&quot;") // XML character entity references
+      }     
+
+      function sanitizeXML(str) {
+        return str.replace(/%/g, "%25").replace(/#/g, "%23")
+      }
+            
+      const svgText = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">
+        <rect x="0" y="0" width="${w}" height="${h}" fill="#111"/>
+        ${
+          this.messages.map((message, row) => {
+            const y = data.offset.y + data.lineHeight*(row + 1)
+            const x = data.offset.x
+            const msg = sanitizeMessage(message[1])
+            return `<text x="${x}" y="${y}" fill="${LOGGER_COLORS[message[0]]}">${msg}</text>`
+          }).join("\n")
+        }
+      </svg>`
+  
+      const newSVG = "data:image/svg+xml;utf8," + sanitizeXML(svgText)
+      imageEl.src = newSVG
+      imageEl.isReady = false
+      // console.info("generated", newSVG)
+      this.dirty = false
+    }
+  },
+
+  createTexture() {
+    this.imageEl = document.createElement("img")
+    this.imageEl.width = 512
+    this.imageEl.height = 512
+    this.imageEl.isReady = true
+
+    const texture = this.texture = new THREE.Texture(this.imageEl)
+
+    // svg images take some time to process so it is important that we
+    // perform each step when it is ready, otherwise we are caught in
+    // an infinite loop displaying errors, which generates errors, 
+    // which displays more errors
+    this.imageEl.onload = () => {
+      // console.info("loaded")
+      texture.needsUpdate = true
+    }
+
+    this.imageEl.onerror = () => {
+      // console.info("error")
+      texture.image.isReady = true
+    }
+
+    texture.onUpdate = () => {
+      // console.info("updated")
+      texture.image.isReady = true
+    }
+
+    this.showTexture()
+  },
+
+  showTexture() {
+    const mesh = this.el.getObject3D("mesh")
+    if (mesh && mesh.material) {
+      mesh.material.map = this.texture
+    }
+  },
+
+  showMessage(type, msg) {
+    const data = this.data
+
+    if (!data.types.includes(type)) {
+      return
+    }
+
+    if (this.filter && !this.filter.test(msg)) {
+      return
+    }
+
+    for (let i = 0, n = msg.length; i < n; i += data.columnWidth) {
+      this.messages.push([type, msg.slice(i, Math.min(n, i + data.columnWidth))])
+    }
+
+    while (this.messages.length >= this.data.maxLines) {
+      this.messages.shift()
+    }
+
+    this.dirty = true
+  },
+
+  onSetObject3D(e) {
+    this.showTexture()
+  },
+})
+
+AFRAME.registerPrimitive("a-logger", {
+  defaultComponents: {
+    geometry: {primitive: "plane", height: 3, width: 2},
+    material: {color: "white", shader: "flat", side: "double"}, // must be white for colors to show correctly
+    logger: {},
+  },
+
+  mappings: {
+  }
+});
