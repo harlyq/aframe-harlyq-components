@@ -104,39 +104,8 @@ AFRAME.registerComponent("logger", {
   },
 
   tick() {
-    const imageEl = this.imageEl
-
-    if (this.dirty && imageEl.isReady) {
-      const data = this.data
-      const w = data.width
-      const h = (data.maxLines + 1)*data.lineHeight
-
-      function sanitizeMessage(str) {
-        str = str.replace(/[^\x20-\x7E\n\t]/g, "") // ignore characters not in this set
-        return str.replace(/[&<>'"]/g, (m) => m === "&" ? "&amp;" : m === "<" ? "&lt;" : m === ">" ? "&gt;" : m === "'" ? "&apos;" : "&quot;") // XML character entity references
-      }     
-
-      function sanitizeXML(str) {
-        return str.replace(/%/g, "%25").replace(/#/g, "%23")
-      }
-            
-      const svgText = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">
-        <rect x="0" y="0" width="${w}" height="${h}" fill="#111"/>
-        ${
-          this.messages.map((message, row) => {
-            const y = data.offset.y + data.lineHeight*(row + 1)
-            const x = data.offset.x
-            const msg = sanitizeMessage(message[1])
-            return `<text x="${x}" y="${y}" fill="${LOGGER_COLORS[message[0]]}">${msg}</text>`
-          }).join("\n")
-        }
-      </svg>`
-  
-      const newSVG = "data:image/svg+xml;utf8," + sanitizeXML(svgText)
-      imageEl.src = newSVG
-      imageEl.isReady = false
-      // console.info("generated", newSVG)
-      this.dirty = false
+    if (this.dirty && this.imageEl.isReady) {
+      this.updateTexture()
     }
   },
 
@@ -170,6 +139,40 @@ AFRAME.registerComponent("logger", {
     this.showTexture()
   },
 
+  updateTexture() {
+    const imageEl = this.imageEl
+    const data = this.data
+    const w = data.width
+    const h = (data.maxLines + 1)*data.lineHeight
+
+    function sanitizeMessage(str) {
+      str = str.replace(/[^\x20-\x7E\n\t]/g, "") // ignore characters not in this set
+      return str.replace(/[&<>'"]/g, (m) => m === "&" ? "&amp;" : m === "<" ? "&lt;" : m === ">" ? "&gt;" : m === "'" ? "&apos;" : "&quot;") // XML character entity references
+    }     
+
+    function sanitizeXML(str) {
+      return str.replace(/%/g, "%25").replace(/#/g, "%23")
+    }
+          
+    const svgText = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">
+      <rect x="0" y="0" width="${w}" height="${h}" fill="#111"/>
+      ${
+        this.messages.map((message, row) => {
+          const y = data.offset.y + data.lineHeight*(row + 1)
+          const x = data.offset.x
+          const msg = sanitizeMessage(message[1])
+          return `<text x="${x}" y="${y}" fill="${LOGGER_COLORS[message[0]]}">${msg}</text>`
+        }).join("\n")
+      }
+    </svg>`
+
+    const newSVG = "data:image/svg+xml;utf8," + sanitizeXML(svgText)
+    imageEl.src = newSVG
+    imageEl.isReady = false
+    // console.info("generated", newSVG)
+    this.dirty = false
+  },
+
   showTexture() {
     const mesh = this.el.getObject3D("mesh")
     if (mesh && mesh.material) {
@@ -188,8 +191,12 @@ AFRAME.registerComponent("logger", {
       return
     }
 
-    for (let i = 0, n = msg.length; i < n; i += data.columnWidth) {
-      this.messages.push([type, msg.slice(i, Math.min(n, i + data.columnWidth))])
+    const lines = msg.split("\n")
+
+    for (let line of lines) {
+      for (let i = 0, n = line.length; i < n; i += data.columnWidth) {
+        this.messages.push([type, line.slice(i, Math.min(n, i + data.columnWidth))])
+      }
     }
 
     while (this.messages.length >= this.data.maxLines) {
