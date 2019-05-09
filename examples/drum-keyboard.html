@@ -61,8 +61,9 @@
         >
         </a-plane>
         <!-- each stick contains a raycaster which will interact with the hoverSelector on the keyboard_plane -->
-        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07" position="0 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
-        <a-entity id="right_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07" position=".1 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
+        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: reparentOnEquip" position="0 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
+        <a-entity id="right_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: keepOnDrop" position=".1 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
+        <a-entity id="stick3" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: respawnOnDrop" position=".2 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
     </a-entity>
     </a-scene>
   </body>
