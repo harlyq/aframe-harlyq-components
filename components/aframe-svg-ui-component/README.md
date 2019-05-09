@@ -30,7 +30,7 @@ The **laser-controls** setup a `yellow` laser in the `right` hand which intersec
 Hover and touch events are sent independently, so both can occur at the same time.  With multiple raycasters the touch and hover status remains active as long as one of the raycasters is touching or hovering over the element
 
 <aside class="warning">
-For hover and touch events to work correctly, the elements that could be returned as a uiTarget must have a unique (within the svg) id.  Ids are used because they are consistent even when the svg is updated.
+For hover and touch events to work correctly, the elements that could be returned as a uiTarget must have a unique (within the svg) id and must have a visible representation (i.e. `g` elements and `fill: none` are not selectable).  Ids are used because they are consistent even when the svg is updated.
 </aside>
 
 ## Properties
