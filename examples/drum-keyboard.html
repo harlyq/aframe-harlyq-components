@@ -57,7 +57,7 @@
         
         <a-plane id="keyboard_plane" scale="0.9 0.4 1" rotation="-60 0 0 " 
           svg-ui='debug2: true; resolution: 1024 1024; template: #keyboard_svg; touchSelectors: rect; _hoverCol:#022; _keyCol:cyan; _layout:us-lower; _hoverKeys:1234;'
-          wait-set="event: svg-ui-touchStart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
+          wait-set="event: svg-ui-touchstart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
         >
         </a-plane>
         <!-- each stick contains a raycaster which will interact with the hoverSelector on the keyboard_plane -->

@@ -3,6 +3,15 @@ import { domHelper, aframeHelper } from "harlyq-helpers"
 const SVG_HTML_WIDTH = 256
 const SVG_HTML_HEIGHT = 256
 
+function appendUnique(list, otherList) {
+  for (let i = 0; i < otherList.length; i++) {
+    if (!list.includes(otherList[i])) {
+      list.push(otherList[i])
+    }
+  }
+  return list
+}
+
 AFRAME.registerComponent("svg-ui", {
   schema: {
     template: { default: "" },
@@ -38,7 +47,7 @@ AFRAME.registerComponent("svg-ui", {
 
   init() {
     this.hasUIListeners = false
-    this.raycaster = undefined
+    this.raycasters = []
     this.hoverEls = []
     this.touchEls = []
     this.onSetObject3D = this.onSetObject3D.bind(this)
@@ -89,7 +98,7 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   tick() {
-    if (!this.raycaster) {
+    if (this.raycasters.length === 0) {
       this.el.sceneEl.removeBehavior(this)
     } else {
       this.updateHoverAndTouch()
@@ -130,19 +139,19 @@ AFRAME.registerComponent("svg-ui", {
     const texture = this.texture = new THREE.Texture(this.imageEl)
     const self = this
 
-    // steps for successful update the texture
+    // steps for successful rendering of the texture
     // - imageEl.src = <new svg>
     // - imageEl.onload
     // - texture.needsUpdate = true
     // - texture.onUpdate
     // - image.isReady = true
-    // - if new content, goto beginning
+    // - render any pending content
 
     // steps for failed update
     // - imageEl.src = <new svg>
     // - imageEl.onerror
     // - image.isReady = true
-    // - if new content, goto beginning
+    // - render any pending content
 
     this.imageEl.onload = () => {
       texture.needsUpdate = true
@@ -257,49 +266,47 @@ AFRAME.registerComponent("svg-ui", {
     let hoverElements = []
     let touchElements = []
 
-    if (this.raycaster) {
-      const intersection = this.raycaster.components.raycaster.getIntersection(this.el)
-
-      if (intersection) {
-        hoverElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.hoverSelectors, false) )
-
-        if (intersection.distance < this.data.touchDistance) {
-          touchElements.push( ...this.calcElementsFromUV(intersection.uv, this.data.touchSelectors, this.data.debug) )
+    for (let raycaster of this.raycasters) {
+      if (raycaster) {
+        const intersection = raycaster.components.raycaster.getIntersection(this.el)
+  
+        if (intersection) {
+          appendUnique( hoverElements, this.calcElementsFromUV(intersection.uv, this.data.hoverSelectors, false) )
+  
+          if (intersection.distance < this.data.touchDistance) {
+            appendUnique( touchElements, this.calcElementsFromUV(intersection.uv, this.data.touchSelectors, this.data.debug) )
+          }
         }
       }
     }
 
-    if (hoverElements.length > 0) {
-      for (let el of this.hoverEls) {
-        if (!hoverElements.includes(el)) {
-          this.sendEvent("svg-ui-hoverleave", { uiTarget: el, elements: hoverElements })
-        }
+    for (let el of this.hoverEls) {
+      if (!hoverElements.find(otherEl => otherEl.id === el.id)) {
+        this.sendEvent("svg-ui-hoverend", { uiTarget: el, hovers: hoverElements.map(x => x.id) }, this.el.id)
       }
-  
-      for (let el of hoverElements) {
-        if (!this.hoverEls.includes(el)) {
-          this.sendEvent("svg-ui-hoverenter", { uiTarget: el, elements: hoverElements })
-        }
-      }
-  
-      this.hoverEls = hoverElements
     }
 
-    if (touchElements.length > 0) {
-      for (let el of this.touchEls) {
-        if (!touchElements.includes(el)) {
-          this.sendEvent("svg-ui-touchend", { uiTarget: el, elements: touchElements })
-        }
+    for (let el of hoverElements) {
+      if (!this.hoverEls.find(otherEl => otherEl.id === el.id)) {
+        this.sendEvent("svg-ui-hoverstart", { uiTarget: el, hovers: hoverElements.map(x => x.id) }, this.el.id)
       }
-  
-      for (let el of touchElements) {
-        if (!this.touchEls.includes(el)) {
-          this.sendEvent("svg-ui-touchstart", { uiTarget: el, elements: touchElements })
-        }
-      }
-  
-      this.touchEls = touchElements
     }
+  
+    this.hoverEls = hoverElements
+
+    for (let el of this.touchEls) {
+      if (!touchElements.find(otherEl => otherEl.id === el.id)) {
+        this.sendEvent("svg-ui-touchend", { uiTarget: el, touches: touchElements.map(x => x.id) }, this.el.id)
+      }
+    }
+
+    for (let el of touchElements) {
+      if (!this.touchEls.find(otherEl => otherEl.id === el.id)) {
+        this.sendEvent("svg-ui-touchstart", { uiTarget: el, touches: touchElements.map(x => x.id) }, this.el.id)
+      }
+    }
+
+    this.touchEls = touchElements
   },
 
   onSetObject3D(e) {
@@ -308,17 +315,17 @@ AFRAME.registerComponent("svg-ui", {
 
   onRaycasterIntersected(e) {
     if (this.data.debug) {
-      console.log("onRaycasterIntersected")
+      console.log("onRaycasterIntersected", this.el.id)
     }
-    this.raycaster = e.detail.el
+    this.raycasters.push(e.detail.el)
     this.el.sceneEl.addBehavior(this)
   },
 
   onRaycasterIntersectedCleared(e) {
     if (this.data.debug) {
-      console.log("onRaycasterIntersectedCleared")
+      console.log("onRaycasterIntersectedCleared", this.el.id)
     }
-    this.raycaster = undefined
+    this.raycasters.splice( this.raycasters.indexOf(e.detail.el), 1 )
   },
 
   onClick(e) {
