@@ -2,7 +2,7 @@
 
 The **svg-ui** component provides an interactable user interface (UI) based upon an SVG template, by generating a texture from the SVG and assigning it to the `material.src` (aka *map* of the `mesh` object).  If a cursor component is available, it generates **svg-ui-click** events when the user clicks on a UI element.  If a **raycaster** component is configured to intersect with the entity then it will potentially generate hover and touch related events.  The SVG string is treated as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), and attributes on the component are passed to the template before being used to generate a texture
 
-The SVG template does NOT support CSS styles inside the SVG or as part of the document (it is ignored).  Because current web technology does not support interacting with the texture, a second svg is generated and placed at (0,0) on the page, which is used for determining interactions. This second svg will be visible in 2D if **a-sky** and **background** components are not used (which can be useful for debugging)
+The **svg-ui** does NOT apply CSS styles defined outside of the SVG or in CDATA sections, but it does support the `<style>` element.  Because current web technology does not support interacting with the texture, a second svg is generated and placed at (0,0) on the page, which is used for determining interactions. This second svg will be visible in 2D if **a-sky** or **background** components are NOT used (which can be useful for debugging)
 
 e.g.
 ```html

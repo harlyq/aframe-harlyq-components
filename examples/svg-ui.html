@@ -7,9 +7,8 @@
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="ui_template" type="x-template">
       <svg id="svg1" viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg" version="1.1">
-        <g id="two">
-          <circle id="circle1" cx="50" cy="50" r="30" cursor="move" fill="${_col}"/>
-        </g>
+        <style>circle { fill: ${_col}; }</style>
+        <circle id="circle1" cx="50" cy="50" r="30"/>
       </svg>
     </script>
     <script id="ui_custom" type="x-template">
@@ -37,7 +36,7 @@
       <a-entity laser-controls="hand: left" raycaster="objects: [svg-ui]; far: 20" line="color: cyan; opacity: 0.75"></a-entity>
       <a-plane id="circle" position="0 2 -5" 
         material="transparent: true;" 
-        svg-ui="template: #ui_template; clickSelectors: g; _col: purple"
+        svg-ui="template: #ui_template; clickSelectors: circle; _col: purple"
       ></a-plane>
       <a-entity id="counter" position="0 0 -10" 
         material="transparent: false; color: white; side: back"
