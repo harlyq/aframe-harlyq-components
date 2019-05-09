@@ -13,8 +13,8 @@ AFRAME.registerComponent("simple-hands", {
     rightSelector: { default: "" },
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
-    toolStart: { default: "triggerdown" },
-    toolEnd: { default: "gripdown" },
+    toolEquip: { default: "triggerdown" },
+    toolDrop: { default: "gripdown" },
     watch: { default: true },
     bubble: { default: true },
     debug: { default: false },
@@ -43,8 +43,8 @@ AFRAME.registerComponent("simple-hands", {
     this.onSceneChanged = this.onSceneChanged.bind(this)
     this.onGrabStartEvent = this.onGrabStartEvent.bind(this)
     this.onGrabEndEvent = this.onGrabEndEvent.bind(this)
-    this.onToolStartEvent = this.onToolStartEvent.bind(this)
-    this.onToolEndEvent = this.onToolEndEvent.bind(this)
+    this.onToolEquipEvent = this.onToolEquipEvent.bind(this)
+    this.onToolDropEvent = this.onToolDropEvent.bind(this)
     this.onSceneLoaded = this.onSceneLoaded.bind(this)
 
     this.setMode(this.state.left, "hover")
@@ -78,8 +78,8 @@ AFRAME.registerComponent("simple-hands", {
       const data = this.data
       side.hand.addEventListener(data.grabStart, this.onGrabStartEvent);
       side.hand.addEventListener(data.grabEnd, this.onGrabEndEvent);
-      side.hand.addEventListener(data.toolStart, this.onToolStartEvent);
-      side.hand.addEventListener(data.toolEnd, this.onToolEndEvent);
+      side.hand.addEventListener(data.toolEquip, this.onToolEquipEvent);
+      side.hand.addEventListener(data.toolDrop, this.onToolDropEvent);
       side.hasListeners = true
     }
   },
@@ -89,8 +89,8 @@ AFRAME.registerComponent("simple-hands", {
       const data = this.data
       side.hand.removeEventListener(data.grabStart, this.onGrabStartEvent);
       side.hand.removeEventListener(data.grabEnd, this.onGrabEndEvent);
-      side.hand.removeEventListener(data.toolStart, this.onToolStartEvent);
-      side.hand.removeEventListener(data.toolEnd, this.onToolEndEvent);
+      side.hand.removeEventListener(data.toolEquip, this.onToolEquipEvent);
+      side.hand.removeEventListener(data.toolDrop, this.onToolDropEvent);
       side.hasListeners = false
     }
   },
@@ -300,7 +300,7 @@ AFRAME.registerComponent("simple-hands", {
     }
 
     targetEl.emit(eventName, { hand: handEl }, bubble)
-    handEl.emit(eventName, { hand: handEl, target: targetEl }, bubble)
+    this.el.emit(eventName, { hand: handEl, object: targetEl }, bubble)
   },
 
   onSceneLoaded() {
@@ -344,19 +344,19 @@ AFRAME.registerComponent("simple-hands", {
     }
   },
 
-  onToolStartEvent(e) {
+  onToolEquipEvent(e) {
     const side = this.determineSide(e.target)
     if (side.name === "hover" && side.target && side.targetType === "tool") {
       this.sendEvent(side.hand, side.target, "hoverend")
       this.setMode(side, "tool")
-      this.sendEvent(side.hand, side.target, "toolequipped")
+      this.sendEvent(side.hand, side.target, "toolequip")
     }
   },
 
-  onToolEndEvent(e) {
+  onToolDropEvent(e) {
     const side = this.determineSide(e.target)
     if (side.name === "tool" && side.target) {
-      this.sendEvent(side.hand, side.target, "tooldropped")
+      this.sendEvent(side.hand, side.target, "tooldrop")
       this.setMode(side, "hover")
       side.target = undefined
     }

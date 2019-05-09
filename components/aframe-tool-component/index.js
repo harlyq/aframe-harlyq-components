@@ -7,18 +7,18 @@ AFRAME.registerComponent("tool", {
 
   init() {
     this.handA = undefined
-    this.onToolEquipped = this.onToolEquipped.bind(this)
-    this.onToolDropped = this.onToolDropped.bind(this)
+    this.onToolEquip = this.onToolEquip.bind(this)
+    this.onToolDrop = this.onToolDrop.bind(this)
   },
 
   play() {
-    this.el.addEventListener("toolequipped", this.onToolEquipped)
-    this.el.addEventListener("tooldropped", this.onToolDropped)
+    this.el.addEventListener("toolequip", this.onToolEquip)
+    this.el.addEventListener("tooldrop", this.onToolDrop)
   },
 
   pause() {
-    this.el.removeEventListener("toolequipped", this.onToolEquipped)
-    this.el.removeEventListener("tooldropped", this.onToolDropped)
+    this.el.removeEventListener("toolequip", this.onToolEquip)
+    this.el.removeEventListener("tooldrop", this.onToolDrop)
   },
 
   tick() {
@@ -35,7 +35,7 @@ AFRAME.registerComponent("tool", {
     // console.log( AFRAME.utils.coordinates.stringify(this.el.getAttribute("position")) )
   },
 
-  onToolEquipped(e) {
+  onToolEquip(e) {
     const data = this.data
     this.handA = e.detail.hand
     // this.el.sceneEl.addBehavior(this)
@@ -47,7 +47,7 @@ AFRAME.registerComponent("tool", {
     this.handA.appendChild(this.el)
   },
 
-  onToolDropped(e) {
+  onToolDrop(e) {
     this.handA = undefined
     const worldPosition = new THREE.Vector3()
     const worldQuaternion = new THREE.Quaternion()

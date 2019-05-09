@@ -12,10 +12,14 @@ e.g.
 ## Events
 | EVENT | DESCRIPTION |
 | - | - |
-| **hoverstart** | sent to the object that the hand sphere collides with. Only sent when the trigger is not pressed |
-| **hoverend** | sent to the object that the hand sphere no longer collides with. This will also be sent if a grab starts while we are hovering over an object |
-| **grabstart** | sent to the object that we were hovering over when the user pressed the trigger. Only sent if the hand sphere is colliding with an object |
-| **grabend** | sent to the object that received the grabstart, when the user releases the trigger |
+| **hoverend** | sent to the object that the hand sphere no longer collides with. This will also be sent if a grabStart or toolEquip occurs while we are hovering over an object |
+| **hoverstart** | sent to the object that the hand sphere collides with. Only sent when not currently grabbing or holding a tool |
+| **grabend** | sent to the grabbed object that received when the **grabEnd** trigger is used |
+| **grabstart** | sent to the object that we were hovering over when the user pressed the **grabStart** trigger |
+| **tooldrop** | sent to the equipped tool when the **toolDrop** trigger is used |
+| **toolequip** | sent to the object that we were hovering over when the user pressed the **toolEquip** trigger |
+
+In each case two events will be sent, one to this entity with the parameters `{ hand: HTMLElement, object: HTMLElement }`, the other to the associated grab or tool object with `{ hand: HTMLElement }`
 
 ## Properties
 
@@ -24,27 +28,62 @@ e.g.
 emitted events will bubble up the entity hierarchy
 
 ---
+**colliderOffset** : vec3 = `0 0 0`
+
+the offset of the center of the collision sphere from the origin of the entity
+
+---
+**colliderRadius** : number = `0.05`
+
+the radius (meters) of the sphere for collision checks
+
+---
 **debug**: boolean = `false`
 
 if true, show debug bounding boxes around objects that are tested for overlap
 
 ---
-**objects** : string = ""
+**grabEnd** : string = `triggerup`
 
-a selector to filter the objects to be tested for overlap
-
----
-**offset** : vec3 = `0 0 0`
-
-the offset of the center of the collision sphere from the origin of the entity
+controller trigger for the `grabend` event on a grab object
 
 ---
-**radius** : number = `0.05`
+**grabSelectors** : string = ""
 
-the radius (meters) of the sphere for collision checks
+a selector to filter the objects to be tested for overlap.  Objects in this list will generate grab events when triggered
+
+---
+**grabStart** : string = `triggerdown`
+
+controller trigger for the `grabstart` event on a grab object
+
+---
+**leftSelector** : string = ""
+
+selector for the left controller
+
+---
+**rightSelector** : string = ""
+
+selector for the right controller
+
+---
+**toolDrop**: string = `gripdown`
+
+controller trigger for initiating a `tooldrop` event on a tool object
+
+---
+**toolEquip**: string = `triggerdown`
+
+controller trigger for initiating a `toolequip` event on a tool object
+
+---
+**toolSelectors**: string = ""
+
+a selector to filter tool related objects. Objects in this list will generate tool events when triggered.  The **toolSelectors** have priority over the **grabSelectors**
 
 ---
 **watch** : boolean = `true`
 
-if true, watch for the addition and removal of entities and add them to the collision list if they match the **objects** selector
+if true, watch for the addition and removal of entities (after the scene is loaded) and add them to the collision list if they match the **objects** selector
 
