@@ -60,7 +60,7 @@ AFRAME.registerComponent("wait-add-remove", {
 
   init() {
     this.addRemoveEntities = this.addRemoveEntities.bind(this)
-    this.startDelay = this.startDelay.bind(this)
+    this.onEvent = this.onEvent.bind(this)
 
     this.waitTimer = aframeHelper.basicTimer()
     this.waitListener = aframeHelper.scopedListener()
@@ -69,11 +69,11 @@ AFRAME.registerComponent("wait-add-remove", {
   update(oldData) {
     const data = this.data
     if (oldData.event !== data.event || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
-      this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.startDelay)
+      this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
     
-    if (oldData.delay !== data.delay && (this.timer || data.event === "")) {
-      this.startDelay()
+    if (oldData.delay !== data.delay && data.event === "") {
+      this.waitTimer.start(this.data.delay, this.addRemoveEntities)
     }
   },
 
@@ -85,6 +85,16 @@ AFRAME.registerComponent("wait-add-remove", {
   play() {
     this.waitListener.add()
     this.waitTimer.resume()
+  },
+
+  // there may be several events "pending" at the same time, so use a separate timer for each event
+  onEvent() {
+    const data = this.data
+    if (data.delay > 0) {
+      setTimeout(this.addRemoveEntities, data.delay*1000)
+    } else {
+      this.addRemoveEntities()
+    }
   },
 
   startDelay() {

@@ -1,5 +1,3 @@
-// Copyright 2018-2019 harlyq
-// MIT license
 import { aframeHelper, attribute, pseudorandom, utils } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
@@ -19,12 +17,10 @@ AFRAME.registerComponent("wait-set", {
   multiple: true,
 
   init() {
+    this.onEvent = this.onEvent.bind(this)
     this.setProperties = this.setProperties.bind(this)
-    this.startDelay = this.startDelay.bind(this)
 
-    this.event = undefined
     this.rules = {}
-    this.sources = []
 
     this.waitListener = aframeHelper.scopedListener()
     this.waitTimer = aframeHelper.basicTimer()
@@ -77,11 +73,11 @@ AFRAME.registerComponent("wait-set", {
     }
 
     if (data.event !== oldData.event || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.startDelay)
+      this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
 
-    if (data.delay !== oldData.delay && (this.delayTimer || data.event === "")) {
-      this.startDelay()
+    if (data.delay !== oldData.delay && data.event === "") {
+      this.waitTimer.start(this.data.delay, this.setProperties)
     }
   },
 
@@ -95,22 +91,17 @@ AFRAME.registerComponent("wait-set", {
     this.waitListener.add()
   },
 
-  startDelay(e) {
-    this.event = e
-    this.waitTimer.start(this.data.delay, this.setProperties)
-  },
-
-  setProperties() {
-    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, this.event ? this.event.target : undefined)
+  setProperties(event) {
+    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, event ? event.target : undefined)
 
     for (let el of elements) {
       for (let prop in this.rules) {
         let rule = this.rules[prop]
 
         const value = attribute.stringify( attribute.randomize(rule, this.lcg.random) )
-        const processedValue = this.processValue(value, this.event)
+        const processedValue = this.processValue(value, event)
         if (this.data.debug) {
-          console.log("wait-set:setProperties", "id=", el.id, "property=", prop, "value=", value, "$event=", this.event)
+          console.log("wait-set:setProperties", "id=", el.id, "property=", prop, "value=", value, "$event=", event)
         }
 
         aframeHelper.setProperty(el, prop, processedValue)
@@ -131,6 +122,18 @@ AFRAME.registerComponent("wait-set", {
     }
 
     return result
-  }
+  },
+
+  // there may be several events "pending" at the same time, so use a separate timer for each event
+  onEvent(e) {
+    const data = this.data
+    const self = this
+
+    if (data.delay > 0) {
+      setTimeout(() => self.setProperties(e), data.delay*1000)
+    } else {
+      this.setProperties(e)
+    }
+  },
 
 })

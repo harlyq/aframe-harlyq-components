@@ -19,15 +19,20 @@
     <div style="position: absolute; z-index: 9999" onclick="document.getElementById('music').play()">click to start audio</div>
     <a-scene>
       <audio id="music" src="../../aframe-test-audio/assets/Quarkstar_-_Cricket_Seasoning_1.mp3" autoplay></audio>
-      <a-entity timer-emit="src: #music; target: #listener; start: 0; one: 2; two: 4; three: 6; four: 10; periodic: 1,2,3"></a-entity>
+      <a-entity id="spammer" timer-emit="src: #music; target: #listener; start: 0; one: 2; two: 4; three: 6; four: 10; periodic: 1,2,3"></a-entity>
       <a-entity id="listener" wait-add-remove__1="event: one; add: a-box.one.a#one[color=red][position=0 0 -10]"
         wait-add-remove__2="event: two; add: a-box.two.b#two[color=blue][position=5 2 -5]"
         wait-add-remove__3="event: two; delay: 1; add: a-sphere.three.c#three[color=green][position=-5 2 -5][foo-bar=test:blah]; remove: .two,[color=red]"
         wait-set__4="event: four; target: #three; position: -4 3 -5; foo-bar.test: down"
-        wait-set__5="event: four; delay: 2.5; target: #three; color: red..pink">
+        wait-set__5="event: four; delay: 2.5; target: #three; color: red..pink"
+        wait-set__6="event: periodic; delay: 4; target: a-tetrahedron; color: black..orange">
       </a-entity>
       <a-box color="red" position="0 0 -10" rotation="0 0 -20" keyframe__blah="duration: 5; direction: alternate; loops: 5; color: ,green|black,,orange; position: ,0 0 -5; rotation: , 0 0 20"></a-box>
-      <a-tetrahedron keyframe="duration: 0; color: pink|brown|grey; position: 0 2 -5..0 3 -5; rotation: 0 -20 -20..0 0 20"></a-tetrahedron>
+      <a-tetrahedron id="tetrahedron" class="special"
+        keyframe__a="duration: 0; color: pink|brown|grey; position: 0 2 -5..0 3 -5; rotation: 0 -20 -20..0 0 20"
+        keyframe__b="duration: 5; position: , 5 5 -5"
+        wait-playBROKEN="debug: true; event: periodic; source: #listener; delay: 4; target: .special; components: keyframe__b; action: toggle"
+        ></a-tetrahedron>
     </a-scene>
     <script>
       const mediaTimerEl = document.querySelector("[timer-emit]")

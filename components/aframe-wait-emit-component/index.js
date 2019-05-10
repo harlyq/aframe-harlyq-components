@@ -7,20 +7,19 @@ import { aframeHelper } from "harlyq-helpers"
 // 
 AFRAME.registerComponent("wait-emit", {
   schema: {
-    "event": { default: "" },
-    "delay": { default: 0 },
-    "source": { default: "" },
-    "sourceScope": { default: "document", oneOf: ["parent", "self", "document"] },
-    "out": { default: "" },
-    "target": { default: "" },
-    "targetScope": { default: "document", oneOf: ["parent", "self", "document"] },
+    event: { default: "" },
+    delay: { default: 0 },
+    source: { default: "" },
+    sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
+    out: { default: "" },
+    target: { default: "" },
+    targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
   },
   multiple: true,
 
   init() {
-    this.sendEvent = this.sendEvent.bind(this)
-    this.startTimer = this.startTimer.bind(this)
     this.onEvent = this.onEvent.bind(this)
+    this.sendEvent = this.sendEvent.bind(this)
     this.sources = []
 
     this.waitTimer = aframeHelper.basicTimer()
@@ -39,7 +38,7 @@ AFRAME.registerComponent("wait-emit", {
       this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
 
-    if (data.delay !== oldData.delay && (this.sendwaitTimer || data.event === "")) {
+    if (data.delay !== oldData.delay && data.event === "") {
       this.waitTimer.start(data.delay, this.sendEvent)
     }
   },
@@ -54,18 +53,26 @@ AFRAME.registerComponent("wait-emit", {
     this.waitTimer.resume()
   },
 
-  onEvent() {
-    this.waitTimer.start(this.data.delay, this.sendEvent)
-  },
-
-  sendEvent(evt) {
+  sendEvent(event) {
     const data = this.data
-    const targets = this.waitListener.getElementsInScope(this.el, data.target, data.targetScope, evt.target)
-    const eventData = Object.assign({ source: this.el }, evt)
-    const event = data.out ? data.out : data.event
+    const targets = this.waitListener.getElementsInScope(this.el, data.target, data.targetScope, event ? event.target : undefined)
+    const eventData = Object.assign(event, { source: this.el })
+    const name = data.out ? data.out : data.event
 
     for (let target of targets) {
-      target.emit(event, eventData)
+      target.emit(name, eventData)
+    }
+  },
+
+  // there may be several events "pending" at the same time, so use a separate timer for each event
+  onEvent(e) {
+    const data = this.data
+    const self = this
+
+    if (data.delay > 0) {
+      setTimeout(() => self.sendEvent(e), data.delay*1000)
+    } else {
+      this.sendEvent(e)
     }
   },
 
