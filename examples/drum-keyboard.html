@@ -30,7 +30,7 @@
           const textOffsetX = r
           const textOffsetY = r
   
-          return `<svg viewBox="0 0 320 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">${ 
+          return `<svg viewBox="0 0 320 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${ 
             keys.map((rowOfKeys,row) => rowOfKeys.map((key,col) => {
               const colOffset = r*(13 - rowOfKeys.length)
               const x = offsetX + col*colInterval + textOffsetX + colOffset
@@ -47,10 +47,10 @@
         </script>
 
         <script id="stick" type2="x-template">
-          <a-box scale=".25 .01 .01" color="cyan"></a-box>
+          <a-box scale=".25 .01 .01" color="${_col}"></a-box>
           <a-entity position=".15 0 0">
             <!-- raycaster is separate because we don't want the apply the sphere's scaling to the debug line -->
-            <a-entity raycaster="objects: #keyboard_plane; direction: 0 -1 0; far: .2; showLine: true" line="color: red;"></a-entity>
+            <a-entity raycaster="objects: [svg-ui]; direction: 0 -1 0; far: .2; showLine: true" line="color: red;"></a-entity>
             <a-sphere scale=".03 .03 .03" color="teal"></a-sphere>
           </a-entity>
         </script>
@@ -61,10 +61,21 @@
         >
         </a-plane>
         <!-- each stick contains a raycaster which will interact with the hoverSelector on the keyboard_plane -->
-        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: reparentOnEquip" position="0 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
-        <a-entity id="right_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: keepOnDrop" position=".1 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
-        <a-entity id="stick3" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: respawnOnDrop" position=".2 .2 0" rotation="0 90 0" prefab="template: #stick" ></a-entity>
-    </a-entity>
+        <a-entity id="left_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: reparentOnEquip" position="0 .2 0" rotation="0 90 0" prefab="template: #stick; _col: cyan" ></a-entity>
+        <a-entity id="right_stick" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: keepOnDrop" position=".1 .2 0" rotation="0 90 0" prefab="template: #stick; _col: lightblue" ></a-entity>
+        <a-entity id="stick3" tool="handRotation: 0 90 0; handPosition: 0 0 -.07; usage: respawnOnDrop" position=".2 .2 0" rotation="0 90 0" prefab="template: #stick; _col: yellow" ></a-entity>
+      </a-entity>
+      <a-plane id="touchpad" scale=".5 .5 .5" position=".7 1 -.2" rotation="-60 -65 0"
+        svg-ui="template: #touchpad_svg; touchSelectors: #sensitive; touchDeadZone: 10; _x: 0; _y: 0"
+        wait-set="event: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x; svg-ui._y: $event.detail.intersection.svg.y"
+      >
+        <script id="touchpad_svg">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <rect id="sensitive" x="0" y="0" width="100" height="100" />
+            <circle cx="${_x}" cy="${_y}" r="5" fill="lime"/>
+          </svg>
+        </script>
+      </a-plane>
     </a-scene>
   </body>
 </html>
