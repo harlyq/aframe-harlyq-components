@@ -22,6 +22,7 @@ AFRAME.registerComponent("wait-set", {
     this.setProperties = this.setProperties.bind(this)
 
     this.rules = {}
+    this.toggles = []
 
     this.waitListener = aframeHelper.scopedListener()
     this.waitTimer = aframeHelper.basicTimer()
