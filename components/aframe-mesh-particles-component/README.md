@@ -55,6 +55,11 @@ The linear interpolation weighting of the destination. 0 means the particles ign
 The duration in seconds of the whole system, -1 implies the system never ends
 
 ---
+**enabled**: boolean = `true`
+
+Enable or disable spawning of particles (note existing particles will continue to for the remainder of their lifetime when **enabled** is set to `false`)
+
+---
 **instances**: selector = ""
 
 A selector for the entities with **instance** components to use for this particle system.  Multiple instances will be shared evenly amongst this particle system.  If **instances** is not set, then use the **instance** component on this entity.  An error occurs if an instance cannot be found and no particles are generated.

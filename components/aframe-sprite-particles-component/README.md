@@ -130,7 +130,7 @@ overall color for the emitter. It is cheaper to set the emitter color than using
 set the time on the emitter, this can be used to pre-charge the emitter with particles.  This is a write-only value, it does not get updated over time
 
 ---
-**enable** : boolean = `true`
+**enabled** : boolean = `true`
 
 enable or disable the emitter. existing particles will continue their lives, but there will be no new particles
 

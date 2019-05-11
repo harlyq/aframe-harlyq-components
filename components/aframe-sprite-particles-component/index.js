@@ -28,6 +28,7 @@ const VERTS_PER_RIBBON = 2
 
 const RANDOM_REPEAT_COUNT = 131072 // random numbers will start repeating after this number of particles
 
+// @ts-ignore
 const degToRad = THREE.Math.degToRad
 
 const ATTR_TO_DEFINES = {
@@ -164,7 +165,7 @@ AFRAME.registerComponent("sprite-particles", {
     destinationOffset: { default: "0 0 0" },
     destinationWeight: { default: "0" },
 
-    enable: { default: true },
+    enabled: { default: true },
     emitterTime: { default: 0 },
     model: { type: "selector" },
     modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase },
@@ -220,7 +221,7 @@ AFRAME.registerComponent("sprite-particles", {
     this.nextTime = 0
     this.numDisabled = 0
     this.numEnabled = 0
-    this.startDisabled = !this.data.enable // if we start disabled then the tick is disabled, until the component is enabled
+    this.startDisabled = !this.data.enabled // if we start disabled then the tick is disabled, until the component is enabled
     this.manageIDs = false
 
     this.params[ID_PARAM] = -1 // unmanaged IDs
@@ -389,7 +390,7 @@ AFRAME.registerComponent("sprite-particles", {
       this.updateAttributes()
     }
 
-    if (data.enable && this.startDisabled) {
+    if (data.enabled && this.startDisabled) {
       this.startDisabled = false
     }
 
@@ -423,7 +424,7 @@ AFRAME.registerComponent("sprite-particles", {
 
     // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
     // once managed, always managed
-    this.manageIDs = this.manageIDs || !data.enable || data.source || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" || data.model || data.delay > 0
+    this.manageIDs = this.manageIDs || !data.enabled || data.source || typeof this.el.getDOMAttribute(this.attrName).enabled !== "undefined" || data.model || data.delay > 0
 
     // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
     if (data.texture !== oldData.texture) {
@@ -439,7 +440,7 @@ AFRAME.registerComponent("sprite-particles", {
     if (deltaTime > 100) deltaTime = 100 // ignore long pauses
     const dt = deltaTime/1000 // dt is in seconds
 
-    if (data.enable) { this.delayTime -= dt }
+    if (data.enabled) { this.delayTime -= dt }
     if (this.delayTime >= 0) { return }
 
     if (!data.model || this.modelVertices) {
@@ -944,7 +945,7 @@ AFRAME.registerComponent("sprite-particles", {
       const spawnRate = this.data.spawnRate
       const isBurst = data.spawnType === "burst"
       const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
-      const isEnableDisable = data.enable ? this.numEnabled < n : this.numDisabled < n
+      const isEnableDisable = data.enabled ? this.numEnabled < n : this.numDisabled < n
       const hasSource = data.source && data.source.object3D != null
       const isUsingModel = this.modelVertices && this.modelVertices.length
       const isRibbon = this.isRibbon()
@@ -1001,14 +1002,14 @@ AFRAME.registerComponent("sprite-particles", {
               particleQuaternion.setXYZW(index, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
             }
   
-            particleVertexID.setX(index, data.enable ? id : -1) // id is unique and is tied to position and quaternion
+            particleVertexID.setX(index, data.enabled ? id : -1) // id is unique and is tied to position and quaternion
   
             if (isEnableDisable) {
               // if we're enabled then increase the number of enabled and reset the number disabled, once we 
               // reach this.numEnabled === n, all IDs would have been set and isEnableDisable will switch to false.
               // vice versa if we are disabled. these numbers represent the number of consecutive enables or disables.
-              this.numEnabled = data.enable ? this.numEnabled + 1 : 0
-              this.numDisabled = data.enable ? 0 : this.numDisabled + 1
+              this.numEnabled = data.enabled ? this.numEnabled + 1 : 0
+              this.numDisabled = data.enabled ? 0 : this.numDisabled + 1
             }  
 
             index = (index + 1) % n

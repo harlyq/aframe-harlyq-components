@@ -24,6 +24,7 @@ AFRAME.registerComponent("svg-ui", {
     touchDeadZone: { default: .5 },
     bubbles: { default: false },
     debug: { default: false },
+    enabled: { default: true },
   },
 
   // copy new properties to the schema so they will appear in the Inspector
@@ -106,7 +107,7 @@ AFRAME.registerComponent("svg-ui", {
   tick() {
     if (this.raycasters.length === 0) {
       this.el.sceneEl.removeBehavior(this)
-    } else {
+    } else if (this.data.enabled) {
       this.updateHoverAndTouch()
     }
   },
@@ -391,12 +392,13 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   onClick(e) {
-    if (this.data.debug) {
+    const data = this.data
+    if (data.debug) {
       console.log("click", this.el.id)
     }
 
-    if (e.detail.intersection) {
-      let hitElements = this.calcElementsFromUV(e.detail.intersection.uv, this.data.clickSelectors, this.data.debug)
+    if (e.detail.intersection && data.enabled) {
+      let hitElements = this.calcElementsFromUV(e.detail.intersection.uv, data.clickSelectors, data.debug)
       const intersection = { ...e.detail.intersection, svg: this.calcViewXYFomUV(e.detail.intersection.uv) }
 
       if (hitElements && hitElements.length > 0) {

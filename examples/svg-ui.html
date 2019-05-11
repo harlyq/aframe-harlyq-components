@@ -6,13 +6,13 @@
     <script src="../../aframe/aframe-0.9.0.js"></script>
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="ui_template" type="x-template">
-      <svg id="svg1" viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg" version="1.1">
+      <svg id="svg1" viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg">
         <style>circle { fill: ${_col}; }</style>
         <circle id="circle1" cx="50" cy="50" r="30"/>
       </svg>
     </script>
     <script id="ui_custom" type="x-template">
-      <svg id="svg2" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" version="1.1">
+      <svg id="svg2" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
         <rect x="0" y="0" width="120" height="120" stroke="cyan"/>
         ${_boxes.split(",").map(box => box.trim()).map( (box,i) => {
           hovers = _hovers.split(",")
@@ -27,6 +27,13 @@
           `
         }).join("")}
         <text x="2" y="115" fill="cyan">${_time}</text>
+      </svg>
+    </script>
+    <script id="ui_touchpanel" type="x-template">
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <rect id="board" x="0" y="0" width="100" height="100" fill="green" />
+        <text x="7" y="15" fill="black">${enabled ? 'Touch works' : 'DISABLED'}</text>
+        <circle cx="${_x}" cy="${_y}" r="3" fill="black" />
       </svg>
     </script>
   </head>
@@ -45,12 +52,23 @@
         uv-transform="repeat: -1 1"
         store-bind__1="store: #scene; from: store__a._checked; to: svg-ui._checked"
         wait-set__1="event: svg-ui-click; target: a-scene; store__a._checked: $event.detail.uiTarget.id"
-        wait-set__2="event: test-tick; svg-ui._time: $event.detail.count;"
         wait-set__3="event: svg-ui-hoverstart; svg-ui._hovers: $event.detail.hovers"
         wait-set__4="event: svg-ui-hoverend; svg-ui._hovers: $event.detail.hovers"
       ></a-entity>
       <a-plane id="animatedsvg" position="2 2 -5" material="transparent: true" svg-ui="template: url(animated-square.svg); _col: orange;" texture-updater></a-plane>
       <a-plane id="roundedinline" position="0 0 -5" material="transparent: true" svg-ui='_col: #245; template: <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect x="5" y="5" width="80" height="60" rx="5" fill="${_col}"/></svg>;'></a-plane>
+      <a-plane id="touchpanel" position="-1 1 -.5" scale=".5 .5 .5"
+        svg-ui="_x: 20; _y: 20; template: #ui_touchpanel; touchSelectors: rect; enabled: false"
+        wait-set="event: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x;  svg-ui._y: $event.detail.intersection.svg.y">
+        <script>
+          const touchPanelEl = document.getElementById("touchpanel")
+          let toggle = true
+          setInterval(() => {
+            touchPanelEl.setAttribute("svg-ui", {enabled: toggle})
+            toggle = !toggle
+          }, 10000)
+        </script>
+      </a-plane>
     </a-scene>
     <script>
       const counterEl = document.getElementById("counter")
@@ -59,7 +77,7 @@
       }
       
       function mark() {
-        counterEl.emit("test-tick", {count: Date.now()}) // use a tick because setAttribute() doesn't like components with kebab-case
+        counterEl.setAttribute("svg-ui", {_time: Date.now()})
       }
     </script>
   </body>

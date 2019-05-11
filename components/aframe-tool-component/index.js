@@ -1,4 +1,6 @@
+// @ts-ignore
 const radToDeg = THREE.Math.radToDeg
+// @ts-ignore
 const degToRad = THREE.Math.degToRad
 const parseToLowerCase = str => (typeof str === "string") ? str.toLowerCase() : str
 
@@ -14,6 +16,7 @@ AFRAME.registerComponent("tool", {
 
     // when we reparent this entity, the component is re-initialized, 
     // so before the reparent we can store the hand entity (see onToolEquip())
+    // then on the first update recalculate the hand entity
     hand: { default: "" }
   },
 

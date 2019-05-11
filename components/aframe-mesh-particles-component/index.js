@@ -112,6 +112,7 @@ const CUSTOM_PARSER = {
 
 AFRAME.registerComponent("mesh-particles", {
   schema: {
+    enabled: { default: true },
     duration: { default: -1 },
     instancePools: { default: "" },
     spawnRate: { default: "1" },
@@ -236,7 +237,7 @@ AFRAME.registerComponent("mesh-particles", {
   tick(time, deltaTime) {
     const dt = Math.min(0.1, deltaTime*0.001) // cap the dt to help when we are debugging
 
-    if ((this.duration < 0 || time - this.startTime < this.duration) && this.instancePools.length > 0) {
+    if ((this.duration < 0 || time - this.startTime < this.duration) && this.instancePools.length > 0 && this.data.enabled) {
       this.spawnCount += this.spawnRate*dt
 
       if (this.spawnCount > 1) {
@@ -477,6 +478,9 @@ AFRAME.registerComponent("mesh-particles", {
           instance.setScaleAt(i, tempScale.x, tempScale.y, tempScale.z)
         }
   
+        if (!particle.scales && isFirstFrame) {
+          instance.setScaleAt(i, 1, 1, 1)
+        }
       }
     }
   })(),

@@ -28,6 +28,11 @@ The direction of each iteration, forward animates from the first values to the l
 The time in seconds for a keyframe sequence to perform a single iteration
 
 ---
+**enabled**: boolean = `true`
+
+When **enabled** is `false` the keyframing is paused
+
+---
 **easing** : `linear | ease | ease-cubic | ease-quad | ease-quart | ease-quint | ease-sine | ease-expo | ease-circ | ease-elastic | ease-back | ease-bounce` = `linear`
 
 An easing function to use for the interpolation.  Each type (except linear) also has in, out and in-out forms e.g `ease-in-quint`, `ease-out-quint`, `ease-in-out-quint`. See https://sole.github.io/tween.js/examples/03_graphs.html for example curves

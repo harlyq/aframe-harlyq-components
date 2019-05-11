@@ -11,6 +11,7 @@ AFRAME.registerComponent("wait-set", {
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
     target: { default: "" },
     targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
+    toggles: { default: "" },
     seed: { type: "int", default: -1 },
     debug: { default: false },
   },
@@ -79,6 +80,10 @@ AFRAME.registerComponent("wait-set", {
     if (data.delay !== oldData.delay && data.event === "") {
       this.waitTimer.start(this.data.delay, this.setProperties)
     }
+
+    if (data.toggles !== oldData.toggles) {
+      this.toggles = data.toggles.split(",").map(x => x.trim()).filter(x => x)
+    }
   },
 
   pause() {
@@ -105,6 +110,11 @@ AFRAME.registerComponent("wait-set", {
         }
 
         aframeHelper.setProperty(el, prop, processedValue)
+      }
+
+      for (let prop of this.toggles) {
+        const toggleValue = !aframeHelper.getProperty(el, prop)
+        aframeHelper.setProperty(el, prop, toggleValue)
       }
     }
   },
@@ -137,3 +147,4 @@ AFRAME.registerComponent("wait-set", {
   },
 
 })
+

@@ -151,7 +151,6 @@ AFRAME.registerComponent("timer-emit", {
     }
 
     if (eventsToSend.length > 0) {
-      const data = this.data
       const source = this.el
 
       for (let target of this.targets) {

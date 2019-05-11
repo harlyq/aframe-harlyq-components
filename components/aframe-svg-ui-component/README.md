@@ -60,6 +60,11 @@ A selector which defines the svg elements that will generate `svg-ui-click` even
 If true, show debugging information about clicks, hovers and SVG strings
 
 ---
+**enabled**: boolean = `true`
+
+Enable or disable to generation of events from the svg-ui
+
+---
 **hoverSelectors**: string = ""
 
 A selector which defines the svg elements that will generate `svg-ui-hoverstart` and `svg-ui-hoverend` events.  There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is hovering.  The **raycaster** component is provided automatically when using a **cursor** component
@@ -75,6 +80,8 @@ The resolution of the texture onto which the SVG is generated. The lower the res
 An SVG string, reference to a **script** element which contains the SVG string, or a `url(<filename>)` which contains the svg text.  This string represents the SVG but is processed as a [template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals), so all attributes on the component are available to the template. This is useful for dynamically updating the SVG, as any changes to the attributes will regenerate the SVG texture.  If the svg contains any animation add a **texture-updater** component (may not work with Firefox), to ensure the changes are re-rendered every frame.  If errors occur in the template, then reloading the page with the browser's developer tools active may provide more insight into the problem (the `debugger` keyword can also be used in any code sections to set a breakpoint). The SVG texture is more sensitive to malformed SVG than the SVG in html (so the interaction svg may appear, but the svg texture is black), so check for invalid keywords and use double rather than single quotes
 
 Setting `type="x-template"` in the **script** element will prevent the browser from trying to execute the text and generating an error, although not having the type usually provides auto-completion in the editor
+
+Because we are converting the svg to an image for displaying on a mesh, the `xmlns="http://www.w3.org/2000/svg"` attribute is mandatory in the svg
 
 ---
 **touchDeadZone**: number = `.5`

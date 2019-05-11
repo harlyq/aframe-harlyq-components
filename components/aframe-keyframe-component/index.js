@@ -57,6 +57,7 @@ AFRAME.registerComponent("keyframe", {
     seed: { default: -1, type: "int" },
     easing: { default: "linear", oneOf: Object.keys(interpolation.EASING_FUNCTIONS) },
     randomizeEachLoop: { default: true },
+    enabled: { default: true },
   },
   multiple: true,
 
@@ -141,9 +142,11 @@ AFRAME.registerComponent("keyframe", {
   },
 
   tick(time, timeDelta) {
-    // clamp frame time to make thing simpler when debugging
-    const dt = Math.min(timeDelta, MAX_FRAME_TIME_MS)/1000
-    this.step(dt)
+    if (this.data.enabled) {
+      // clamp frame time to make thing simpler when debugging
+      const dt = Math.min(timeDelta, MAX_FRAME_TIME_MS)/1000
+      this.step(dt)
+    }
   },
 
   step(dt) {

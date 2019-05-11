@@ -176,26 +176,26 @@
           <a-text value="no perspective" mixin="label"></a-text>
         </a-entity>
         <a-entity id="enable_disable" position="0 -4 0">
-          <a-entity id="toggle2" sprite-particles="spawnRate: 3; texture: #blob; lifeTime: 2; radialPosition: 1; angularVelocity: 720 0 0..0 720 0; enable: true"></a-entity>
+          <a-entity id="toggle2" sprite-particles="spawnRate: 3; texture: #blob; lifeTime: 2; radialPosition: 1; angularVelocity: 720 0 0..0 720 0; enabled: true"></a-entity>
           <a-text value="enable/disable" mixin="label"></a-text>
           <script>
             let toggle2 = document.getElementById("toggle2")
             let enableToggle2 = true
             setInterval(() => {
               enableToggle2 = !enableToggle2
-              toggle2.setAttribute("sprite-particles", {enable: enableToggle2})
+              toggle2.setAttribute("sprite-particles", {enabled: enableToggle2})
             }, 5000)
           </script>
         </a-entity>
         <a-entity id="disable_source" position="0 -8 0">
-          <a-entity id="toggle" sprite-particles="source: #toggle; spawnRate: 3; texture: #blob; lifeTime: 2; radialPosition: 1; angularVelocity: 720 0 0..0 720 0; enable: false"></a-entity>
+          <a-entity id="toggle" sprite-particles="source: #toggle; spawnRate: 3; texture: #blob; lifeTime: 2; radialPosition: 1; angularVelocity: 720 0 0..0 720 0; enabled: false"></a-entity>
           <a-text value="disable + source" mixin="label"></a-text>
           <script>
             let toggle = document.getElementById("toggle")
             let enableToggle = false
             setInterval(() => {
               enableToggle = !enableToggle
-              toggle.setAttribute("sprite-particles", {enable: enableToggle})
+              toggle.setAttribute("sprite-particles", {enabled: enableToggle})
             }, 4000)
           </script>
         </a-entity>
@@ -267,14 +267,14 @@
           <a-text value="source + burst" mixin="label"></a-text>
         </a-entity>
         <a-entity id="trails_disable" position="16 12 0">
-          <a-entity id="toggle3" sprite-particles="texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5; enable: true"></a-entity>
+          <a-entity id="toggle3" sprite-particles="texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5; enabled: true"></a-entity>
           <a-text value="trails + disable" mixin="label"></a-text>
           <script>
             let toggle3 = document.getElementById("toggle3")
             let enableToggle3 = true
             setInterval(() => {
               enableToggle3 = !enableToggle3
-              toggle3.setAttribute("sprite-particles", {enable: enableToggle3})
+              toggle3.setAttribute("sprite-particles", {enabled: enableToggle3})
             }, 5500)
           </script>
         </a-entity>
