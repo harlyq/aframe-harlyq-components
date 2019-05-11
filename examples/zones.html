@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Zone Examples</title>
+    <!--script src="https://aframe.io/releases/0.9.1/aframe.js"></script-->
+    <script src="../../aframe/aframe-0.9.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+  </head>
+  <body>
+    <a-scene>
+      <a-entity id="lefthand" vive-controls="hand: left"></a-entity>
+      <a-entity id="righthand" vive-controls="hand: right" wait-set="event: triggerdown; target: #zone; toggles: trigger-zone.enabled"></a-entity>
+      <a-entity id="zone" position="0 1 0" scale=".5 1 .25" rotation="20 -45 150" id="zone1" 
+        trigger-zone="triggerSelectors: [vive-controls]; debug: true; enabled: true"></a-entity>
+      <a-logger position="0 0 -5"></a-logger>
+    </a-scene>
+  </body>
+</html>

@@ -145,7 +145,7 @@ AFRAME.registerComponent("simple-hands", {
   
         let obj3D = el.object3D  
         if (!obj3D.boundingSphere || !obj3D.boundingBox || obj3D.boundingBox.isEmpty()) {
-          this.generateOrientedBoundingBox(obj3D, debugColor)
+          threeHelper.generateOrientedBoundingBox(obj3D, debugColor)
         }
   
         if (obj3D.boundingBox.isEmpty()) { 
@@ -217,23 +217,6 @@ AFRAME.registerComponent("simple-hands", {
       this.state.right.hand = rightHand
       this.addListeners(this.state.right)
       this.showColliderDebug(this.state.right)
-    }
-  },
-
-  generateOrientedBoundingBox(obj3D, debugColor) {
-    // cache boundingBox and boundingSphere
-    obj3D.boundingBox = obj3D.boundingBox || new THREE.Box3()
-    obj3D.boundingSphere = obj3D.boundingSphere || new THREE.Sphere()
-    threeHelper.setOBBFromObject3D(obj3D.boundingBox, obj3D)
-
-    if (!obj3D.boundingBox.isEmpty()) {
-      obj3D.boundingBox.getBoundingSphere(obj3D.boundingSphere)
-
-      if (debugColor) {
-        obj3D.boundingBoxDebug = new THREE.Box3Helper(obj3D.boundingBox, debugColor)
-        obj3D.boundingBoxDebug.name = "simpleHandsDebug"
-        obj3D.add(obj3D.boundingBoxDebug)
-      }
     }
   },
 
