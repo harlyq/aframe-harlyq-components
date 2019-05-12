@@ -1,4 +1,4 @@
-import { proximity, extent, threeHelper } from "harlyq-helpers"
+import { proximity, extent, threeHelper, domHelper } from "harlyq-helpers"
 
 const TOO_MANY_ENTITIES_WARNING = 100
 
@@ -203,20 +203,17 @@ AFRAME.registerComponent("simple-hands", {
     const leftHand = data.leftSelector ? sceneEl.querySelector(data.leftSelector) : undefined
     const rightHand = data.rightSelector ? sceneEl.querySelector(data.rightSelector) : undefined
 
-    if (leftHand !== this.state.left.hand) {
-      this.removeListeners(this.state.left)
-      this.hideColliderDebug(this.state.right)
-      this.state.left.hand = leftHand
-      this.addListeners(this.state.left)
-      this.showColliderDebug(this.state.left)
-  }
+    this.setHand(leftHand, this.state.left)
+    this.setHand(rightHand, this.state.right)
+  },
 
-    if (rightHand !== this.state.right.hand) {
-      this.removeListeners(this.state.right)
-      this.hideColliderDebug(this.state.right)
-      this.state.right.hand = rightHand
-      this.addListeners(this.state.right)
-      this.showColliderDebug(this.state.right)
+  setHand(handEl, side) {
+    if (handEl !== side.hand) {
+      this.removeListeners(side)
+      this.hideColliderDebug(side)
+      side.hand = handEl
+      this.addListeners(side)
+      this.showColliderDebug(side)
     }
   },
 
@@ -245,10 +242,10 @@ AFRAME.registerComponent("simple-hands", {
       // if (newHoverEl) console.log("closest", newHoverEl.id)
 
       if (side.target && side.target !== newHoverEl) {
-        this.sendEvent(side.hand, side.target, "hoverend")
+        this.sendTwoEvents("hoverend", side.hand, side.target)
       }
       if (newHoverEl && newHoverEl !== side.target) {
-        this.sendEvent(side.hand, newHoverEl, "hoverstart")
+        this.sendTwoEvents("hoverstart", side.hand, newHoverEl)
       } 
       side.target = newHoverEl
       side.targetType = newHoverEl ? newHoverType : undefined
@@ -276,14 +273,14 @@ AFRAME.registerComponent("simple-hands", {
     return (this.state.left.hand === el) ? this.state.left : (this.state.right.hand === el) ? this.state.right : undefined
   },
 
-  sendEvent(handEl, targetEl, eventName) {
+  sendTwoEvents(name, handEl, targetEl) {
     const bubble = this.data.bubble
     if (this.data.debug) {
-      console.log(eventName, targetEl.id)
+      console.log(name, targetEl.id)
     }
 
-    targetEl.emit(eventName, { hand: handEl }, bubble)
-    this.el.emit(eventName, { hand: handEl, object: targetEl }, bubble)
+    targetEl.emit(name, { hand: handEl, object: targetEl }, bubble)
+    this.el.emit(name, { hand: handEl, object: targetEl }, bubble)
   },
 
   onSceneLoaded() {
@@ -305,23 +302,26 @@ AFRAME.registerComponent("simple-hands", {
     }
   },
 
-  onSceneChanged() {
-    this.gatherElements()
+  onSceneChanged(mutations) {
+    domHelper.applyNodeMutations(this.grabEls, mutations, this.data.grabSelectors)
+    domHelper.applyNodeMutations(this.toolEls, mutations, this.data.toolSelectors)
+
+    // assume no need to check hands for add/remove
   },
 
   onGrabStartEvent(e) {
     const side = this.determineSide(e.target)
     if (side && side.name === "hover" && side.target && side.targetType === "grab") {
-      this.sendEvent(side.hand, side.target, "hoverend")
+      this.sendTwoEvents("hoverend", side.hand, side.target)
       this.setMode(side, "grab")
-      this.sendEvent(side.hand, side.target, "grabstart")
+      this.sendTwoEvents("grabstart", side.hand, side.target)
     }
   },
 
   onGrabEndEvent(e) {
     const side = this.determineSide(e.target)
     if (side.name === "grab" && side.target) {
-      this.sendEvent(side.hand, side.target, "grabend")
+      this.sendTwoEvents("grabend", side.hand, side.target)
       this.setMode(side, "hover")
       side.target = undefined
     }
@@ -330,16 +330,16 @@ AFRAME.registerComponent("simple-hands", {
   onToolEquipEvent(e) {
     const side = this.determineSide(e.target)
     if (side.name === "hover" && side.target && side.targetType === "tool") {
-      this.sendEvent(side.hand, side.target, "hoverend")
+      this.sendTwoEvents("hoverend", side.hand, side.target)
       this.setMode(side, "tool")
-      this.sendEvent(side.hand, side.target, "toolequip")
+      this.sendTwoEvents("toolequip", side.hand, side.target)
     }
   },
 
   onToolDropEvent(e) {
     const side = this.determineSide(e.target)
     if (side.name === "tool" && side.target) {
-      this.sendEvent(side.hand, side.target, "tooldrop")
+      this.sendTwoEvents("tooldrop", side.hand, side.target)
       this.setMode(side, "hover")
       side.target = undefined
     }

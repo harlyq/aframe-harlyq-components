@@ -19,7 +19,7 @@ e.g.
 | **tooldrop** | sent to the equipped tool when the **toolDrop** trigger is used |
 | **toolequip** | sent to the object that we were hovering over when the user pressed the **toolEquip** trigger |
 
-In each case two events will be sent, one to this entity with the parameters `{ hand: HTMLElement, object: HTMLElement }`, the other to the associated grab or tool object with `{ hand: HTMLElement }`
+In each case two events will be sent, one to this entity, and the other to the grab or tool entity, both with the parameters `{ hand: HTMLElement, object: HTMLElement }`
 
 ## Properties
 
