@@ -16,19 +16,19 @@ AFRAME.registerSystem("logger", {
     this.oldInfo = console.info
 
     console.log = (...args) => {
-      this.sendToLogger("log", args.join(" "))
+      this.sendToLogger("log", sprintf(args))
       this.oldLog(...args)
     }
     console.error = (...args) => {
-      this.sendToLogger("error", args.join(" "))
+      this.sendToLogger("error", sprintf(args))
       this.oldError(...args)
     }
     console.warn = (...args) => {
-      this.sendToLogger("warn", args.join(" "))
+      this.sendToLogger("warn", sprintf(args))
       this.oldWarn(...args)
     }
     console.info = (...args) => {
-      this.sendToLogger("info", args.join(" "))
+      this.sendToLogger("info", sprintf(args))
       this.oldInfo(...args)
     }
   },
@@ -64,8 +64,8 @@ AFRAME.registerComponent("logger", {
     maxLines: { default: 20 },
     offset: { type: "vec2", default: {x:2, y:2} },
     lineHeight: { default: 12 },
-    columnWidth: { default: 40 },
-    width: { default: 400 },
+    columnWidth: { default: 80 },
+    width: { default: 620 },
     types: { type: "array", default: ["log", "error", "warn"] },
     filter: { default: "" },
   },
@@ -89,7 +89,8 @@ AFRAME.registerComponent("logger", {
     //   console.log(str)
     // },100)
     // console.log("abcdefghijklmnopqrstuvwxyz0123456789")
-    // console.log("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    // console.log("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ACBDEFGHIJKLMNOP")
+    // console.log("%.2f%.2i%s%o%.3d%c that","1","9","help","34","color:red","is","it") // 1.0009help[object]034 that is it
   },
 
   remove() {
@@ -158,6 +159,7 @@ AFRAME.registerComponent("logger", {
           
     const svgText = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">
       <rect x="0" y="0" width="${w}" height="${h}" fill="#111"/>
+      <style> text { font-family: monospace; }></style>
       ${
         this.messages.map((message, row) => {
           const y = data.offset.y + data.lineHeight*(row + 1)
@@ -215,11 +217,34 @@ AFRAME.registerComponent("logger", {
 
 AFRAME.registerPrimitive("a-logger", {
   defaultComponents: {
-    geometry: {primitive: "plane", height: 3, width: 2},
+    geometry: {primitive: "plane", height: 3, width: 3},
     material: {color: "white", shader: "flat", side: "double"}, // must be white for colors to show correctly
     logger: {},
   },
 
   mappings: {
+    types: "logger.types",
+    filter: "logger.filter",
   }
 });
+
+function sprintf(args) {
+  if (args.length === 0) {
+    return ""
+  }
+
+  let i = 1
+  let str = args[0].replace(/%(\.(\d+))?([cdfios])/g, (m, p1, p2, p3) => {
+    let temp
+    switch (p3) {
+      case "c": i++; return ""
+      case "d": 
+      // @ts-ignore
+      case "i": temp = parseInt(args[i++], 10); return p2 ? temp.toString().padStart(p2, '0') : temp
+      case "f": temp = parseFloat(args[i++]); return p2 ? temp.toFixed(p2) : temp
+      case "o": return "[object]"
+      case "s": return args[i++]
+    }
+  })
+  return str + (i < args.length ? " " + args.slice(i).join(" ") : "")
+}
