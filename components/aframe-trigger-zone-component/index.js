@@ -1,7 +1,6 @@
-import { proximity, threeHelper } from "harlyq-helpers"
+import { proximity, threeHelper, domHelper } from "harlyq-helpers"
 
 const parseToLowerCase = (str) => typeof str === "string" ? str.toLowerCase() : str
-const COLOR_GREY = new THREE.Color("cyan")
 
 AFRAME.registerComponent("trigger-zone", {
   schema: {
@@ -22,6 +21,7 @@ AFRAME.registerComponent("trigger-zone", {
     this.triggerElements = []
     this.observer = undefined
     this.onSceneLoaded = this.onSceneLoaded.bind(this)
+    this.onSceneChanged = this.onSceneChanged.bind(this)
 
     this.el.sceneEl.addEventListener("loaded", this.onSceneLoaded)
   },
@@ -68,7 +68,11 @@ AFRAME.registerComponent("trigger-zone", {
 
   gatherElements() {
     const data = this.data
-    this.triggerElements = data.triggerSelectors ? document.querySelectorAll(data.triggerSelectors) : []
+    this.triggerElements = data.triggerSelectors ? Array.from(document.querySelectorAll(data.triggerSelectors)) : []
+
+    if (data.debug) {
+      console.log(`gathering ${this.triggerElements.length} elements`)
+    }
 
     if (this.triggerElements.length === 0) {
       console.warn(`no trigger elements using '${data.triggerSelectors}' for trigger-zone`)
@@ -76,7 +80,7 @@ AFRAME.registerComponent("trigger-zone", {
   },
 
   checkForEnterLeave() {
-    const elements = this.findOverlapping(this.triggerElements, COLOR_GREY)
+    const elements = this.findOverlapping(this.triggerElements, "cyan")
 
     for (let overlapping of this.overlapping) {
       if (!elements.includes(overlapping)) {
@@ -103,12 +107,11 @@ AFRAME.registerComponent("trigger-zone", {
     return function findOverlapping(els, debugColor) {
       let overlappingEls = []
       const object3D = this.el.object3D
-      const data = this.data
 
       object3D.updateMatrixWorld(true)
       object3D.getWorldPosition(zonePosition)
       object3D.getWorldScale(zoneScale_2).multiplyScalar(0.5)
-      const zoneRadius = data.shape === "sphere" ? data.radius : Math.hypot(zoneScale_2.x, zoneScale_2.y, zoneScale_2.z)
+      const zoneRadius = Math.hypot(zoneScale_2.x, zoneScale_2.y, zoneScale_2.z)
 
       for (let el of els) {
         if (!el.isEntity || !el.object3D) {
@@ -135,13 +138,8 @@ AFRAME.registerComponent("trigger-zone", {
 
         // Bounding box collision check
         let isOverlapping = false
-        if (data.shape === "sphere") {
-          // const distanceToBox = proximity.sphereToBox(zonePosition, el3D.boundingBox.min, el3D.boundingBox.max, el3D.matrixWorld.elements)
-          // isOverlapping = distanceToBox < zoneRadius
-        } else {
-          const distanceToBox = proximity.boxToBox(BOX_MIN_EXTENTS, BOX_MAX_EXTENTS, object3D.matrixWorld.elements, el3D.boundingBox.min, el3D.boundingBox.max, el3D.matrixWorld.elements)
-          isOverlapping = distanceToBox < 0
-        }
+        const distanceToBox = proximity.boxToBox(BOX_MIN_EXTENTS, BOX_MAX_EXTENTS, object3D.matrixWorld.elements, el3D.boundingBox.min, el3D.boundingBox.max, el3D.matrixWorld.elements)
+        isOverlapping = distanceToBox < 0
 
         if (isOverlapping) {
           overlappingEls.push(el)
@@ -155,11 +153,11 @@ AFRAME.registerComponent("trigger-zone", {
 
   sendTwoEvents(name, to) {
     if (this.data.debug) {
-      console.log(name, this.el.id, to.id)
+      console.log(name, domHelper.getDebugName(this.el), domHelper.getDebugName(to))
     }
 
-    this.el.emit(name, { zoneTarget: to }, this.data.bubble)
-    to.emit(name, { zoneSource: this.el }, this.data.bubble)
+    this.el.emit(name, { zoneTarget: to, zoneSource: this.el }, this.data.bubble)
+    to.emit(name, { zoneTarget: to, zoneSource: this.el }, this.data.bubble)
   },
 
   setupWatch() {
@@ -191,4 +189,9 @@ AFRAME.registerComponent("trigger-zone", {
     this.gatherElements()
     this.setupWatch()
   },
+
+  onSceneChanged(mutations) {
+    domHelper.applyNodeMutations(this.triggerElements, mutations, this.data.triggerSelectors)
+  },
 })
+

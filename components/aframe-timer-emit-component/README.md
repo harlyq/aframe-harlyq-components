@@ -6,9 +6,9 @@ This component can appear multiple times on a single entity
 
 e.g.
 ```html
-<a-entity timer-emit="periodic=1,2,3,4,5; after3seconds=3; in10seconds=10"></a-entity>
+<a-entity timer-emit="_periodic=1,2,3,4,5; _after3seconds=3; _in10seconds=10"></a-entity>
 ```
-repeatedly sends the event `periodic` at 1,2,3,4 and 5 seconds, sends `after3seconds` after 3 seconds and `in10seconds` at 10 seconds
+repeatedly sends the event `_periodic` at 1,2,3,4 and 5 seconds, sends `_after3seconds` after 3 seconds and `_in10seconds` at 10 seconds
 
 ```html
 <a-entity timer-emit="src=#someAudio; splash=1,15.5"></a-entity>
