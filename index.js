@@ -1,6 +1,6 @@
 import './components/aframe-arm-swinger-system/index.js'
 import './components/aframe-audio-vis-component/index.js'
-import './components/aframe-climb-system/index.js'
+import './components/aframe-climb-component/index.js'
 import './components/aframe-clone-entity-component/index.js'
 import './components/aframe-clone-geometry-component/index.js'
 import './components/aframe-extrude-component/index.js'

@@ -9,12 +9,15 @@
   <body>
     <a-scene id="scene" 
       arm-swinger="left: #leftHand; right: #rightHand; startEvent: trackpaddown; endEvent: trackpadup; cameraRig: #cameraRig; scaling: .3" 
-      climb="left: #leftHand; right: #rightHand; startEvent: triggerdown; endEvent: triggerup; cameraRig: #cameraRig; climbables: a-box;" debug>
+      climb="debug: true; cameraRig: #cameraRig;"
+      simple-hands="debug: true; leftSelector: #leftHand; rightSelector: #rightHand; grabStart: triggerdown; grabEnd: triggerup; grabSelectors: a-box"
+    >
       <a-entity id="cameraRig">
         <a-camera id="camera"></a-camera>
         <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
         <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
       </a-entity>
+      <a-logger position="-1 0 -5"></a-logger>
       <a-box id="red" position="0 0 -10" color="red"></a-box>
       <a-box id="blue" position="5 0 -10" color="blue"></a-box>
       <a-box id="green" position="-5 0 0" color="green"></a-box>
