@@ -1,6 +1,4 @@
-import { proximity, threeHelper, domHelper } from "harlyq-helpers"
-
-const parseToLowerCase = (str) => typeof str === "string" ? str.toLowerCase() : str
+import { overlap, threeHelper, domHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("trigger-zone", {
   schema: {
@@ -10,6 +8,7 @@ AFRAME.registerComponent("trigger-zone", {
     tickMS: { default: 100 },
     bubble: { default: false },
     enabled: { default: true },
+    test: { default: "overlap", oneOf: ["overlap", "within"]},
   },
 
   multiple: true,
@@ -138,8 +137,11 @@ AFRAME.registerComponent("trigger-zone", {
 
         // Bounding box collision check
         let isOverlapping = false
-        const distanceToBox = proximity.boxToBox(BOX_MIN_EXTENTS, BOX_MAX_EXTENTS, object3D.matrixWorld.elements, el3D.boundingBox.min, el3D.boundingBox.max, el3D.matrixWorld.elements)
-        isOverlapping = distanceToBox < 0
+        if (this.data.test === "overlap") {
+          isOverlapping = overlap.boxWithBox(el3D.boundingBox.min, el3D.boundingBox.max, el3D.matrixWorld.elements, BOX_MIN_EXTENTS, BOX_MAX_EXTENTS, object3D.matrixWorld.elements)
+        } else {
+          isOverlapping = overlap.boxWithinBox(el3D.boundingBox.min, el3D.boundingBox.max, el3D.matrixWorld.elements, BOX_MIN_EXTENTS, BOX_MAX_EXTENTS, object3D.matrixWorld.elements)
+        }
 
         if (isOverlapping) {
           overlappingEls.push(el)

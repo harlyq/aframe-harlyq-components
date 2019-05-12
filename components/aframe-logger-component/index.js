@@ -65,7 +65,7 @@ AFRAME.registerComponent("logger", {
     offset: { type: "vec2", default: {x:2, y:2} },
     lineHeight: { default: 12 },
     columnWidth: { default: 40 },
-    width: { default: 350 },
+    width: { default: 400 },
     types: { type: "array", default: ["log", "error", "warn"] },
     filter: { default: "" },
   },
@@ -88,6 +88,8 @@ AFRAME.registerComponent("logger", {
     //   console.info(str)
     //   console.log(str)
     // },100)
+    // console.log("abcdefghijklmnopqrstuvwxyz0123456789")
+    // console.log("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
   },
 
   remove() {

@@ -28,6 +28,11 @@ When enabled show (cyan) debug boxes around the trigger entities and a (blue for
 Enable or disble the trigger events
 
 ---
+**test**: `within` | `overlap` = `overlap`
+
+Overlapping occurs when either there is any overlap between the oriented bounding boxes (`overlap`) or the trigger entity is completely within the zone (`within`)
+
+---
 **tickMS**: number = `100`
 
 Period at which we check for overlapping trigger entities in the zone.  Higher values can miss fast moving targets, but have lower CPU usage
