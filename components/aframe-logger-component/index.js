@@ -65,9 +65,10 @@ AFRAME.registerComponent("logger", {
     offset: { type: "vec2", default: {x:2, y:2} },
     lineHeight: { default: 12 },
     columnWidth: { default: 80 },
-    width: { default: 620 },
+    characterWidth: { default: 7.3 },
     types: { type: "array", default: ["log", "error", "warn"] },
     filter: { default: "" },
+    font: { default: "1em monospace" },
   },
 
   init() {
@@ -88,8 +89,8 @@ AFRAME.registerComponent("logger", {
     //   console.info(str)
     //   console.log(str)
     // },100)
-    // console.log("abcdefghijklmnopqrstuvwxyz0123456789")
-    // console.log("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ACBDEFGHIJKLMNOP")
+    // console.log("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz")
+    // console.log("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;'[]/?#") // 81 characters
     // console.log("%.2f%.2i%s%o%.3d%c that","1","9","help","34","color:red","is","it") // 1.0009help[object]034 that is it
   },
 
@@ -145,7 +146,7 @@ AFRAME.registerComponent("logger", {
   updateTexture() {
     const imageEl = this.imageEl
     const data = this.data
-    const w = data.width
+    const w = data.columnWidth * data.characterWidth
     const h = (data.maxLines + 1)*data.lineHeight
 
     function sanitizeMessage(str) {
@@ -159,7 +160,7 @@ AFRAME.registerComponent("logger", {
           
     const svgText = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" version="1.1">
       <rect x="0" y="0" width="${w}" height="${h}" fill="#111"/>
-      <style> text { font-family: monospace; }></style>
+      <style> text { font: ${data.font}; }></style>
       ${
         this.messages.map((message, row) => {
           const y = data.offset.y + data.lineHeight*(row + 1)
@@ -234,12 +235,11 @@ function sprintf(args) {
   }
 
   let i = 1
-  let str = args[0].replace(/%(\.(\d+))?([cdfios])/g, (m, p1, p2, p3) => {
+  let str = args[0].toString().replace(/%(\.(\d+))?([cdfios])/g, (m, p1, p2, p3) => {
     let temp
     switch (p3) {
-      case "c": i++; return ""
+      case "c": i++; return "" // not supported
       case "d": 
-      // @ts-ignore
       case "i": temp = parseInt(args[i++], 10); return p2 ? temp.toString().padStart(p2, '0') : temp
       case "f": temp = parseFloat(args[i++]); return p2 ? temp.toFixed(p2) : temp
       case "o": return "[object]"
