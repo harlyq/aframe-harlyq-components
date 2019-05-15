@@ -1,5 +1,4 @@
 
-// @ts-ignore
 function toLowerCase(str) { return str.toLowerCase() }
 
 const WRAPPING_MAP = {

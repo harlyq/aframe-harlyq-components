@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "allowJs": true,
+    "checkJs": true,
+    "newLine": "LF",
+    "module": "es6"
+  }
+}

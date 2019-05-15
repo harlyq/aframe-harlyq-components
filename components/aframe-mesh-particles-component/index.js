@@ -37,7 +37,6 @@ function validateRangeOption(part, validateItemFn) {
 function parseVec3RangeOptionArray(str) {
   if (!str) return undefined
 
-  // @ts-ignore
   const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
   if (!result.every(part => validateRangeOption(part, validateVec3))) {
     console.warn(`unrecognized array of vec3 range options '${str}'`)
@@ -49,7 +48,6 @@ function parseVec3RangeOptionArray(str) {
 function parseFloatRangeOptionArray(str) {
   if (!str) return undefined
 
-  // @ts-ignore
   const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
   if (!result.every(part => validateRangeOption(part, validateFloat))) {
     console.warn(`unrecognized array of float range options '${str}'`)
@@ -65,7 +63,6 @@ function vec3OrFloatToVec3(vec3) {
 function parseScaleArray(str) {
   if (!str) return undefined
 
-  // @ts-ignore
   const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
   if (!result.every(part => validateRangeOption(part, validateVec3) || validateRangeOption(part, validateFloat))) {
     console.warn(`unrecognized array of float or vec3 range options '${str}'`)
@@ -81,7 +78,6 @@ function parseScaleArray(str) {
 function parseColorRangeOptionArray(str) {
   if (!str) return undefined
 
-  // @ts-ignore
   const result = attribute.nestedSplit(str.toLowerCase()).map( str => attribute.parse(str) ).flat()
   if (!result.every(part => validateRangeOption(part, validateColor))) {
     console.warn(`unrecognized array of color range options '${str}'`)

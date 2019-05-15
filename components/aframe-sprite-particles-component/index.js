@@ -88,8 +88,7 @@ const parseColorRangeArray = (str) => {
   }) )
 }
 
-// @ts-ignore
-const toLowerCase = x => x.toLowerCase()
+function toLowerCase(x) { return x.toLowerCase() }
 
 // console.assert(AFRAME.utils.deepEqual(parseVecRange("", [1,2,3]), [1,2,3,1,2,3]))
 // console.assert(AFRAME.utils.deepEqual(parseVecRange("5", [1,2,3]), [5,2,3,5,2,3]))

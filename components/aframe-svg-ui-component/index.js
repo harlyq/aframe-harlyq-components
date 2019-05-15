@@ -246,7 +246,6 @@ AFRAME.registerComponent("svg-ui", {
 
   processTemplate(str) {
     if (this.svgTextFunction) {
-      // @ts-ignore
       const result = this.svgTextFunction(...Object.values(this.data))
       return result.replace(/%/g, "%25").replace(/#/g, '%23') // patch all # and % because they are special characters for data:image
     }

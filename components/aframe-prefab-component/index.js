@@ -68,7 +68,6 @@ AFRAME.registerComponent('prefab', {
   processTemplate(str) {
     const templateArgs = Object.keys(this.data).concat("return `" + str + "`")
     const fn = new Function(...templateArgs)
-    // @ts-ignore
     return fn(...Object.values(this.data))
   },
 })
