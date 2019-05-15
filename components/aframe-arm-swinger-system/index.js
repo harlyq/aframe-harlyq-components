@@ -2,7 +2,7 @@
 const UP_VECTOR = new THREE.Vector3(0,1,0)
 const MAX_HISTORY_LENGTH = 3
 
-AFRAME.registerSystem("arm-swinger", {
+AFRAME.registerComponent("arm-swinger", {
   schema: {
     left: { type: "selector" },
     right: { type: "selector" },

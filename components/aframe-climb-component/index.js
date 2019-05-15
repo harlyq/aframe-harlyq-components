@@ -1,8 +1,6 @@
 import { domHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("climb", {
-  dependencies: ["simple-hands"],
-
   schema: {
     cameraRig: { type: "selector" },
     enabled: { default: true },
@@ -12,8 +10,15 @@ AFRAME.registerComponent("climb", {
   init() {
     this.onGrabStart = this.onGrabStart.bind(this)
     this.onGrabEnd = this.onGrabEnd.bind(this)
+    this.onSceneLoaded = this.onSceneLoaded.bind(this)
 
     this.grab = { hand: undefined, target: undefined, position: new THREE.Vector3() }
+
+    this.el.sceneEl.addEventListener("loaded", this.onSceneLoaded)
+  },
+
+  remove() {
+    this.el.sceneEl.removeEventListener("loaded", this.onSceneLoaded)
   },
 
   tick: (function() {
@@ -68,4 +73,9 @@ AFRAME.registerComponent("climb", {
     }
   },
 
+  onSceneLoaded() {
+    if (!this.data.cameraRig) {
+      console.warn(`no cameraRig found`)
+    }
+  },
 })
