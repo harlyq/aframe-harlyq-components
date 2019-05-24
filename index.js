@@ -1,4 +1,4 @@
-import './components/aframe-arm-swinger-system/index.js'
+import './components/aframe-arm-swinger-component/index.js'
 import './components/aframe-audio-vis-component/index.js'
 import './components/aframe-climb-component/index.js'
 import './components/aframe-clone-entity-component/index.js'
