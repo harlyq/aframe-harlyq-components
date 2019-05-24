@@ -37,7 +37,7 @@ function validateRangeOption(part, validateItemFn) {
 function parseVec3RangeOptionArray(str) {
   if (!str) return undefined
 
-  const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
+  const result = attribute.nestedSplit(str).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateVec3))) {
     console.warn(`unrecognized array of vec3 range options '${str}'`)
     return undefined
@@ -48,7 +48,7 @@ function parseVec3RangeOptionArray(str) {
 function parseFloatRangeOptionArray(str) {
   if (!str) return undefined
 
-  const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
+  const result = attribute.nestedSplit(str).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateFloat))) {
     console.warn(`unrecognized array of float range options '${str}'`)
     return undefined
@@ -63,7 +63,7 @@ function vec3OrFloatToVec3(vec3) {
 function parseScaleArray(str) {
   if (!str) return undefined
 
-  const result = attribute.nestedSplit(str).map( str => attribute.parse(str) ).flat()
+  const result = attribute.nestedSplit(str).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateVec3) || validateRangeOption(part, validateFloat))) {
     console.warn(`unrecognized array of float or vec3 range options '${str}'`)
     return undefined
@@ -78,7 +78,7 @@ function parseScaleArray(str) {
 function parseColorRangeOptionArray(str) {
   if (!str) return undefined
 
-  const result = attribute.nestedSplit(str.toLowerCase()).map( str => attribute.parse(str) ).flat()
+  const result = attribute.nestedSplit(str.toLowerCase()).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateColor))) {
     console.warn(`unrecognized array of color range options '${str}'`)
     return undefined
@@ -304,7 +304,9 @@ AFRAME.registerComponent("mesh-particles", {
     }
 
     newParticle.lifeTime = attribute.randomize(this.lifeTimeRule, random)
-    newParticle.radialPhi = (data.radialType !== "circlexz") ? random()*TWO_PI : PI_2
+
+    // http://mathworld.wolfram.com/SpherePointPicking.html
+    newParticle.radialPhi = (data.radialType !== "circlexz") ? 2*Math.acos( random()*2 - 1 ) : PI_2
     newParticle.radialTheta = data.radialType === "circleyz" ? 0 : (data.radialType === "circle" || data.radialType === "circlexy") ? PI_2 : random()*TWO_PI
 
     if (cData.position) { newParticle.positions = cData.position.map(part => attribute.randomize(part, random)) }
