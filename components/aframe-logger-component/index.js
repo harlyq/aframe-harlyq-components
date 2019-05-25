@@ -10,6 +10,14 @@ AFRAME.registerSystem("logger", {
   init() {
     this.loggers = []
     this.isLogging = false
+  },
+
+  remove() {
+    this.releaseLogs()
+    console.assert(this.loggers.length === 0)
+  },
+
+  captureLogs() {
     this.oldLog = console.log
     this.oldError = console.error
     this.oldWarn = console.warn
@@ -33,7 +41,7 @@ AFRAME.registerSystem("logger", {
     }
   },
 
-  remove() {
+  releaseLogs() {
     console.log = this.oldLog
     console.error = this.oldError
     console.warn = this.oldWarn
@@ -52,10 +60,16 @@ AFRAME.registerSystem("logger", {
 
   registerLogger(comp) {
     this.loggers.push(comp)
+    if (this.loggers.length === 1) {
+      this.captureLogs()
+    }
   },
 
   unregisterLogger(comp) {
     this.loggers.splice( this.loggers.indexOf(comp), 1 )
+    if (this.loggers.length === 0) {
+      this.releaseLogs()
+    }
   },
 })
 
