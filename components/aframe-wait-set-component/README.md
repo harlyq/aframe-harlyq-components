@@ -19,9 +19,9 @@ waits `1.5` seconds after the event `start` has been received on this component'
 if true show debugging information when properties are set
 
 ---
-**delay** : number = `0`
+**delay** : string = `0`
 
-wait for this many seconds before sending **outEvent**.  If **inEvent** is specified, then only start the delay once **inEvent** is received
+wait for this many seconds before setting the custom properties on the **target**. If **event** is specified, then only start the delay once **event** is received
 
 ---
 **event** : string = ""

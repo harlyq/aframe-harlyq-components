@@ -1,7 +1,7 @@
 // Copyright 2018-2019 harlyq
 // MIT license
 
-import { selector, aframeHelper } from "harlyq-helpers"
+import { aframeHelper, attribute, selector } from "harlyq-helpers"
 
 /**
  * Creates an HTML Element that matches a given selector string e.g. div.door#door1[state=open], 
@@ -48,7 +48,7 @@ function trimQuotes(str) {
 
 AFRAME.registerComponent("wait-add-remove", {
   schema: {
-    delay: { default: 0 },
+    delay: { default: "0" },
     event: { default: "" },
     source: { default: "" },
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
@@ -72,8 +72,12 @@ AFRAME.registerComponent("wait-add-remove", {
       this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
     
-    if (oldData.delay !== data.delay && data.event === "") {
-      this.waitTimer.start(this.data.delay, this.addRemoveEntities)
+    // must be last as the waitTimer may trigger immediately
+    if (oldData.delay !== data.delay) {
+      this.delay = attribute.parse(data.delay)
+      if (data.event === "") {
+        this.waitTimer.start( attribute.randomize(this.delay), this.addRemoveEntities)
+      }
     }
   },
 
@@ -90,15 +94,11 @@ AFRAME.registerComponent("wait-add-remove", {
   // there may be several events "pending" at the same time, so use a separate timer for each event
   onEvent() {
     const data = this.data
-    if (data.delay > 0) {
-      setTimeout(this.addRemoveEntities, data.delay*1000)
+    if (data.delay && data.delay !== "0") {
+      setTimeout( this.addRemoveEntities, attribute.randomize(this.delay)*1000 )
     } else {
       this.addRemoveEntities()
     }
-  },
-
-  startDelay() {
-    this.waitTimer.start(this.data.delay, this.addRemoveEntities)
   },
 
   addRemoveEntities() {

@@ -5,7 +5,7 @@ import { aframeHelper, attribute, pseudorandom, utils } from "harlyq-helpers"
 // 
 AFRAME.registerComponent("wait-set", {
   schema: {
-    delay: { default: 0 },
+    delay: { default: "0" },
     event: { default: "" },
     source: { default: "" },
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
@@ -78,12 +78,16 @@ AFRAME.registerComponent("wait-set", {
       this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
 
-    if (data.delay !== oldData.delay && data.event === "") {
-      this.waitTimer.start(this.data.delay, this.setProperties)
-    }
-
     if (data.toggles !== oldData.toggles) {
       this.toggles = data.toggles.split(",").map(x => x.trim()).filter(x => x)
+    }
+
+    // must be last as the waitTimer may trigger immediately
+    if (data.delay !== oldData.delay) {
+      this.delay = attribute.parse(data.delay)
+      if (data.event === "") {
+        this.waitTimer.start( attribute.randomize(this.delay), this.setProperties )
+      }
     }
   },
 
@@ -140,8 +144,8 @@ AFRAME.registerComponent("wait-set", {
     const data = this.data
     const self = this
 
-    if (data.delay > 0) {
-      setTimeout(() => self.setProperties(e), data.delay*1000)
+    if (data.delay && data.delay !== "0") {
+      setTimeout( () => self.setProperties(e), attribute.randomize(this.delay)*1000 )
     } else {
       this.setProperties(e)
     }

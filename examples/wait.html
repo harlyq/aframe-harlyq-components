@@ -31,7 +31,8 @@
       <a-tetrahedron id="tetrahedron" class="special"
         keyframe__a="duration: 0; color: pink|brown|grey; position: 0 2 -5..0 3 -5; rotation: 0 -20 -20..0 0 20"
         keyframe__b="duration: 5; position: , 5 5 -5; enabled: false"
-        wait-set="debug: true; event: _periodic; source: #listener; delay: 4; target: .special; toggles: keyframe__b.enabled"
+        wait-set__1="event: _periodic; source: #listener; delay: 2..4; target: .special; toggles: keyframe__b.enabled"
+        wait-set__2="debug: true; delay: ; target: .special; toggles: keyframe__b.enabled"
         ></a-tetrahedron>
     </a-scene>
     <script>

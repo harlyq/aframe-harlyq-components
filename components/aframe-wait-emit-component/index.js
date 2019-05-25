@@ -1,6 +1,4 @@
-// Copyright 2018-2019 harlyq
-// MIT license
-import { aframeHelper } from "harlyq-helpers"
+import { aframeHelper, attribute } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-emit" component for emitting events on this or other elements after a delay or event
@@ -8,7 +6,7 @@ import { aframeHelper } from "harlyq-helpers"
 AFRAME.registerComponent("wait-emit", {
   schema: {
     event: { default: "" },
-    delay: { default: 0 },
+    delay: { default: "0" },
     source: { default: "" },
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
     out: { default: "" },
@@ -38,8 +36,11 @@ AFRAME.registerComponent("wait-emit", {
       this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
 
-    if (data.delay !== oldData.delay && data.event === "") {
-      this.waitTimer.start(data.delay, this.sendEvent)
+    if (data.delay !== oldData.delay) {
+      this.delay = attribute.parse(data.delay)
+      if (data.event === "") {
+        this.waitTimer.start( attribute.randomize(data.delay), this.sendEvent )
+      }
     }
   },
 
@@ -69,8 +70,8 @@ AFRAME.registerComponent("wait-emit", {
     const data = this.data
     const self = this
 
-    if (data.delay > 0) {
-      setTimeout(() => self.sendEvent(e), data.delay*1000)
+    if (data.delay && data.delay !== "0") {
+      setTimeout( () => self.sendEvent(e), attribute.randomize(this.delay)*1000 )
     } else {
       this.sendEvent(e)
     }

@@ -1,6 +1,6 @@
 ## wait-emit
 
-Once one of the the **source** selector elements has received **inEvent** and **delay** seconds have passed, sends **outEvent** to all elements matching the **target** selector. The **wait-emit** component is useful for remapping and redirecting events
+Once one of the the **source** selector elements has received **event** and **delay** seconds have passed, sends **out** to all elements matching the **target** selector. The **wait-emit** component is useful for remapping and redirecting events
 
 This component can appear multiple times on a single entity
 
@@ -17,9 +17,9 @@ Once a child element (`sourceScope: self`) matching selector `.button` receives 
 
 ## Properties
 
-**delay** : number = `0`
+**delay** : : value OR value1 | value2 | ... | valueN OR min..max = `0`
 
-wait for this many seconds before sending **outEvent**.  If **inEvent** is specified, then only start the delay once **inEvent** is received
+wait for this many seconds before sending **out**.  If **event** is specified, then only start the delay once **event** is received
 
 ---
 **event** : string = ""
@@ -29,12 +29,12 @@ event to listen for
 ---
 **out** : string = ""
 
-output event to send.  This event will contain a **detail** attribute which contains the data from the **inEvent** (if used)
+output event to send.  This event will contain a **detail** attribute which contains the data from the **event** (if used)
 
 ---
 **source** : string = ""
 
-a selector defining the source entities to listen for **inEvent** on.  **sourceScope** can be used to restrict this selector to a part of the DOM hierarchy.  If not specified we listen on the component's entity
+a selector defining the source entities to listen for **event** on.  **sourceScope** can be used to restrict this selector to a part of the DOM hierarchy.  If not specified we listen on the component's entity
 
 ---
 **sourceScope** : document | self | parent = `document`

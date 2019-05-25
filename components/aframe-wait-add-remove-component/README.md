@@ -29,9 +29,9 @@ List of selectors, which represent entities to add as children to this component
 Number of times to repeat the add operation. Useful for adding the same entity multiple times
 
 ---
-**delay** : number = `0`
+**delay** : value OR value1 | value2 | ... | valueN OR min..max = `0`
 
-Delay of `x` seconds before entities are added and/or removed. If an **event** is specified then the delay is started when the event is received
+Delay in seconds before entities are added and/or removed. If an **event** is specified then the delay is started when the event is received
 
 ---
 **event** : string = ""
