@@ -238,7 +238,7 @@ AFRAME.registerComponent("mesh-particles", {
     }
 
     if (data.event !== oldData.event) {
-      this.startEvents.on(data.event)
+      this.startEvents.setEvents(data.event)
     }
 
     if (!data.event) {

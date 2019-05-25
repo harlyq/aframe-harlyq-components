@@ -433,7 +433,7 @@ AFRAME.registerComponent("sprite-particles", {
     }
 
     if (data.event !== oldData.event) {
-      this.startEvents.on(data.event)
+      this.startEvents.setEvents(data.event)
     }
   },
 
