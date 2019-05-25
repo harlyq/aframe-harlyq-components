@@ -6,12 +6,12 @@ This component can appear multiple times on a single entity
 
 e.g.
 ```html
-<a-entity wait-emit="event: click; delay: 1; source: #button; target: .door"></a-entity>
+<a-entity wait-emit="events: click; delay: 1; source: #button; target: .door"></a-entity>
 ```
-Once the element `#button` receives the `click` event, wait `1` second, then send the `click` event (because no **out** was re-use the input **event**) to all the `.door` elements
+Once the element `#button` receives the `click` event, wait `1` second, then send the `click` event (because no **out** was re-use the input **events**) to all the `.door` elements
 
 ```html
-<a-entity wait-emit="event: click; delay: 1; source: .button; sourceScope: self; out: open; target: .door; targetScope: self"></a-entity>
+<a-entity wait-emit="events: click; delay: 1; source: .button; sourceScope: self; out: open; target: .door; targetScope: self"></a-entity>
 ```
 Once a child element (`sourceScope: self`) matching selector `.button` receives the `click` event, wait `1` second, then send the `open` event to all children (`targetScope: self`) matching selector `.door`
 
@@ -22,9 +22,9 @@ Once a child element (`sourceScope: self`) matching selector `.button` receives 
 wait for this many seconds before sending **out**.  If **event** is specified, then only start the delay once **event** is received
 
 ---
-**event** : string = ""
+**events** : string = ""
 
-event to listen for
+events to listen for
 
 ---
 **out** : string = ""

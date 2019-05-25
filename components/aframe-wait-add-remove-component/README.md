@@ -12,7 +12,7 @@ e.g.
 after `10` seconds, removes all descendants with the id `three` or an attribute `color` of `blue`, then add a child entity of type `a-entity` with a classname `class`, an id of `id` and two attributes `geometry="primitive: box"` and `material="color:red"`
 
 ```html
-<a-entity wait-add-remove="event: click; source: .button; sourceScope: self; delay: 2.5; 
+<a-entity wait-add-remove="events: click; source: .button; sourceScope: self; delay: 2.5; 
   add: a-box#mybox[color=blue]"></a-entity>
 ```
 once the `click` event is received from child of this component (`sourceScope: self`) matching the selector `.button`, wait 2.5 seconds, then add an `a-box` with id `mybox` and `color="blue"`
@@ -31,12 +31,12 @@ Number of times to repeat the add operation. Useful for adding the same entity m
 ---
 **delay** : value OR value1 | value2 | ... | valueN OR min..max = `0`
 
-Delay in seconds before entities are added and/or removed. If an **event** is specified then the delay is started when the event is received
+Delay in seconds before entities are added and/or removed. If an **events** is specified then the delay is started when the event is received
 
 ---
-**event** : string = ""
+**events** : string = ""
 
-Add and/or remove entities after this event has been received.  If a **delay** is present then start the delay after this event has been received
+Add and/or remove entities after a matching event has been received.  If a **delay** is present then start the delay after this event has been received
 
 ---
 **remove** : string[] = ""

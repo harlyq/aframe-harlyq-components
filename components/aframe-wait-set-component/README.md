@@ -8,7 +8,7 @@ This component can appear multiple times on a single entity
 
 e.g.
 ```html
-<a-entity wait-set="event: start; delay: 1.5; target: .light; material.color=red|yellow; pulse=1..2.5"></a-entity>
+<a-entity wait-set="events: start; delay: 1.5; target: .light; material.color=red|yellow; pulse=1..2.5"></a-entity>
 ```
 waits `1.5` seconds after the event `start` has been received on this component's entity and then set the `material.color` to either `red` or `yellow`, and the `pulse` component to a number between `1` and `2.5` for all entities of the class `light`
 
@@ -21,12 +21,12 @@ if true show debugging information when properties are set
 ---
 **delay** : : value OR value1 | value2 | ... | valueN OR min..max = `0`
 
-wait for this many seconds before setting the custom properties on the **target**. If **event** is specified, then only start the delay once **event** is received
+wait for this many seconds before setting the custom properties on the **target**. If **events** is specified, then only start the delay once **events** is received
 
 ---
-**event** : string = ""
+**events** : string = ""
 
-event to listen for
+events to listen for
 
 ---
 **seed** : int = `-1`

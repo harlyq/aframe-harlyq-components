@@ -108,7 +108,7 @@ const CUSTOM_PARSER = {
 
 AFRAME.registerComponent("mesh-particles", {
   schema: {
-    on: { default: "" },
+    events: { default: "" },
     enabled: { default: true },
     duration: { default: -1 },
     instancePools: { default: "" },
@@ -237,11 +237,11 @@ AFRAME.registerComponent("mesh-particles", {
       }
     }
 
-    if (data.event !== oldData.event) {
-      this.startEvents.setEvents(data.event)
+    if (data.events !== oldData.events) {
+      this.startEvents.setEvents(data.events)
     }
 
-    if (!data.event) {
+    if (!data.events) {
       this.isStarted = true
       this.startTime = data.delay
     }

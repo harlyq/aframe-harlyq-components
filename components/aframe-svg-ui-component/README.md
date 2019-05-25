@@ -13,7 +13,7 @@ e.g.
   </svg>
 </script>
 <a-plane position="0 0 -2" svg-ui="template: #ui_template; clickSelectors: circle; _col=blue"
-  wait-set="event: svg-ui-click; svg-ui._col=red"
+  wait-set="events: svg-ui-click; svg-ui._col=red"
 ></a-plane>
 ```
 The **laser-controls** setup a `yellow` laser in the `right` hand which intersects any element with an `svg-ui` attribute less than `5`m from the controller.  The UI is placed upon an **a-plane** and uses the template described in `#ui_template`.  This template is an svg `circle` near the middle, who's color is determined by the `${_col}` template expression.  The **_col** variable is set to `blue` on the `svg-ui` component, and the component will generate `svg-ui-click` events whenever the user clicks on elements that match the `clickSelectors: circle`.  The **wait-set** component takes the **svg-ui-click** events and sets the `svg-ui._col` to `red`, which will force a rebuild of the template and show a red circle on the UI texture

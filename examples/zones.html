@@ -9,7 +9,7 @@
   <body>
     <a-scene>
       <a-entity id="lefthand" vive-controls="hand: left"></a-entity>
-      <a-entity id="righthand" vive-controls="hand: right" wait-set="event: triggerdown; target: #secondZone; toggles: trigger-zone.enabled"></a-entity>
+      <a-entity id="righthand" vive-controls="hand: right" wait-set="events: triggerdown; target: #secondZone; toggles: trigger-zone.enabled"></a-entity>
       <a-entity id="secondZone" position="-1 1 0" scale=".5 .5 .25" rotation="-20 35 15"
         trigger-zone="triggerSelectors: [vive-controls]; debug: true; enabled: true; watch: true; test: within;"
       ></a-entity>

@@ -5,7 +5,7 @@ import { aframeHelper, attribute } from "harlyq-helpers"
 // 
 AFRAME.registerComponent("wait-emit", {
   schema: {
-    event: { default: "" },
+    events: { default: "" },
     delay: { default: "0" },
     source: { default: "" },
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
@@ -32,14 +32,14 @@ AFRAME.registerComponent("wait-emit", {
   update(oldData) {
     const data = this.data
 
-    if (data.event !== oldData.event || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
+    if (data.events !== oldData.events || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
+      this.waitListener.set(this.el, data.source, data.sourceScope, data.events, this.onEvent)
     }
 
     // must be last as the waitTimer may trigger immediately
     if (data.delay !== oldData.delay) {
       this.delay = attribute.parse(data.delay)
-      if (data.event === "") {
+      if (data.events === "") {
         this.waitTimer.start( attribute.randomize(data.delay), this.sendEvent )
       }
     }

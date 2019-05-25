@@ -163,7 +163,7 @@ AFRAME.registerComponent("sprite-particles", {
     destinationOffset: { default: "0 0 0" },
     destinationWeight: { default: "0" },
 
-    event: { default: "" },
+    events: { default: "" },
     enabled: { default: true },
     emitterTime: { default: 0 },
     model: { type: "selector" },
@@ -219,7 +219,7 @@ AFRAME.registerComponent("sprite-particles", {
     this.destinationWeight // parsed value for destinationWeight
     this.nextID = 0
     this.nextTime = 0
-    this.startDisabled = !this.data.enabled || !!this.data.event // prevents the tick, and doesn't spawn any particles
+    this.startDisabled = !this.data.enabled || !!this.data.events // prevents the tick, and doesn't spawn any particles
     this.manageIDs = false
 
     this.params[ID_PARAM] = -1 // unmanaged IDs
@@ -391,7 +391,7 @@ AFRAME.registerComponent("sprite-particles", {
       this.updateAttributes()
     }
 
-    if (data.enabled && this.startDisabled && !data.event) {
+    if (data.enabled && this.startDisabled && !data.events) {
       this.startDisabled = false
     }
 
@@ -425,15 +425,15 @@ AFRAME.registerComponent("sprite-particles", {
 
     // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
     // once managed, always managed
-    this.manageIDs = this.manageIDs || !data.enabled || !!data.event || data.source || typeof this.el.getDOMAttribute(this.attrName).enabled !== "undefined" || data.model || data.delay > 0
+    this.manageIDs = this.manageIDs || !data.enabled || !!data.events || data.source || typeof this.el.getDOMAttribute(this.attrName).enabled !== "undefined" || data.model || data.delay > 0
 
     // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
     if (data.texture !== oldData.texture) {
       this.loadTexture(data.texture)
     }
 
-    if (data.event !== oldData.event) {
-      this.startEvents.setEvents(data.event)
+    if (data.events !== oldData.events) {
+      this.startEvents.setEvents(data.events)
     }
   },
 

@@ -135,7 +135,7 @@ set the time on the emitter, this can be used to pre-charge the emitter with par
 enable or disable the emitter. When disabled, existing particles will continue their lives, but there will be no new particles
 
 ---
-**event** : string = ""
+**events** : string = ""
 
 a comma separated list of events to listen for.  If event is set, then particles will not appear until a matching event is received
 

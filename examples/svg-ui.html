@@ -51,15 +51,15 @@
         svg-ui="debug: false; template: #ui_custom; clickSelectors: rect; hoverSelectors: rect[id]; bubbles: true; _boxes: A,B,C; _checked:A; _hovers:; _time: 0;"
         uv-transform="repeat: -1 1"
         store-bind__1="store: #scene; from: store__a._checked; to: svg-ui._checked"
-        wait-set__1="event: svg-ui-click; target: a-scene; store__a._checked: $event.detail.uiTarget.id"
-        wait-set__3="event: svg-ui-hoverstart; svg-ui._hovers: $event.detail.hovers"
-        wait-set__4="event: svg-ui-hoverend; svg-ui._hovers: $event.detail.hovers"
+        wait-set__1="events: svg-ui-click; target: a-scene; store__a._checked: $event.detail.uiTarget.id"
+        wait-set__3="events: svg-ui-hoverstart; svg-ui._hovers: $event.detail.hovers"
+        wait-set__4="events: svg-ui-hoverend; svg-ui._hovers: $event.detail.hovers"
       ></a-entity>
       <a-plane id="animatedsvg" position="2 2 -5" material="transparent: true" svg-ui="template: url(animated-square.svg); _col: orange;" texture-updater></a-plane>
       <a-plane id="roundedinline" position="0 0 -5" material="transparent: true" svg-ui='_col: #245; template: <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect x="5" y="5" width="80" height="60" rx="5" fill="${_col}"/></svg>;'></a-plane>
       <a-plane id="touchpanel" position="-1 1 -.5" scale=".5 .5 .5"
         svg-ui="_x: 20; _y: 20; template: #ui_touchpanel; touchSelectors: rect; enabled: false"
-        wait-set="event: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x;  svg-ui._y: $event.detail.intersection.svg.y">
+        wait-set="events: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x;  svg-ui._y: $event.detail.intersection.svg.y">
         <script>
           const touchPanelEl = document.getElementById("touchpanel")
           let toggle = true

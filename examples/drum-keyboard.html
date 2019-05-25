@@ -57,7 +57,7 @@
         
         <a-plane id="keyboard_plane" scale="0.9 0.4 1" rotation="-60 0 0 " 
           svg-ui='resolution: 1024 1024; template: #keyboard_svg; touchSelectors: rect; _hoverCol:#022; _keyCol:cyan; _layout:us-lower; _hoverKeys:1234;'
-          wait-set="event: svg-ui-touchstart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
+          wait-set="events: svg-ui-touchstart; svg-ui._hoverKeys: $event.detail.uiTarget.id"
         >
         </a-plane>
         <!-- each stick contains a raycaster which will interact with the hoverSelector on the keyboard_plane -->
@@ -67,7 +67,7 @@
       </a-entity>
       <a-plane id="touchpad" scale=".5 .5 .5" position=".7 1 -.2" rotation="-60 -65 0"
         svg-ui="template: #touchpad_svg; touchSelectors: #sensitive; touchDeadZone: 10; _x: 0; _y: 0"
-        wait-set="event: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x; svg-ui._y: $event.detail.intersection.svg.y"
+        wait-set="events: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x; svg-ui._y: $event.detail.intersection.svg.y"
       >
         <script id="touchpad_svg">
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">

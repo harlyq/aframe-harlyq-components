@@ -49,7 +49,7 @@ function trimQuotes(str) {
 AFRAME.registerComponent("wait-add-remove", {
   schema: {
     delay: { default: "0" },
-    event: { default: "" },
+    events: { default: "" },
     source: { default: "" },
     sourceScope: { default: "document", oneOf: ["parent", "self", "document"] },
     add: { type: "array" },
@@ -68,14 +68,14 @@ AFRAME.registerComponent("wait-add-remove", {
 
   update(oldData) {
     const data = this.data
-    if (oldData.event !== data.event || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
-      this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
+    if (oldData.events !== data.events || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
+      this.waitListener.set(this.el, data.source, data.sourceScope, data.events, this.onEvent)
     }
     
     // must be last as the waitTimer may trigger immediately
     if (oldData.delay !== data.delay) {
       this.delay = attribute.parse(data.delay)
-      if (data.event === "") {
+      if (data.events === "") {
         this.waitTimer.start( attribute.randomize(this.delay), this.addRemoveEntities)
       }
     }

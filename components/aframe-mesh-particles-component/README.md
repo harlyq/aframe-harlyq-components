@@ -60,7 +60,7 @@ The duration in seconds of the whole system, -1 implies the system never ends
 Enable or disable spawning of particles (note existing particles will continue to for the remainder of their lifetime when **enabled** is set to `false`)
 
 ---
-**event** : string = ""
+**events** : string = ""
 
 a comma separated list of events to listen for.  If event is set, then particles will not appear until a matching event is received
 
