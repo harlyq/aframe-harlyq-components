@@ -12,7 +12,7 @@
 
       </a-assets>
       <a-box id="box" instance-pool="size: 10000" material="transparent:true"></a-box>
-      <a-sphere id="sphere" instance-pool="size: 180" material="transparent:true"></a-sphere>
+      <a-sphere id="sphere" instance-pool="size: 300" material="transparent:true"></a-sphere>
       <a-instance src="#box" color="cyan" dynamic="true" scale=".1 .1 .1" animation="property: position; from: 10 4 -10; to: -10 4 -10; loop: true; dur: 40000"></a-instance>
       <a-entity id="radial" position="0 0 -15" 
         mesh-particles="instancePools: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1,1; radialAcceleration: -1,-1; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
@@ -41,6 +41,15 @@
             tumblerEl.setAttribute("mesh-particles", {enabled: toggle})
             toggle = !toggle
           }, 7000)
+        </script>
+      </a-entity>
+      <a-entity id="events" position="5 -5 -15" 
+        mesh-particles="event: ping; instancePools: #sphere; spawnRate: 20; radialType: circleyz; radialPosition: 2; scale: 0,.5,0; color: teal; lifeTime: 1; duration: 1">
+        <script>
+          const eventsEl = document.getElementById("events")
+          setInterval(() => {
+            eventsEl.dispatchEvent( new CustomEvent("ping", {}) )
+          }, 3500)
         </script>
       </a-entity>
     </a-scene>

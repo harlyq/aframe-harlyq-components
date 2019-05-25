@@ -1,4 +1,4 @@
-import { pseudorandom, attribute, interpolation } from "harlyq-helpers"
+import { aframeHelper, attribute, interpolation, pseudorandom } from "harlyq-helpers"
 
 const toLowerCase = x => x.toLowerCase()
 const warn = msg => console.warn("mesh-particles", msg)
@@ -108,6 +108,7 @@ const CUSTOM_PARSER = {
 
 AFRAME.registerComponent("mesh-particles", {
   schema: {
+    on: { default: "" },
     enabled: { default: true },
     duration: { default: -1 },
     instancePools: { default: "" },
@@ -138,6 +139,8 @@ AFRAME.registerComponent("mesh-particles", {
   multiple: true,
 
   init() {
+    this.isStarted = false
+    this.hasListeners = false
     this.spawnID = 0
     this.spawnCount = 0
     this.instancePools = []
@@ -145,6 +148,8 @@ AFRAME.registerComponent("mesh-particles", {
     this.particles = []
     this.customData = {}
     this.lcg = pseudorandom.lcg()
+
+    this.startEvents = aframeHelper.onEvents(this.el, this.onEvent.bind(this))
   },
 
   remove() {
@@ -152,6 +157,14 @@ AFRAME.registerComponent("mesh-particles", {
 
     this.source = undefined
     this.destination = undefined
+  },
+
+  play() {
+    this.startEvents.play()
+  },
+
+  pause() {
+    this.startEvents.pause()
   },
 
   update(oldData) {
@@ -170,10 +183,6 @@ AFRAME.registerComponent("mesh-particles", {
       this.lifeTimeRule = attribute.parse(data.lifeTime)
       this.maxLifeTime = getMaxRangeOptions(this.lifeTimeRule)
       this.particles = []
-    }
-
-    if (data.delay !== oldData.delay) {
-      this.startTime = data.delay // this will not work if we restart the spawner
     }
 
     if (data.source !== oldData.source) {
@@ -228,12 +237,22 @@ AFRAME.registerComponent("mesh-particles", {
       }
     }
 
+    if (data.event !== oldData.event) {
+      this.startEvents.on(data.event)
+    }
+
+    if (!data.event) {
+      this.isStarted = true
+      this.startTime = data.delay
+    }
   },
 
   tick(time, deltaTime) {
+    const t = time*0.001
     const dt = Math.min(0.1, deltaTime*0.001) // cap the dt to help when we are debugging
+    const isActive = (this.duration < 0 || t - this.startTime < this.duration)
 
-    if ((this.duration < 0 || time - this.startTime < this.duration) && this.instancePools.length > 0 && this.data.enabled) {
+    if (this.isStarted && isActive && this.instancePools.length > 0 && this.data.enabled) {
       this.spawnCount += this.spawnRate*dt
 
       if (this.spawnCount > 1) {
@@ -244,8 +263,20 @@ AFRAME.registerComponent("mesh-particles", {
         this.spawn()
         this.spawnCount--
       }
+
+    } else if (this.isStarted && !isActive) {
+      this.isStarted = false
     }
+
     this.move(dt)
+  },
+
+  onEvent(e) {
+    const self = this
+    setTimeout(() => { 
+      self.isStarted = true
+      self.startTime = self.el.sceneEl.clock.elapsedTime
+    }, this.delay*1000)
   },
 
   releaseInstances() {

@@ -60,6 +60,11 @@ The duration in seconds of the whole system, -1 implies the system never ends
 Enable or disable spawning of particles (note existing particles will continue to for the remainder of their lifetime when **enabled** is set to `false`)
 
 ---
+**event** : string = ""
+
+a comma separated list of events to listen for.  If event is set, then particles will not appear until a matching event is received
+
+---
 **instances**: selector = ""
 
 A selector for the entities with **instance** components to use for this particle system.  Multiple instances will be shared evenly amongst this particle system.  If **instances** is not set, then use the **instance** component on this entity.  An error occurs if an instance cannot be found and no particles are generated.

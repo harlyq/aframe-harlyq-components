@@ -454,6 +454,14 @@
           <a-entity sprite-particles="emitterTime: 5; texture: #blob; radialType: circleXZ; spawnRate: 10; radialPosition: 1; velocity: 0 0.5 0; radialVelocity: -0.1; angularVelocity: 0 450 0; lifeTime: 5; color: teal,darkBlue"></a-entity>
           <a-text value="emitterTime 5s" mixin="label"></a-text>
         </a-entity>
+        <a-entity id="events" position="-20 -8 0">
+          <a-entity id="eventsParticles" sprite-particles="event: ping; texture: #blob; spawnRate: 10; position: -.75 0 0.. .75 0 0; velocity: 0 .8 0..0 1.1 0; acceleration: 0 -.8 0; scale: 1,1,.5; lifeTime: 2; duration: 2; color: lightBlue..white"></a-entity>
+          <a-text value="events" mixin="label"></a-text>
+          <script>
+            eventsEl = document.querySelector("#eventsParticles")
+            setInterval( () => eventsEl.dispatchEvent( new CustomEvent("ping", {}) ), 5400 )
+          </script>
+        </a-entity>
       </a-entity>
       <!--a-entity position="0 0 -4">
         <a-entity position="0 0 0">

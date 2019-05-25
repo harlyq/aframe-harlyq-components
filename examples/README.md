@@ -44,10 +44,14 @@ https://harlyq.github.io/aframe-harlyq-components/examples/zones.html
 none
 ### merge-geometry
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/prefab.html
 ### mesh-particles
 https://harlyq.github.io/aframe-harlyq-components/examples/mesh-particles.html
 ### prefab
 https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/prefab.html
 ### procedural-texture
 https://harlyq.github.io/aframe-harlyq-components/examples/heightfield.html
 

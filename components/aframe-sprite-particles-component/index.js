@@ -1,5 +1,4 @@
-// Copyright 2018-2019 harlyq
-// License MIT
+import { aframeHelper } from "harlyq-helpers"
 
 const TIME_PARAM = 0 // [0].x
 const ID_PARAM = 1 // [0].y
@@ -164,6 +163,7 @@ AFRAME.registerComponent("sprite-particles", {
     destinationOffset: { default: "0 0 0" },
     destinationWeight: { default: "0" },
 
+    event: { default: "" },
     enabled: { default: true },
     emitterTime: { default: 0 },
     model: { type: "selector" },
@@ -199,6 +199,7 @@ AFRAME.registerComponent("sprite-particles", {
     this.delayTime = 0
     this.lifeTime = [1,1]
     this.trailLifeTime = [0,0] // if 0, then use this.lifeTime
+    this.paused = false // track paused because isPlaying will be false on the first frame
 
     // this.useTransparent = false
     this.textureFrames = new Float32Array(4) // xy is TextureFrame, z is TextureCount, w is TextureLoop
@@ -218,18 +219,19 @@ AFRAME.registerComponent("sprite-particles", {
     this.destinationWeight // parsed value for destinationWeight
     this.nextID = 0
     this.nextTime = 0
-    this.numDisabled = 0
-    this.numEnabled = 0
-    this.startDisabled = !this.data.enabled // if we start disabled then the tick is disabled, until the component is enabled
+    this.startDisabled = !this.data.enabled || !!this.data.event // prevents the tick, and doesn't spawn any particles
     this.manageIDs = false
 
     this.params[ID_PARAM] = -1 // unmanaged IDs
+
+    this.startEvents = aframeHelper.onEvents(this.el, this.onEvent.bind(this))
   },
 
   remove() {
     if (this.mesh) {
       this.el.removeObject3D(this.mesh.name)
     }
+
     if (this.data.model) {
       this.data.model.removeEventListener("object3dset", this.handleObject3DSet)
     }
@@ -389,7 +391,7 @@ AFRAME.registerComponent("sprite-particles", {
       this.updateAttributes()
     }
 
-    if (data.enabled && this.startDisabled) {
+    if (data.enabled && this.startDisabled && !data.event) {
       this.startDisabled = false
     }
 
@@ -423,11 +425,15 @@ AFRAME.registerComponent("sprite-particles", {
 
     // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
     // once managed, always managed
-    this.manageIDs = this.manageIDs || !data.enabled || data.source || typeof this.el.getDOMAttribute(this.attrName).enabled !== "undefined" || data.model || data.delay > 0
+    this.manageIDs = this.manageIDs || !data.enabled || !!data.event || data.source || typeof this.el.getDOMAttribute(this.attrName).enabled !== "undefined" || data.model || data.delay > 0
 
     // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
     if (data.texture !== oldData.texture) {
       this.loadTexture(data.texture)
+    }
+
+    if (data.event !== oldData.event) {
+      this.startEvents.on(data.event)
     }
   },
 
@@ -447,7 +453,7 @@ AFRAME.registerComponent("sprite-particles", {
       this.params[TIME_PARAM] = this.emitterTime
 
       if (this.geometry && this.manageIDs) {
-        this.updateWorldTransform(this.emitterTime)
+        this.spawnParticles(this.emitterTime)
       } else {
         this.params[ID_PARAM] = -1
       }
@@ -461,15 +467,30 @@ AFRAME.registerComponent("sprite-particles", {
   pause() {
     this.paused = true
     this.enableEditorObject(this.data.editorObject)
+    this.startEvents.pause()
   },
 
   play() {
     this.paused = false
     this.enableEditorObject(false)
+    this.startEvents.play()
   },
 
-  handleObject3DSet(event) {
-    if (event.target === this.data.model && event.detail.type === MODEL_MESH) {
+  onEvent() {
+    const self = this
+    const data = this.data
+
+    setTimeout( () => {
+      self.emitterTime = data.emitterTime
+      self.nextTime = 0
+      self.nextID = 0
+      self.delayTime = 0
+      self.startDisabled = false
+    }, data.delay*1000 )
+  },
+
+  handleObject3DSet(e) {
+    if (e.target === this.data.model && e.detail.type === MODEL_MESH) {
       this.updateModelMesh(this.data.model.getObject3D(MODEL_MESH))
     }
   },
@@ -773,15 +794,10 @@ AFRAME.registerComponent("sprite-particles", {
       if (this.startDisabled || this.data.delay > 0 || this.data.model) {
         vertexIDs.fill(-1)
 
-        this.numEnabled = 0
-        this.numDisabled = n  
       } else {
         for (let i = 0; i < n; i++) {
           vertexIDs[i] = i
         }
-
-        this.numEnabled = n
-        this.numDisabled = 0
       }
 
       this.geometry.addAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
@@ -927,14 +943,14 @@ AFRAME.registerComponent("sprite-particles", {
     }
   },
 
-  updateWorldTransform: (function() {
+  spawnParticles: (function() {
     let position = new THREE.Vector3()
     let quaternion = new THREE.Quaternion()
     let scale = new THREE.Vector3()
     let modelPosition = new THREE.Vector3()
     let m4 = new THREE.Matrix4()
 
-    return function(emitterTime) {
+    return function spawnParticles(emitterTime) {
       const data = this.data
       const n = this.count
 
@@ -944,7 +960,6 @@ AFRAME.registerComponent("sprite-particles", {
       const spawnRate = this.data.spawnRate
       const isBurst = data.spawnType === "burst"
       const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
-      const isEnableDisable = data.enabled ? this.numEnabled < n : this.numDisabled < n
       const hasSource = data.source && data.source.object3D != null
       const isUsingModel = this.modelVertices && this.modelVertices.length
       const isRibbon = this.isRibbon()
@@ -1003,21 +1018,13 @@ AFRAME.registerComponent("sprite-particles", {
   
             particleVertexID.setX(index, data.enabled ? id : -1) // id is unique and is tied to position and quaternion
   
-            if (isEnableDisable) {
-              // if we're enabled then increase the number of enabled and reset the number disabled, once we 
-              // reach this.numEnabled === n, all IDs would have been set and isEnableDisable will switch to false.
-              // vice versa if we are disabled. these numbers represent the number of consecutive enables or disables.
-              this.numEnabled = data.enabled ? this.numEnabled + 1 : 0
-              this.numDisabled = data.enabled ? 0 : this.numDisabled + 1
-            }  
-
-            index = (index + 1) % n
+            index = (index + 1) % n  // wrap around to 0 if we'd emitted the last particle in our stack
             numSpawned++
 
             if (isIDUnique) {
               this.nextID++
             } else {
-              this.nextID = index // wrap around to 0 if we'd emitted the last particle in our stack
+              this.nextID = index
             }
           }
         }
