@@ -17,7 +17,7 @@ Once a child element (`sourceScope: self`) matching selector `.button` receives 
 
 ## Properties
 
-**delay** : : value OR value1 | value2 | ... | valueN OR min..max = `0`
+**delay** : value OR value1 | value2 | ... | valueN OR min..max = `0`
 
 wait for this many seconds before sending **out**.  If **event** is specified, then only start the delay once **event** is received
 

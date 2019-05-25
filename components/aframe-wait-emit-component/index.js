@@ -36,6 +36,7 @@ AFRAME.registerComponent("wait-emit", {
       this.waitListener.set(this.el, data.source, data.sourceScope, data.event, this.onEvent)
     }
 
+    // must be last as the waitTimer may trigger immediately
     if (data.delay !== oldData.delay) {
       this.delay = attribute.parse(data.delay)
       if (data.event === "") {

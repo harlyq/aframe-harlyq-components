@@ -19,7 +19,7 @@ waits `1.5` seconds after the event `start` has been received on this component'
 if true show debugging information when properties are set
 
 ---
-**delay** : string = `0`
+**delay** : : value OR value1 | value2 | ... | valueN OR min..max = `0`
 
 wait for this many seconds before setting the custom properties on the **target**. If **event** is specified, then only start the delay once **event** is received
 
