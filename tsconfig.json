@@ -4,7 +4,7 @@
     "allowJs": true,
     "checkJs": true,
     "newLine": "LF",
-    "module": "es6"
+    "module": "es6",
+    "moduleResolution": "node"
   },
-  "include": ["src/*"]
 } // this config generates "Cannot write file ... because it would overwrite input file"
