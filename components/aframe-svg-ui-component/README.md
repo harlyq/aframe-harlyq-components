@@ -23,12 +23,12 @@ The **laser-controls** setup a `yellow` laser in the `right` hand which intersec
 | - | - |
 | **svg-ui-click** | sent when a `click` event is received, and interaction was on a **clickSelectors** compatible element. Sent for each element with `detail: { uiTarget: HTMLElement, intersection: Intersection }` |
 | **svg-ui-hoverend** | sent when ALL **raycaster** components intersecting this entity, no longer intersect this **hoverSelectors** compatible element. Sent for each element with `detail: { uiTarget: HTMLElement, hovers: string[] }`, hovers is a list of ids of all active hover elements. |
-| **svg-ui-hoverstart** | sent when ALL **raycaster** components intersecting this entity, intersect a **hoverSelectors** compatible element. Sent with `detail: { uiTarget: HTMLElement, hovers: string[] }`, hovers is a list of ids of all active hover elements |
+| **svg-ui-hoverstart** | sent when ANY **raycaster** components intersecting this entity, intersects a **hoverSelectors** compatible element that is not currently intersected by another **raycaster**. Sent with `detail: { uiTarget: HTMLElement, hovers: string[] }`, hovers is a list of ids of all active hover elements |
 | **svg-ui-touchend** | sent when ANY **raycaster** component intersecting this entity, no longer intersects or within the **touchDistance** of a **touchSelectors** compatible element. Sent for each element with `detail: { uiTarget: HTMLElement, intersection: Intersection, touches: string[] }`, touches is a list of ids of all active touch elements |
 | **svg-ui-touchstart** | sent when ANY **raycaster** component intersecting this entity, intersects and is within **touchDistance** of a **touchSelectors** compatible element. Sent with `detail: { uiTarget: HTMLElement, intersection: Intersection, touches: string[] }`, touches is a list of ids of all active touch elements |
 | **svg-ui-touchmove** | sent when ANY **raycaster** component intersecting this entity, intersects and is within **touchDistance** of a **touchSelectors** compatible element and has moved **touchDeadZone** units from its last `touchmove` (or `touchstart` if this is the first move) position. Sent with `detail: { uiTarget: HTMLElement, intersection: Intersection, touches: string[] }`, touches is a list of ids of all active touch elements |
 
-Hover and touch events are sent independently, so both can occur at the same time. 
+Hover and touch events are sent independently, so both can occur at the same time. All events are sent to the **svg-ui** component's entity. Touch events are also sent to the **raycaster** component's entity.
 
 Type `Intersection` represents `{ distance: number, point: {x,y,z}, face: THREE.Face, faceIndex: index, object: THREE.Object3D, uv: {x,y}, svg: {x,y} }` where 
 * `distance` is meters between the origin of the ray and the intersection

@@ -321,17 +321,17 @@ AFRAME.registerComponent("svg-ui", {
 
         for (let prevEl of touchInfo.elements) {
           if (!touchElements.find(newEl => newEl.id === prevEl.id)) {
-            this.sendEvent("svg-ui-touchend", { uiTarget: prevEl, intersection, touches: touchIds }, this.el.id)
+            this.sendEvent("svg-ui-touchend", { uiTarget: prevEl, intersection, touches: touchIds }, raycaster)
           }
         }
     
         for (let newEl of touchElements) {
           if (touchInfo.elements.find(prevEl => prevEl.id === newEl.id)) {
             if (hasMoved) {
-              this.sendEvent("svg-ui-touchmove", { uiTarget: newEl, intersection, touches: touchIds }, this.el.id)
+              this.sendEvent("svg-ui-touchmove", { uiTarget: newEl, intersection, touches: touchIds }, raycaster)
             }
           } else {
-            this.sendEvent("svg-ui-touchstart", { uiTarget: newEl, intersection, touches: touchIds }, this.el.id)
+            this.sendEvent("svg-ui-touchstart", { uiTarget: newEl, intersection, touches: touchIds }, raycaster)
           }
         }
     
@@ -344,25 +344,29 @@ AFRAME.registerComponent("svg-ui", {
 
     for (let el of this.hoverEls) {
       if (!hoverElements.find(otherEl => otherEl.id === el.id)) {
-        this.sendEvent("svg-ui-hoverend", { uiTarget: el, hovers: hoverElements.map(x => x.id) }, this.el.id)
+        this.sendEvent("svg-ui-hoverend", { uiTarget: el, hovers: hoverElements.map(x => x.id) })
       }
     }
 
     for (let el of hoverElements) {
       if (!this.hoverEls.find(otherEl => otherEl.id === el.id)) {
-        this.sendEvent("svg-ui-hoverstart", { uiTarget: el, hovers: hoverElements.map(x => x.id) }, this.el.id)
+        this.sendEvent("svg-ui-hoverstart", { uiTarget: el, hovers: hoverElements.map(x => x.id) })
       }
     }
   
     this.hoverEls = hoverElements
   },
 
-  sendEvent(name, details) {
+  sendEvent(name, details, targetEl) {
     if (this.data.debug) {
-      console.log("emit", name, details)
+      console.log("emit", name, details, targetEl)
     }
 
     this.el.emit(name, details, this.data.bubbles)
+
+    if (targetEl) {
+      targetEl.emit(name, details, this.data.bubbles)
+    }
   },
 
   onSetObject3D(e) {

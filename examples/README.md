@@ -79,6 +79,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### store-bind
 https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### svg-ui
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+
 https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
@@ -107,6 +109,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
 ### wait-emit
 none
 ### wait-set
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+
 https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html

@@ -5,6 +5,73 @@
     <!--script src="https://aframe.io/releases/0.9.2/aframe.js"></script-->
     <script src="../../aframe/aframe-0.9.0.js"></script>
     <script src="../dist/aframe-harlyq-components.js"></script>
+    <script id="palette" type="x-template">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="69.695702mm"
+        height="57.126026mm"
+        viewBox="0 0 69.695702 57.126026"
+        version="1.1">
+        <g
+          id="layer1"
+          style="display:inline"
+          transform="translate(-78.4257,-57.415247)">
+          <path
+            style="display:inline;fill:#c5b49c;fill-opacity:1;stroke:#000000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+            d="m 137.42476,63.422729 c -14.46068,-6.464025 -33.22417,-8.623262 -44.932075,-1.133022 -9.417677,6.917311 -16.535553,18.031125 -13.02279,29.539904 5.119003,13.746509 19.26665,21.416409 33.640435,22.557139 15.14649,0.68592 34.66623,-14.709868 34.8787,-22.416071 -0.41286,-9.128385 -6.51983,-7.977903 -12.38611,-10.704662 -4.03678,-2.122104 0.0419,-5.883975 4.91895,-7.690435 5.13582,-1.664642 5.10928,-6.586647 -3.09711,-10.152853 z"
+            id="path4747" />
+          <ellipse
+            style="fill:#ff0000;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="red"
+            cx="125.61668"
+            cy="68.584778"
+            rx="6.2808337"
+            ry="6.0469737" />
+          <ellipse
+            style="display:inline;fill:#0000ff;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="blue"
+            cx="109.1796"
+            cy="65.878677"
+            rx="6.2808337"
+            ry="6.0469737" />
+          <ellipse
+            style="display:inline;fill:#800080;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="purple"
+            cx="94.012062"
+            cy="73.295403"
+            rx="6.2808337"
+            ry="6.0469737" />
+          <ellipse
+            style="display:inline;fill:#90ee90;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="lightgreen"
+            cx="92.475258"
+            cy="89.732475"
+            rx="6.2808337"
+            ry="6.0469737" />
+          <ellipse
+            style="display:inline;fill:#ffa500;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="orange"
+            cx="104.03466"
+            cy="100.89098"
+            rx="6.2808337"
+            ry="6.0469737" />
+          <ellipse
+            style="display:inline;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="black"
+            cx="120.00401"
+            cy="104.23185"
+            rx="6.2808337"
+            ry="6.0469737" />
+          <ellipse
+            style="display:inline;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+            id="white"
+            cx="133.43431"
+            cy="94.610146"
+            rx="6.2808337"
+            ry="6.0469737" />
+        </g>
+      </svg>
+    </script>
   </head>
   <body>
     <a-scene background="color: teal">
@@ -16,9 +83,13 @@
         <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
         <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
       </a-entity>
-      <a-entity position="0 1 0" chalk="color: blue;" tool raycaster="objects: .board; showLine: false; far: 0.06" rumble="events: raycaster-intersection; controllers: $tool.hand; force: .3"></a-entity>
+      <a-entity position="0 1 0" chalk="color: blue;" tool raycaster="objects: .board, [svg-ui]; showLine: false; far: 0.06" 
+        wait-set="debug: true; events: svg-ui-touchstart; chalk.color: $event.detail.uiTarget.id"
+        rumble="events: raycaster-intersection; controllers: $tool.hand; force: .3"
+      ></a-entity>
       <a-entity class="board" position="0 1 -.5" scale=".3 .3 .3" rotation="-45 0 0" geometry="primitive: plane" material="src: #canvas;"></a-entity>
       <a-entity class="board" position="-1 1 -.5" scale=".5 .5 .5" geometry="primitive: sphere" material="src: #canvas;"></a-entity>
+      <a-entity geometry="primitive: plane" material="color: white; transparent: true" svg-ui="debug: true; template: #palette; touchSelectors: ellipse" scale=".3 .3 .3" position=".5 1 0" rotation="-45 -90 0"></a-entity>
     </a-scene>
   </body>
 </html>

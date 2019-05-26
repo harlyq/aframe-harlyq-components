@@ -88,8 +88,6 @@ AFRAME.registerComponent("tool", {
     this.handA = e.detail.hand
     this.el.setAttribute( "tool", { hand: "#" + e.detail.hand.id } )
 
-    console.log("equipped", aframeHelper.getProperty( this.el, "tool.hand" ) )
-
     if (data.usage === "reparentonequip") {
       // remember the hand, so after the re-init() we start in that hand
       this.el.setAttribute("position", data.handPosition)
