@@ -4,6 +4,8 @@
 https://harlyq.github.io/aframe-harlyq-components/examples/movement.html
 ### audio-vis
 none
+### chalk
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
 ### climb
 https://harlyq.github.io/aframe-harlyq-components/examples/movement.html
 ### clone-entity
@@ -60,7 +62,13 @@ https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
+### rumble
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
 ### simple-hands
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
+
 https://harlyq.github.io/aframe-harlyq-components/examples/simple-hands.html
 ### sprite-particles
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
@@ -80,6 +88,10 @@ https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.ht
 https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 ### timer-emit
 https://harlyq.github.io/aframe-harlyq-components/examples/wait.html
+### tool
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
 ### trigger-zone
 https://harlyq.github.io/aframe-harlyq-components/examples/zones.html
 ### two-handed-transform

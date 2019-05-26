@@ -1,3 +1,5 @@
+import { aframeHelper } from "harlyq-helpers"
+
 // @ts-ignore
 const radToDeg = THREE.Math.radToDeg
 // @ts-ignore
@@ -20,8 +22,8 @@ AFRAME.registerComponent("tool", {
     hand: { default: "" }
   },
 
-    // this component will be re-initialized when we change it's parent
-    init() {
+  // this component will be re-initialized when we change it's parent
+  init() {
     this.handA = undefined
     this.onToolEquip = this.onToolEquip.bind(this)
     this.onToolDrop = this.onToolDrop.bind(this)
@@ -82,11 +84,14 @@ AFRAME.registerComponent("tool", {
 
   onToolEquip(e) {
     const data = this.data
+
     this.handA = e.detail.hand
+    this.el.setAttribute( "tool", { hand: "#" + e.detail.hand.id } )
+
+    console.log("equipped", aframeHelper.getProperty( this.el, "tool.hand" ) )
 
     if (data.usage === "reparentonequip") {
       // remember the hand, so after the re-init() we start in that hand
-      this.el.setAttribute("hand", e.detail.hand.id)
       this.el.setAttribute("position", data.handPosition)
       this.el.setAttribute("rotation", data.handRotation)
       this.el.flushToDOM()
@@ -103,6 +108,9 @@ AFRAME.registerComponent("tool", {
     const data = this.data
     const object3D = this.el.object3D
 
+    this.handA = undefined
+    this.el.setAttribute( "tool", { hand: "" } )
+
     if (data.usage === "reparentonequip") {
       const worldPosition = new THREE.Vector3()
       const worldQuaternion = new THREE.Quaternion()
@@ -115,7 +123,6 @@ AFRAME.registerComponent("tool", {
       // set components directly because they are re-applied when we reparent
       this.el.setAttribute("position", worldPosition)
       this.el.setAttribute("rotation", `${radToDeg(worldEuler.x)} ${radToDeg(worldEuler.y)} ${radToDeg(worldEuler.z)}`)
-      this.el.setAttribute("hand", "")
       this.el.flushToDOM()
 
       this.el.sceneEl.appendChild(this.el) // this will force a re-init()
@@ -124,8 +131,6 @@ AFRAME.registerComponent("tool", {
       
       this.objectMatrixOnEquip.decompose(object3D.position, object3D.quaternion, object3D.scale)
     }
-
-    this.handA = undefined
   },
 })
 
