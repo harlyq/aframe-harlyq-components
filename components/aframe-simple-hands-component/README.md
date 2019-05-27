@@ -58,14 +58,9 @@ a selector to filter the objects to be tested for overlap.  Objects in this list
 controller trigger for the `grabstart` event on a grab object
 
 ---
-**leftSelector** : string = ""
+**handSelectors** : string = ""
 
-selector for the left controller
-
----
-**rightSelector** : string = ""
-
-selector for the right controller
+selector for the controllers representing hands
 
 ---
 **toolDrop**: string = `gripdown`

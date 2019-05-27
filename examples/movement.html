@@ -11,7 +11,7 @@
       <a-entity
         arm-swinger="left: #leftHand; right: #rightHand; startEvent: trackpaddown; endEvent: trackpadup; cameraRig: #cameraRig; scaling: .3" 
         climb="debug: true; cameraRig: #cameraRig;"
-        simple-hands="debug: true; leftSelector: #leftHand; rightSelector: #rightHand; grabSelectors: a-box"
+        simple-hands="debug: true; handSelectors: #leftHand,#rightHand; grabSelectors: a-box"
       ></a-entity>
       <a-entity id="cameraRig">
         <a-camera id="camera"></a-camera>

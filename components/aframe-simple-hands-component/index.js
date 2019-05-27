@@ -9,8 +9,7 @@ AFRAME.registerComponent("simple-hands", {
     toolSelectors: { default: "" },
     colliderOffset: { type: "vec3" },
     colliderRadius: { default: 0.05 },
-    leftSelector: { default: "" },
-    rightSelector: { default: "" },
+    handSelectors: { default: "" },
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
     toolEquip: { default: "triggerdown" },
@@ -22,20 +21,7 @@ AFRAME.registerComponent("simple-hands", {
 
   init() {
     this.observer = null
-    this.state = {
-      left: {
-        name: "hover",
-        hand: undefined,
-        hasListeners: false,
-        colliderDebug: undefined,
-      }, 
-      right: {
-        name: "hover",
-        hand: undefined,
-        hasListeners: false,
-        colliderDebug: undefined,
-      } 
-    }
+    this.sides = []
 
     this.grabEls = []
     this.toolEls = []
@@ -46,9 +32,6 @@ AFRAME.registerComponent("simple-hands", {
     this.onToolEquipEvent = this.onToolEquipEvent.bind(this)
     this.onToolDropEvent = this.onToolDropEvent.bind(this)
     this.onSceneLoaded = this.onSceneLoaded.bind(this)
-
-    this.setMode(this.state.left, "hover")
-    this.setMode(this.state.right, "hover")
 
     this.el.sceneEl.addEventListener("loaded", this.onSceneLoaded)
   },
@@ -64,13 +47,15 @@ AFRAME.registerComponent("simple-hands", {
   },
 
   play() {
-    this.addListeners(this.state.left)
-    this.addListeners(this.state.right)
+    for (let side of this.sides) {
+      this.addListeners(side)
+    }
   },
 
   pause() {
-    this.removeListeners(this.state.left)
-    this.removeListeners(this.state.right)
+    for (let side of this.sides) {
+      this.removeListeners(side)
+    }
   },
 
   addListeners(side) {
@@ -103,31 +88,29 @@ AFRAME.registerComponent("simple-hands", {
 
     if (oldData.grabSelectors !== data.grabSelectors || 
       oldData.toolSelectors !== data.toolSelectors || 
-      oldData.leftSelector !== data.leftSelector || 
-      oldData.rightSelector !== data.rightSelector) {
+      oldData.handSelectors !== data.handSelectors) {
       this.gatherElements()
     }
 
     if (!AFRAME.utils.deepEqual(data.colliderOffset, oldData.colliderOffset) || data.colliderRadius !== oldData.colliderRadius) {
-      this.hideColliderDebug(this.state.left)
-      this.hideColliderDebug(this.state.right)
-      this.showColliderDebug(this.state.left)
-      this.showColliderDebug(this.state.right)
+      for (let side of this.sides) {
+        this.hideColliderDebug( side )
+        this.showColliderDebug( side )
+      }
     }
   },
 
   tick() {
-    if (this.state.left.name === "hover" && this.state.left.hand) {
-      this.updateHover(this.state.left)
-    }
-    if (this.state.right.name === "hover" && this.state.right.hand) {
-      this.updateHover(this.state.right)
+    for ( let side of this.sides ) {
+      if ( side.mode === "hover" && side.hand ) {
+        this.updateHover( side )
+      }
     }
   },
 
-  setMode(side, newState) {
-    if (side.name !== newState) {
-      side.name = newState
+  setMode( side, mode ) {
+    if ( side.mode !== mode ) {
+      side.mode = mode
     }
   },
 
@@ -186,34 +169,42 @@ AFRAME.registerComponent("simple-hands", {
     const data = this.data
     const sceneEl = this.el.sceneEl
 
-    const grabEls = data.grabSelectors ? sceneEl.querySelectorAll(data.grabSelectors) : undefined
-    this.grabEls = grabEls ? grabEls : []
+    this.grabEls = data.grabSelectors ? sceneEl.querySelectorAll( data.grabSelectors ) : []
 
-    if (this.grabEls.length > TOO_MANY_ENTITIES_WARNING) {
-      console.warn(`many entities in grabSelectors (${this.grabEls.length}), performance may be affected`)
+    if ( this.grabEls.length > TOO_MANY_ENTITIES_WARNING ) {
+      console.warn( `many entities in grabSelectors (${ this.grabEls.length }), performance may be affected` )
     }
 
-    const toolEls = data.toolSelectors ? sceneEl.querySelectorAll(data.toolSelectors) : undefined
-    this.toolEls = toolEls ? toolEls : []
+    this.toolEls = data.toolSelectors ? sceneEl.querySelectorAll( data.toolSelectors ) : []
 
-    if (this.toolEls.length > TOO_MANY_ENTITIES_WARNING) {
-      console.warn(`many entities in toolSelectors (${this.toolEls.length}), performance may be affected`)
+    if ( this.toolEls.length > TOO_MANY_ENTITIES_WARNING ) {
+      console.warn( `many entities in toolSelectors (${ this.toolEls.length }), performance may be affected` )
     }
 
-    const leftHand = data.leftSelector ? sceneEl.querySelector(data.leftSelector) : undefined
-    const rightHand = data.rightSelector ? sceneEl.querySelector(data.rightSelector) : undefined
-
-    this.setHand(leftHand, this.state.left)
-    this.setHand(rightHand, this.state.right)
+    const handEls = data.handSelectors ? sceneEl.querySelectorAll( data.handSelectors ) : []
+    this.setSides( Array.from( handEls ) )
   },
 
-  setHand(handEl, side) {
-    if (handEl !== side.hand) {
-      this.removeListeners(side)
-      this.hideColliderDebug(side)
-      side.hand = handEl
-      this.addListeners(side)
-      this.showColliderDebug(side)
+  setSides( handEls ) {
+    for ( let i = 0; i < this.sides.length; ) {
+      const side = this.sides[ i ]
+
+      if ( !handEls.includes( side.hand ) ) {
+        this.removeListeners( side )
+        this.hideColliderDebug( side )
+        this.sides.splice( i, 1 )
+      } else {
+        i++
+      }
+    }
+
+    for ( let el of handEls ) {
+      if ( !this.sides.find( side => side.hand === el ) ) {
+        const newSide = { hand: el, mode: "hover", }
+        this.sides.push( newSide )
+        this.addListeners( newSide )
+        this.removeListeners( newSide )
+      }
     }
   },
 
@@ -270,7 +261,7 @@ AFRAME.registerComponent("simple-hands", {
   },
 
   determineSide(el) {
-    return (this.state.left.hand === el) ? this.state.left : (this.state.right.hand === el) ? this.state.right : undefined
+    return this.sides.find( side => side.hand === el )
   },
 
   sendTwoEvents(name, handEl, targetEl) {
@@ -294,8 +285,8 @@ AFRAME.registerComponent("simple-hands", {
     }
 
     const data = this.data
-    if (!this.state.left.hand && !this.state.right.hand) { 
-      console.warn(`unable to find left (${data.leftSelector}) or right (${data.rightSelector}) hands`) 
+    if (this.sides.length === 0) { 
+      console.warn(`unable to find any hand elements (${data.handSelectors})`)
     }
     if (this.grabEls.length === 0 && this.toolEls.length === 0) {
       console.warn(`no grab (${data.grabSelectors}) or tool (${data.toolSelectors}) elements`)
@@ -311,7 +302,7 @@ AFRAME.registerComponent("simple-hands", {
 
   onGrabStartEvent(e) {
     const side = this.determineSide(e.target)
-    if (side && side.name === "hover" && side.target && side.targetType === "grab") {
+    if (side && side.mode === "hover" && side.target && side.targetType === "grab") {
       this.sendTwoEvents("hoverend", side.hand, side.target)
       this.setMode(side, "grab")
       this.sendTwoEvents("grabstart", side.hand, side.target)
@@ -320,7 +311,7 @@ AFRAME.registerComponent("simple-hands", {
 
   onGrabEndEvent(e) {
     const side = this.determineSide(e.target)
-    if (side.name === "grab" && side.target) {
+    if (side.mode === "grab" && side.target) {
       this.sendTwoEvents("grabend", side.hand, side.target)
       this.setMode(side, "hover")
       side.target = undefined
@@ -329,7 +320,7 @@ AFRAME.registerComponent("simple-hands", {
 
   onToolEquipEvent(e) {
     const side = this.determineSide(e.target)
-    if (side.name === "hover" && side.target && side.targetType === "tool") {
+    if (side.mode === "hover" && side.target && side.targetType === "tool") {
       this.sendTwoEvents("hoverend", side.hand, side.target)
       this.setMode(side, "tool")
       this.sendTwoEvents("toolequip", side.hand, side.target)
@@ -338,7 +329,7 @@ AFRAME.registerComponent("simple-hands", {
 
   onToolDropEvent(e) {
     const side = this.determineSide(e.target)
-    if (side.name === "tool" && side.target) {
+    if (side.mode === "tool" && side.target) {
       this.sendTwoEvents("tooldrop", side.hand, side.target)
       this.setMode(side, "hover")
       side.target = undefined

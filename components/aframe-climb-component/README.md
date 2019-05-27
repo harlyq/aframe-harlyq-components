@@ -6,7 +6,7 @@ The **climb** component assumes the **simple-hands** component (or equivalent) i
 
 e.g.
 ```html
-<a-entity climb="cameraRig: #cameraRig;" simple-hands="leftSelector: #leftHand; rightSelector: #rightHand; grabSelectors: a-box;"></a-entity>
+<a-entity climb="cameraRig: #cameraRig;" simple-hands="handSelectors: #leftHand,#rightHand; grabSelectors: a-box;"></a-entity>
 <a-entity id="cameraRig">
   <a-camera></a-camera>
   <a-entity id="leftHand" hand-controls="left"></a-entity>

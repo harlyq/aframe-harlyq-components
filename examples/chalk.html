@@ -78,7 +78,7 @@
       <a-assets>
         <canvas id="canvas" width="1024" height="1024"></canvas>
       </a-assets>
-      <a-entity id="cameraRig" simple-hands="toolSelectors: [tool]; rightSelector: #rightHand; leftSelector: #leftHand; watch: false; debug: false">
+      <a-entity id="cameraRig" simple-hands="toolSelectors: [tool]; handSelectors: #rightHand,#leftHand; watch: false; debug: false">
         <a-camera></a-camera>
         <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
         <a-entity id="leftHand" vive-controls="hand: left"></a-entity>

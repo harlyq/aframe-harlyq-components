@@ -8,7 +8,7 @@
   </head>
   <body>
     <a-scene>
-      <a-entity id="cameraRig" simple-hands="toolSelectors: [tool]; leftSelector: #left_hand; rightSelector: #right_hand; colliderOffset: 0 -.03 0; debug: false">
+      <a-entity id="cameraRig" simple-hands="toolSelectors: [tool]; handSelectors: #left_hand,#right_hand; colliderOffset: 0 -.03 0; debug: false">
         <a-camera></a-camera>
         <a-entity id="left_hand" vive-controls="hand: left" ></a-entity>
         <a-entity id="right_hand" vive-controls="hand: right"></a-entity>
