@@ -27,7 +27,7 @@ AFRAME.registerComponent("climb", {
     return function tick() {
       const data = this.data
       if (data.enabled && this.grab.hand && this.grab.target) {
-        const rig = data.cameraRig ? data.cameraRig.object3D : undefined
+        const rig = data.cameraRig ? data.cameraRig.object3D : this.el.object3D
     
         if (rig) {
           this.grab.hand.object3D.getWorldPosition(deltaPosition).sub(this.grab.position)
@@ -74,8 +74,8 @@ AFRAME.registerComponent("climb", {
   },
 
   onSceneLoaded() {
-    if (!this.data.cameraRig) {
-      console.warn(`no cameraRig found`)
-    }
+    // if (!this.data.cameraRig) {
+    //   console.warn(`no cameraRig found`)
+    // }
   },
 })

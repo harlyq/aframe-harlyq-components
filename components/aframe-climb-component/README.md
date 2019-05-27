@@ -22,7 +22,7 @@ The use can use the `#leftHand` and `#rightHand` to grab onto any `a-box` and tr
 
 **cameraRig**: selector = ""
 
-The parent entity of the camera and hand controls - it should not be a scene.  There is a warning if the cameraRig is not specified
+The parent entity of the camera and hand controls - it should not be a scene.  If no cameraRig is specified (or valid) then the component's entity is used
 
 ---
 **debug**: boolean = `false`
@@ -32,4 +32,4 @@ If true, outputs data from the grab events
 ---
 **enabled**: boolean = `true`
 
-If false, then doesn't move the camera rig
+If false, the camera rig doesn't move

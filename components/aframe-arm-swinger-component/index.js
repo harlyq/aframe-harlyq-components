@@ -10,7 +10,7 @@ AFRAME.registerComponent("arm-swinger", {
     endEvent: { default: "gripup"},
     cameraRig: { type: "selector" },
     scaling: { default: 1 },
-    enable: { default: true },
+    enabled: { default: true },
   },
 
   init() {
@@ -29,8 +29,8 @@ AFRAME.registerComponent("arm-swinger", {
     this.left = { hand: data.left, positions: [], forwards: [] }
     this.right = { hand: data.right, positions: [], forwards: [] }
 
-    if (oldData.enable !== data.enable) {
-      if (data.enable) {
+    if (oldData.enabled !== data.enabled) {
+      if (data.enabled) {
         this.enable()
       } else {
         this.disable()
@@ -39,7 +39,7 @@ AFRAME.registerComponent("arm-swinger", {
   },
 
   play() {
-    if (this.data.enable) {
+    if (this.data.enabled) {
       this.enable()
     }
   },
@@ -78,8 +78,11 @@ AFRAME.registerComponent("arm-swinger", {
 
   tock() {
     // positioning the camera in the tock because the tick is throttled
-    if (this.data.cameraRig && this.data.cameraRig.object3D && this.isMoving) {
-      this.data.cameraRig.object3D.position.add(this.newOffset)
+    const data = this.data
+
+    const cameraRig3D = data.cameraRig ? data.cameraRig.object3D : this.el.object3D
+    if ( this.isMoving && cameraRig3D ) {
+      cameraRig3D.position.add( this.newOffset )
     }
   },
 
