@@ -84,12 +84,13 @@
         <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
       </a-entity>
       <a-entity position="0 1 0" chalk="color: blue;" tool raycaster="objects: .board, [svg-ui]; showLine: false; far: 0.06" 
-        wait-set="debug: true; events: svg-ui-touchstart; chalk.color: $event.detail.uiTarget.id"
-        rumble="events: raycaster-intersection; controllers: $tool.hand; force: .3"
+        wait-set__1="debug: false; events: svg-ui-touchstart; chalk.color: $event.detail.uiTarget.id"
+        wait-set__2="debug: false; events: toolequip; rumble.controllers: $event.detail.hand"
+        rumble="events: raycaster-intersection; controllers: ; force: .3"
       ></a-entity>
       <a-entity class="board" position="0 1 -.5" scale=".3 .3 .3" rotation="-45 0 0" geometry="primitive: plane" material="src: #canvas;"></a-entity>
       <a-entity class="board" position="-1 1 -.5" scale=".5 .5 .5" geometry="primitive: sphere" material="src: #canvas;"></a-entity>
-      <a-entity geometry="primitive: plane" material="color: white; transparent: true" svg-ui="debug: true; template: #palette; touchSelectors: ellipse" scale=".3 .3 .3" position=".5 1 0" rotation="-45 -90 0"></a-entity>
+      <a-entity geometry="primitive: plane" material="color: white; transparent: true" svg-ui="debug: false; template: #palette; touchSelectors: ellipse" scale=".3 .3 .3" position=".5 1 0" rotation="-45 -90 0"></a-entity>
     </a-scene>
   </body>
 </html>

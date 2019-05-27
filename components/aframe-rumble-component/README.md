@@ -13,7 +13,7 @@ e.g.
 ## Properties
 **controllers** : string = ""
 
-A comma separated list of selectors to identify the controller to pulse.  This string also supports a `$` prefix for reading an attribute on this entity and `$event` for reading the properties of the incoming event (in both cases, the resulting value will be used the selector) e.g. `$tool.hand` will read the `hand` attribute of the `tool` component or `$event.detail.hand` will read the `detail.hand` property of the received event.  If no selector is specified, then look for `[tracked-controls]` on the component's entity
+A selector to identify the controllers to pulse
 
 ---
 **delay** : number = `0`

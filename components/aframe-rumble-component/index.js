@@ -92,18 +92,8 @@ AFRAME.registerComponent( "rumble", {
 
     const data = this.data
     let cacheActuators = true
-    let selector = data.controllers
 
-    if ( data.controllers[0] === "$" ) {
-      if ( data.controllers.indexOf( "$event" ) === 0 ) {
-        selector = aframeHelper.getProperty( e, data.controllers.slice( 6 ) )
-        cacheActuators = false // because the event may change, rebuild the actuators each time
-      } else {
-        selector = aframeHelper.getProperty( this.el, data.controllers.slice( 1 ) )
-      }
-    }
-
-    const elements = selector ? document.querySelectorAll( selector ) : [ this.el ]
+    const elements = data.controllers ? document.querySelectorAll( data.controllers ) : [ this.el ]
     let actuators = []
 
     if ( elements.length === 0 ) {

@@ -124,15 +124,18 @@ AFRAME.registerComponent("wait-set", {
     }
   },
 
-  processValue(value, event) {
+  processValue( value, event ) {
     let result = value
 
-    if (value.indexOf("$event") === 0) {
-      const parts = value.split(".")
-      if (!event) {
-        console.log(`value of $event but no event received`)
+    if ( value[0] === "$" ) {
+      if ( value.indexOf( "$event" ) === 0 ) {
+        if ( !event ) {
+          console.log( `value of $event but no event received` )
+        } else {
+          result = attribute.stringify( utils.getWithPath( event, value.slice( 7 ).split( "." ) ) )
+        }
       } else {
-        result = attribute.stringify( utils.getWithPath(event, parts.slice(1)) )
+        result = attribute.stringify( aframeHelper.getProperty( this.el, value.slice( 1 ) ) )
       }
     }
 
