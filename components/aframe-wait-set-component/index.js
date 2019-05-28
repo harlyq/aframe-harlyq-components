@@ -1,4 +1,4 @@
-import { aframeHelper, attribute, pseudorandom, utils } from "harlyq-helpers"
+import { aframeHelper, attribute, domHelper, pseudorandom, utils } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or events
@@ -102,16 +102,21 @@ AFRAME.registerComponent("wait-set", {
   },
 
   setProperties(event) {
-    const elements = aframeHelper.getElementsInScope(this.el, this.data.target, this.data.targetScope, event ? event.target : undefined)
+    const target = substitute$( this.data.target, this.el, event )
+    const elements = aframeHelper.getElementsInScope(this.el, target, this.data.targetScope, event ? event.target : undefined)
+
+    if (this.data.debug) {
+      console.log( domHelper.getDebugName( this.el ), this.attrName, "setProperties", "target=", target )
+    }
 
     for (let el of elements) {
       for (let prop in this.rules) {
         let rule = this.rules[prop]
 
         const value = attribute.stringify( attribute.randomize(rule, this.lcg.random) )
-        const processedValue = this.processValue(value, event)
+        const processedValue = substitute$( value, this.el, event )
         if (this.data.debug) {
-          console.log("wait-set:setProperties", "id=", el.id, "property=", prop, "value=", value, "$event=", event)
+          console.log( domHelper.getDebugName( this.el ), this.attrName, "setProperties", "element=", domHelper.getDebugName(el), "property=", prop, "value=", value, "$event=", event)
         }
 
         aframeHelper.setProperty(el, prop, processedValue)
@@ -124,30 +129,36 @@ AFRAME.registerComponent("wait-set", {
     }
   },
 
-  processValue( value, event ) {
-    let result = value
-
-    if ( value[0] === "$" ) {
-      if ( value.indexOf( "$event" ) === 0 ) {
-        if ( !event ) {
-          console.log( `value of $event but no event received` )
-        } else {
-          result = attribute.stringify( utils.getWithPath( event, value.slice( 7 ).split( "." ) ) )
-        }
-      } else {
-        result = attribute.stringify( aframeHelper.getProperty( this.el, value.slice( 1 ) ) )
-      }
-    }
-
-    return result
-  },
-
   // there may be several events "pending" at the same time, so use a separate timer for each event
   onEvent(e) {
+    if (this.data.debug) {
+      console.log( domHelper.getDebugName(this.el), this.attrName, "onEvent", e.type, e )
+    }
     const self = this
     this.delayClock.startTimer( attribute.randomize(this.delay), () => self.setProperties(e) )
   },
 
 })
+
+function substitute$( str, el, event ) {
+  return str.replace(/\$([\.\w]+)/g, (_, p1) => processValue( p1, el, event ) )
+}
+
+function processValue( value, el, event ) {
+  let result = value
+
+  if ( value.indexOf( "event" ) === 0 ) {
+    if ( !event ) {
+      console.log( `value of $event but no event received` )
+    } else {
+      result = attribute.stringify( utils.getWithPath( event, value.slice( 6 ).split( "." ) ) )
+    }
+  } else {
+    result = attribute.stringify( aframeHelper.getProperty( el, value.slice( 1 ) ) )
+  }
+
+  return result
+}
+
 
 
