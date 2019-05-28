@@ -13,7 +13,7 @@ trigger-zone-leave | sent when a **triggerSelectors** entity leaves the zone. Se
 
 ## Properties
 
-**bubble**: boolean = `false`
+**bubbles**: boolean = `false`
 
 If true, events bubble up the hierarchy, otherwise they are only sent to the relevant trigger entity and to the trigger-zone entity (which is slightly better for CPU usage)
 

@@ -62,43 +62,44 @@ AFRAME.registerComponent("wait-add-remove", {
     this.addRemoveEntities = this.addRemoveEntities.bind(this)
     this.onEvent = this.onEvent.bind(this)
 
-    this.waitTimer = aframeHelper.basicTimer()
-    this.waitListener = aframeHelper.scopedListener()
+    this.delayClock = aframeHelper.basicClock()
+    this.eventListener = aframeHelper.scopedEvents(this.el, this.onEvent)
+  },
+
+  remove() {
+    this.delayClock.clearAllTimers()
+    this.eventListener.remove()
   },
 
   update(oldData) {
     const data = this.data
     if (oldData.events !== data.events || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
-      this.waitListener.set(this.el, data.source, data.sourceScope, data.events, this.onEvent)
+      this.eventListener.set(data.events, data.source, data.sourceScope, data.events)
     }
     
     // must be last as the waitTimer may trigger immediately
     if (oldData.delay !== data.delay) {
       this.delay = attribute.parse(data.delay)
       if (data.events === "") {
-        this.waitTimer.start( attribute.randomize(this.delay), this.addRemoveEntities)
+        this.delayClock.startTimer( attribute.randomize(this.delay), this.addRemoveEntities )
       }
     }
   },
 
   pause() {
-    this.waitTimer.pause()
-    this.waitListener.remove()
+    this.delayClock.pause()
+    this.eventListener.remove()
   },
 
   play() {
-    this.waitListener.add()
-    this.waitTimer.resume()
+    this.eventListener.add()
+    this.delayClock.resume()
   },
 
   // there may be several events "pending" at the same time, so use a separate timer for each event
   onEvent() {
     const data = this.data
-    if (data.delay && data.delay !== "0") {
-      setTimeout( this.addRemoveEntities, attribute.randomize(this.delay)*1000 )
-    } else {
-      this.addRemoveEntities()
-    }
+    this.delayClock.startTimer( attribute.randomize(this.delay), this.addRemoveEntities )
   },
 
   addRemoveEntities() {

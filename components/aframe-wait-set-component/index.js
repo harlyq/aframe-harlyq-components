@@ -24,14 +24,14 @@ AFRAME.registerComponent("wait-set", {
     this.rules = {}
     this.toggles = []
 
-    this.waitListener = aframeHelper.scopedListener()
-    this.waitTimer = aframeHelper.basicTimer()
+    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent )
+    this.delayClock = aframeHelper.basicClock()
     this.lcg = pseudorandom.lcg()
   },
 
   remove() {
-    this.waitListener.remove()
-    this.waitTimer.stop()
+    this.eventListener.remove()
+    this.delayClock.clearAllTimers()
   },
 
   updateSchema(newData) {
@@ -75,7 +75,7 @@ AFRAME.registerComponent("wait-set", {
     }
 
     if (data.events !== oldData.events || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.waitListener.set(this.el, data.source, data.sourceScope, data.events, this.onEvent)
+      this.eventListener.set( data.events, data.source, data.sourceScope )
     }
 
     if (data.toggles !== oldData.toggles) {
@@ -86,23 +86,23 @@ AFRAME.registerComponent("wait-set", {
     if (data.delay !== oldData.delay) {
       this.delay = attribute.parse(data.delay)
       if (data.events === "") {
-        this.waitTimer.start( attribute.randomize(this.delay), this.setProperties )
+        this.delayClock.startTimer( attribute.randomize(this.delay), this.setProperties )
       }
     }
   },
 
   pause() {
-    this.waitListener.remove()
-    this.waitTimer.pause()
+    this.eventListener.remove()
+    this.delayClock.pause()
   },
 
   play() {
-    this.waitTimer.resume()
-    this.waitListener.add()
+    this.delayClock.resume()
+    this.eventListener.add()
   },
 
   setProperties(event) {
-    const elements = this.waitListener.getElementsInScope(this.el, this.data.target, this.data.targetScope, event ? event.target : undefined)
+    const elements = aframeHelper.getElementsInScope(this.el, this.data.target, this.data.targetScope, event ? event.target : undefined)
 
     for (let el of elements) {
       for (let prop in this.rules) {
@@ -144,15 +144,10 @@ AFRAME.registerComponent("wait-set", {
 
   // there may be several events "pending" at the same time, so use a separate timer for each event
   onEvent(e) {
-    const data = this.data
     const self = this
-
-    if (data.delay && data.delay !== "0") {
-      setTimeout( () => self.setProperties(e), attribute.randomize(this.delay)*1000 )
-    } else {
-      this.setProperties(e)
-    }
+    this.delayClock.startTimer( attribute.randomize(this.delay), () => self.setProperties(e) )
   },
 
 })
+
 

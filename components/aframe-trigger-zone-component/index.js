@@ -6,7 +6,7 @@ AFRAME.registerComponent("trigger-zone", {
     watch: { default: false },
     debug: { default: false },
     tickMS: { default: 100 },
-    bubble: { default: false },
+    bubbles: { default: false },
     enabled: { default: true },
     test: { default: "overlap", oneOf: ["overlap", "within"]},
   },
@@ -158,8 +158,9 @@ AFRAME.registerComponent("trigger-zone", {
       console.log(name, domHelper.getDebugName(this.el), domHelper.getDebugName(to))
     }
 
-    this.el.emit(name, { zoneTarget: to, zoneSource: this.el }, this.data.bubble)
-    to.emit(name, { zoneTarget: to, zoneSource: this.el }, this.data.bubble)
+    const bubbles = this.data.bubbles
+    this.el.emit(name, { zoneTarget: to, zoneSource: this.el }, bubbles)
+    to.emit(name, { zoneTarget: to, zoneSource: this.el }, bubbles)
   },
 
   setupWatch() {

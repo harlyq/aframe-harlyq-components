@@ -13,23 +13,29 @@ AFRAME.registerComponent( "rumble", {
   multiple: true,
 
   init() {
-    this.toStart = aframeHelper.onEvents( this.el, this.onEvent.bind( this ) )
+    this.delayClock = aframeHelper.basicClock()
+    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent.bind( this ) )
     this.pulses = []
   },
 
+  remove() {
+    this.eventListener.remove()
+    this.stopAllActuators()
+  },
+
   play() {
-    this.toStart.play()
+    this.eventListener.add()
   },
 
   pause() {
-    this.toStart.pause()
+    this.eventListener.remove()
     this.stopAllActuators()
   },
 
   update( oldData ) {
     const data = this.data
     if ( data.events !== oldData.events ) {
-      this.toStart.setEvents( data.events )
+      this.eventListener.set( data.events )
     }
 
     if ( data.controllers !== oldData.controllers ) {
@@ -70,15 +76,13 @@ AFRAME.registerComponent( "rumble", {
       } )
     }
 
-    if (data.delay > 0) {
-      const self = this
-      setTimeout( () => pulseActuators(self.pulses), data.delay*1000 )
-    } else {
-      pulseActuators(this.pulses)
-    }
+    const self = this
+    this.delayClock.startTimer( data.delay, () => pulseActuators(self.pulses) )
   },
 
   stopAllActuators() {
+    this.delayClock.clearAllTimers()
+
     for (let actuator of this.pulses) {
       actuator.pulse(0,0)
     }

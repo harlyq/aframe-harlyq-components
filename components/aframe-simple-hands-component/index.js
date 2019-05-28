@@ -15,7 +15,7 @@ AFRAME.registerComponent("simple-hands", {
     toolEquip: { default: "triggerdown" },
     toolDrop: { default: "gripdown" },
     watch: { default: true },
-    bubble: { default: true },
+    bubbles: { default: false },
     debug: { default: false },
   },
 
@@ -265,13 +265,13 @@ AFRAME.registerComponent("simple-hands", {
   },
 
   sendTwoEvents(name, handEl, targetEl) {
-    const bubble = this.data.bubble
+    const bubbles = this.data.bubbles
     if (this.data.debug) {
       console.log(name, targetEl.id)
     }
 
-    targetEl.emit(name, { hand: handEl, object: targetEl }, bubble)
-    this.el.emit(name, { hand: handEl, object: targetEl }, bubble)
+    targetEl.emit(name, { hand: handEl, object: targetEl }, bubbles)
+    this.el.emit(name, { hand: handEl, object: targetEl }, bubbles)
   },
 
   onSceneLoaded() {

@@ -109,6 +109,7 @@ const CUSTOM_PARSER = {
 AFRAME.registerComponent("mesh-particles", {
   schema: {
     events: { default: "" },
+    delay: { default: 0 },
     enabled: { default: true },
     duration: { default: -1 },
     instancePools: { default: "" },
@@ -139,6 +140,9 @@ AFRAME.registerComponent("mesh-particles", {
   multiple: true,
 
   init() {
+    this.startParticles = this.startParticles.bind(this)
+    this.onEvent = this.onEvent.bind(this)
+
     this.isStarted = false
     this.hasListeners = false
     this.spawnID = 0
@@ -149,22 +153,27 @@ AFRAME.registerComponent("mesh-particles", {
     this.customData = {}
     this.lcg = pseudorandom.lcg()
 
-    this.startEvents = aframeHelper.onEvents(this.el, this.onEvent.bind(this))
+    this.delayClock = aframeHelper.basicClock()
+    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent )
   },
 
   remove() {
     this.releaseInstances()
+    this.eventListener.remove()
+    this.delayClock.clearAllTimers()
 
     this.source = undefined
     this.destination = undefined
   },
 
   play() {
-    this.startEvents.play()
+    this.eventListener.add()
+    this.delayClock.resume()
   },
 
   pause() {
-    this.startEvents.pause()
+    this.eventListener.remove()
+    this.delayClock.pause()
   },
 
   update(oldData) {
@@ -238,12 +247,12 @@ AFRAME.registerComponent("mesh-particles", {
     }
 
     if (data.events !== oldData.events) {
-      this.startEvents.setEvents(data.events)
-    }
+      this.eventListener.set(data.events)
 
-    if (!data.events) {
-      this.isStarted = true
-      this.startTime = data.delay
+      if (!data.events) {
+        this.startTime = data.delay
+        this.startParticles()
+      }
     }
   },
 
@@ -265,18 +274,23 @@ AFRAME.registerComponent("mesh-particles", {
       }
 
     } else if (this.isStarted && !isActive) {
-      this.isStarted = false
+      this.stopParticles()
     }
 
     this.move(dt)
   },
 
   onEvent(e) {
-    const self = this
-    setTimeout(() => { 
-      self.isStarted = true
-      self.startTime = self.el.sceneEl.clock.elapsedTime
-    }, this.delay*1000)
+    this.delayClock.startTimer( this.delay, this.startParticles )
+  },
+
+  startParticles() {
+    this.isStarted = true
+    this.startTime = this.el.sceneEl.clock.elapsedTime
+  },
+
+  stopParticles() {
+    this.isStarted = false
   },
 
   releaseInstances() {

@@ -23,7 +23,7 @@ In each case two events will be sent, one to this entity, and the other to the g
 
 ## Properties
 
-**bubble** : boolean = `true`
+**bubbles** : boolean = `false`
 
 emitted events will bubble up the entity hierarchy
 

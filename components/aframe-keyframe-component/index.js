@@ -1,6 +1,4 @@
-// Copyright 2018-2019 harlyq
-// MIT license
-import { utils, attribute, interpolation, pseudorandom, aframeHelper } from "harlyq-helpers"
+import { aframeHelper, attribute, domHelper, interpolation, pseudorandom, utils } from "harlyq-helpers"
 
 const MAX_FRAME_TIME_MS = 100
 
@@ -51,6 +49,8 @@ function getPropertyAsString(target, prop) {
 // 
 AFRAME.registerComponent("keyframe", {
   schema: {
+    events: { default: "" },
+    delay: { default: 0 },
     duration: { default: 1 },
     direction: { default: "forward", oneOf: ["forward", "backward", "alternate"] },
     loops: { default: -1 },
@@ -58,16 +58,38 @@ AFRAME.registerComponent("keyframe", {
     easing: { default: "linear", oneOf: Object.keys(interpolation.EASING_FUNCTIONS) },
     randomizeEachLoop: { default: true },
     enabled: { default: true },
+    debug: { default: false },
+    bubbles: { default: false },
   },
   multiple: true,
 
   init() {
+    this.startKeyframes = this.startKeyframes.bind( this )
     this.lcg = pseudorandom.lcg()
 
     this.loopTime = 0 // seconds
     this.loops = 0
     this.keys = {}
     this.rules = {}
+    this.isStarted = false
+
+    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent.bind( this ) )
+    this.delayClock = aframeHelper.basicClock()
+  },
+
+  remove() {
+    this.eventListener.remove()
+    this.delayClock.clearAllTimers()
+  },
+
+  play() {
+    this.eventListener.add()
+    this.delayClock.resume()
+  },
+
+  pause() {
+    this.eventListener.remove()
+    this.delayClock.pause()
   },
 
   updateSchema(newData) {
@@ -139,6 +161,14 @@ AFRAME.registerComponent("keyframe", {
         aframeHelper.setProperty(this.el, prop, this.keys[prop][0])
       }
     }
+
+    if ( data.events !== oldData.events ) {
+      this.eventListener.set( data.events )      
+    }
+
+    if ( !data.events && data.delay !== oldData.delay ) {
+      this.delayClock.startTimer( data.delay, this.startKeyframes )
+    }
   },
 
   tick(time, timeDelta) {
@@ -151,8 +181,9 @@ AFRAME.registerComponent("keyframe", {
 
   step(dt) {
     const data = this.data
+    const isComplete = this.isComplete()
 
-    if (!this.isComplete()) {
+    if (!isComplete && this.isStarted) {
       let looped = false
       this.loopTime = this.loopTime + (this.forward ? dt : -dt)
     
@@ -182,8 +213,21 @@ AFRAME.registerComponent("keyframe", {
         aframeHelper.setProperty(this.el, prop, value)
       }
     } else {
-      this.el.sceneEl.removeBehavior(this) // deactivate tick
+      this.el.sceneEl.removeBehavior(this) // deactivate tick()
     }
+
+    if ( this.isStarted && isComplete ) {
+      this.sendEvent( "keyframeend", { name: this.attrName } )
+      this.isStarted = false
+    }
+  },
+
+  startKeyframes() {
+    if (!this.isStarted) {
+      this.isStarted = true
+      this.el.sceneEl.addBehavior( this ) // activate tick()
+      this.sendEvent( "keyframestart", { name: this.attrName } )
+    }    
   },
 
   isComplete() {
@@ -223,5 +267,19 @@ AFRAME.registerComponent("keyframe", {
         this.keyTypes[prop] = this.keyTypes[prop] || typeof lastKey
       }
     }
+  },
+
+  sendEvent( type, detail ) {
+    if ( this.data.debug ) {
+      console.log( domHelper.getDebugName( this.el ), this.attrName, "send", type, detail, this.data.bubbles )
+    }
+    this.el.emit( type, detail, this.data.bubbles )
+  },
+
+  onEvent( e ) {
+    if ( this.data.debug ) {
+      console.log( domHelper.getDebugName( this.el ), this.attrName, "onEvent", e.type )
+    }
+    this.delayClock.startTimer( this.data.delay, this.startKeyframes )
   },
 })

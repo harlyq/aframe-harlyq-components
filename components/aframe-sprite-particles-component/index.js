@@ -224,7 +224,8 @@ AFRAME.registerComponent("sprite-particles", {
 
     this.params[ID_PARAM] = -1 // unmanaged IDs
 
-    this.startEvents = aframeHelper.onEvents(this.el, this.onEvent.bind(this))
+    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent.bind(this) )
+    this.delayClock = aframeHelper.basicClock()
   },
 
   remove() {
@@ -235,6 +236,9 @@ AFRAME.registerComponent("sprite-particles", {
     if (this.data.model) {
       this.data.model.removeEventListener("object3dset", this.handleObject3DSet)
     }
+
+    this.eventListener.remove()
+    this.delayClock.clearAllTimers()
   },
 
   update(oldData) {
@@ -433,7 +437,7 @@ AFRAME.registerComponent("sprite-particles", {
     }
 
     if (data.events !== oldData.events) {
-      this.startEvents.setEvents(data.events)
+      this.eventListener.set(data.events)
     }
   },
 
@@ -467,26 +471,29 @@ AFRAME.registerComponent("sprite-particles", {
   pause() {
     this.paused = true
     this.enableEditorObject(this.data.editorObject)
-    this.startEvents.pause()
+    this.eventListener.remove()
+    this.delayClock.pause()
   },
 
   play() {
     this.paused = false
     this.enableEditorObject(false)
-    this.startEvents.play()
+    this.eventListener.add()
+    this.delayClock.resume()
   },
 
   onEvent() {
     const self = this
     const data = this.data
 
-    setTimeout( () => {
+    this.delayClock.startTimer( data.delay, 
+    () => {
       self.emitterTime = data.emitterTime
       self.nextTime = 0
       self.nextID = 0
       self.delayTime = 0
       self.startDisabled = false
-    }, data.delay*1000 )
+    } )
   },
 
   handleObject3DSet(e) {
