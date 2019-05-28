@@ -267,7 +267,7 @@ AFRAME.registerComponent("simple-hands", {
   sendTwoEvents(name, handEl, targetEl) {
     const bubbles = this.data.bubbles
     if (this.data.debug) {
-      console.log(name, targetEl.id)
+      console.log( name, domHelper.getDebugName( targetEl) )
     }
 
     targetEl.emit(name, { hand: handEl, object: targetEl }, bubbles)

@@ -57,7 +57,7 @@ AFRAME.registerComponent("climb", {
 
   onGrabStart(e) {
     if (this.data.debug) {
-      console.log('onGrabStart', domHelper.getDebugName(e.detail.hand), domHelper.getDebugName(e.detail.object))
+      console.log( domHelper.getDebugName( this.el ), this.attrName, 'onGrabStart', domHelper.getDebugName( e.detail.hand ), domHelper.getDebugName( e.detail.object ) )
     }
     this.grab.hand = e.detail.hand
     this.grab.target = e.detail.object
@@ -66,7 +66,7 @@ AFRAME.registerComponent("climb", {
 
   onGrabEnd(e) {
     if (this.data.debug) {
-      console.log('onGrabEnd', domHelper.getDebugName(e.detail.hand))
+      console.log( domHelper.getDebugName( this.el ), this.attrName, 'onGrabEnd', domHelper.getDebugName( e.detail.hand ) )
     }
     if (e.detail.hand === this.grab.hand) {
       this.grab.hand = undefined

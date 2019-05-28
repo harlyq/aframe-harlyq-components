@@ -106,6 +106,8 @@ AFRAME.registerComponent("logger", {
     // console.log("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz")
     // console.log("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;'[]/?#") // 81 characters
     // console.log("%.2f%.2i%s%o%.3d%c that","1","9","help","34","color:red","is","it") // 1.0009help[object]034 that is it
+    // console.warn("a warning")
+    // console.error("an error")
   },
 
   remove() {
