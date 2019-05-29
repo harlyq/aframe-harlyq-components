@@ -45,6 +45,9 @@ AFRAME.registerComponent('materialx', {
     this.system = this.el.sceneEl.systems['material'];
     this.material = null;
     this.oldMaterials = [];
+
+    this.onObject3DSet = this.onObject3DSet.bind(this)
+    this.el.addEventListener("object3dset", this.onObject3DSet)
   },
 
   /**
@@ -169,6 +172,8 @@ AFRAME.registerComponent('materialx', {
    * Dispose of it from memory and unsubscribe from scene updates.
    */
   remove: function () {
+    this.el.removeEventListener("object3dset", this.onObject3DSet)
+
     // var defaultMaterial = new THREE.MeshBasicMaterial();
     var material = this.material;
     // var object3D = this.el.getObject3D('mesh');
@@ -188,31 +193,34 @@ AFRAME.registerComponent('materialx', {
    */
   setMaterial: function (material) {
     var el = this.el;
+    // var mesh;
     var system = this.system;
-    var remapName = this.data.remap;
-    var hasMaterials = false;
-    var oldMaterials = this.oldMaterials;
 
     if (this.material) { disposeMaterial(this.material, system); }
 
     this.material = material;
     system.registerMaterial(material);
 
-    // Set on mesh. If mesh does not exist, wait for it.
+    replaceMaterial(el, this.data.remap, [material], this.oldMaterials)
+
+    // // Set on mesh. If mesh does not exist, wait for it.
     // mesh = el.getObject3D('mesh');
     // if (mesh) {
     //   mesh.material = material;
     // } else {
-    hasMaterials = replaceMaterial(el, remapName, [material], oldMaterials)
-    if (!hasMaterials) {
-      el.addEventListener('object3dset', function waitForMesh (evt) {
-        if (evt.detail.type !== 'mesh' || evt.target !== el) { return; }
-        // el.getObject3D('mesh').material = material;
-        replaceMaterial(el, remapName, [material], oldMaterials)
-        el.removeEventListener('object3dset', waitForMesh);
-      });
+    //   el.addEventListener('object3dset', function waitForMesh (evt) {
+    //     if (evt.detail.type !== 'mesh' || evt.target !== el) { return; }
+    //     el.getObject3D('mesh').material = material;
+    //     el.removeEventListener('object3dset', waitForMesh);
+    //   });
+    // }
+  },
+
+  onObject3DSet(e) {
+    if (e.detail.type === 'mesh' && e.target === this.el) {
+      replaceMaterial(this.el, this.data.remap, [this.material], this.oldMaterials)
     }
-  }
+  },
 });
 
 /**
