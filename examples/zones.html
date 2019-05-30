@@ -16,24 +16,24 @@
       <a-entity id="zone" position="0 1 0" scale=".5 1 .25" rotation="20 -45 150"
         trigger-zone="triggerSelectors: [vive-controls], a-box; debug: true; enabled: true; watch: true"
       >
-        <script>
-          const zoneEl = document.getElementById('zone')
-          const boxEl = document.createElement('a-box')
-          boxEl.setAttribute("scale", ".1 .1 .1")
-
-          let toggle = true
-          setInterval(() => {
-            if (toggle) {
-              boxEl.setAttribute("scale", ".1 .1 .1") // TODO debug why this is needed
-              zoneEl.appendChild(boxEl)
-            } else {
-              zoneEl.removeChild(boxEl)
-            }
-            toggle = !toggle
-          }, 7000)
-        </script>
       </a-entity>
       <a-logger position="0 0 -5"></a-logger>
     </a-scene>
+    <script>
+      const zoneEl = document.getElementById('zone')
+      const boxEl = document.createElement('a-box')
+      boxEl.setAttribute("scale", ".1 .1 .1")
+
+      let toggle = true
+      setInterval(() => {
+        if (toggle) {
+          boxEl.setAttribute("scale", ".1 .1 .1") // TODO debug why this is needed
+          zoneEl.appendChild(boxEl)
+        } else {
+          zoneEl.removeChild(boxEl)
+        }
+        toggle = !toggle
+      }, 7000)
+    </script>
   </body>
 </html>

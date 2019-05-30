@@ -60,17 +60,16 @@
       <a-plane id="touchpanel" position="-1 1 -.5" scale=".5 .5 .5"
         svg-ui="_x: 20; _y: 20; template: #ui_touchpanel; touchSelectors: rect; enabled: false"
         wait-set="events: svg-ui-touchmove; svg-ui._x: $event.detail.intersection.svg.x;  svg-ui._y: $event.detail.intersection.svg.y">
-        <script>
-          const touchPanelEl = document.getElementById("touchpanel")
-          let toggle = true
-          setInterval(() => {
-            touchPanelEl.setAttribute("svg-ui", {enabled: toggle})
-            toggle = !toggle
-          }, 10000)
-        </script>
       </a-plane>
     </a-scene>
     <script>
+      const touchPanelEl = document.getElementById("touchpanel")
+      let toggle = true
+      setInterval(() => {
+        touchPanelEl.setAttribute("svg-ui", {enabled: toggle})
+        toggle = !toggle
+      }, 10000)
+
       const counterEl = document.getElementById("counter")
       if (counterEl) {
         setInterval(mark, 5) // more often than the animationFrame

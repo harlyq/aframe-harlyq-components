@@ -178,26 +178,10 @@
         <a-entity id="enable_disable" position="0 -4 0">
           <a-entity id="toggle2" sprite-particles="spawnRate: 3; texture: #blob; lifeTime: 2; radialPosition: 1; angularVelocity: 720 0 0..0 720 0; enabled: true"></a-entity>
           <a-text value="enable/disable" mixin="label"></a-text>
-          <script>
-            let toggle2 = document.getElementById("toggle2")
-            let enableToggle2 = true
-            setInterval(() => {
-              enableToggle2 = !enableToggle2
-              toggle2.setAttribute("sprite-particles", {enabled: enableToggle2})
-            }, 5000)
-          </script>
         </a-entity>
         <a-entity id="disable_source" position="0 -8 0">
           <a-entity id="toggle" sprite-particles="source: #toggle; spawnRate: 3; texture: #blob; lifeTime: 2; radialPosition: 1; angularVelocity: 720 0 0..0 720 0; enabled: false"></a-entity>
           <a-text value="disable + source" mixin="label"></a-text>
-          <script>
-            let toggle = document.getElementById("toggle")
-            let enableToggle = false
-            setInterval(() => {
-              enableToggle = !enableToggle
-              toggle.setAttribute("sprite-particles", {enabled: enableToggle})
-            }, 4000)
-          </script>
         </a-entity>
         <a-entity id="orbital" position="-4 -8 0">
           <a-entity sprite-particles="texture: #blob; spawnRate: 2; lifeTime: 6; radialPosition: 1; orbitalVelocity: 300; orbitalAcceleration: -30..30; color: yellow,black"></a-entity>
@@ -269,14 +253,6 @@
         <a-entity id="trails_disable" position="16 12 0">
           <a-entity id="toggle3" sprite-particles="texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5; enabled: true"></a-entity>
           <a-text value="trails + disable" mixin="label"></a-text>
-          <script>
-            let toggle3 = document.getElementById("toggle3")
-            let enableToggle3 = true
-            setInterval(() => {
-              enableToggle3 = !enableToggle3
-              toggle3.setAttribute("sprite-particles", {enabled: enableToggle3})
-            }, 5500)
-          </script>
         </a-entity>
         <a-entity id="trails" position="16 8 0">
           <a-entity sprite-particles="texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5"></a-entity>
@@ -457,10 +433,6 @@
         <a-entity id="events" position="-20 -8 0">
           <a-entity id="eventsParticles" sprite-particles="events: ping; texture: #blob; spawnRate: 10; position: -.75 0 0.. .75 0 0; velocity: 0 .8 0..0 1.1 0; acceleration: 0 -.8 0; scale: 1,1,.5; lifeTime: 2; duration: 2; color: lightBlue..white"></a-entity>
           <a-text value="events" mixin="label"></a-text>
-          <script>
-            eventsEl = document.querySelector("#eventsParticles")
-            setInterval( () => eventsEl.dispatchEvent( new CustomEvent("ping", {}) ), 5400 )
-          </script>
         </a-entity>
       </a-entity>
       <!--a-entity position="0 0 -4">
@@ -470,11 +442,34 @@
         </a-entity>
       </a-entity-->
     </a-scene>
-    <!--script>
-      let myScene = document.querySelector("a-scene")
-      myScene.renderer.sortObjects = true
-    </script-->
     <script>
+      // let myScene = document.querySelector("a-scene")
+      // myScene.renderer.sortObjects = true
+
+      let toggle2 = document.getElementById("toggle2")
+      let enableToggle2 = true
+      setInterval(() => {
+        enableToggle2 = !enableToggle2
+        toggle2.setAttribute("sprite-particles", {enabled: enableToggle2})
+      }, 5000)
+
+      let toggle = document.getElementById("toggle")
+      let enableToggle = false
+      setInterval(() => {
+        enableToggle = !enableToggle
+        toggle.setAttribute("sprite-particles", {enabled: enableToggle})
+      }, 4000)
+
+      let toggle3 = document.getElementById("toggle3")
+      let enableToggle3 = true
+      setInterval(() => {
+        enableToggle3 = !enableToggle3
+        toggle3.setAttribute("sprite-particles", {enabled: enableToggle3})
+      }, 5500)
+
+      eventsEl = document.querySelector("#eventsParticles")
+        setInterval( () => eventsEl.dispatchEvent( new CustomEvent("ping", {}) ), 5400 )
+
       drawCheckerBoard(document.querySelector("#texturegrid_8x8"), 8, 8, true)
       drawCheckerBoard(document.querySelector("#texturegrid_2x2"), 2, 2, true)
 
