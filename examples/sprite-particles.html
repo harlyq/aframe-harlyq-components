@@ -356,19 +356,19 @@
           <a-text value="destination + source" mixin="label"></a-text>
         </a-entity>
         <a-entity id="depth_offset" position="20 8 0" rotation="0 -2 0">
-          <a-entity sprite-particles="screenDepthOffset: 1; texture: #blob; spawnRate: 50; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-entity sprite-particles="screenDepthOffset: 1; texture: #blob; spawnRate: 50; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white; lifeTime: 5; alphaTest: 0.5; particleOrder: any"></a-entity>
           <a-text value="depth offset" mixin="label"></a-text>
         </a-entity>
         <a-entity id="no_depth_offset" position="20 4 0" rotation="0 -2 0">
-          <a-entity sprite-particles="texture: #blob; spawnRate: 50; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-entity sprite-particles="texture: #blob; spawnRate: 50; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white; lifeTime: 5; alphaTest: 0.5; particleOrder: any"></a-entity>
           <a-text value="no depth offset" mixin="label"></a-text>
         </a-entity>
         <a-entity id="trails_depth" position="20 0 0" rotation="0 -2 0">
-          <a-entity sprite-particles="texture: #blob; spawnRate: 5; trailInterval: 0.1; trailLifeTime: 2; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white,white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-entity sprite-particles="texture: #blob; spawnRate: 5; trailInterval: 0.1; trailLifeTime: 2; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white,white; lifeTime: 5; alphaTest: 0.5; particleOrder: any"></a-entity>
           <a-text value="trails - depth" mixin="label"></a-text>
         </a-entity>
         <a-entity id="trails_depth" position="20 -4 0" rotation="0 -2 0">
-          <a-entity sprite-particles="screenDepthOffset: 1; texture: #blob; spawnRate: 5; trailInterval: 0.1; trailLifeTime: 2; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white,white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-entity sprite-particles="screenDepthOffset: 1; texture: #blob; spawnRate: 5; trailInterval: 0.1; trailLifeTime: 2; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white,white; lifeTime: 5; alphaTest: 0.5; particleOrder: any"></a-entity>
           <a-text value="trails + depth" mixin="label"></a-text>
         </a-entity>
         <a-entity id="depthwrite_fail" position="0 12 0">

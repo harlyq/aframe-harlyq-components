@@ -185,9 +185,9 @@ over-time ranges for the particle opacity. `0` is transparent, `1` is opaque
 maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed after creation)
 
 ---
-**particleOrder** : newest | oldest | original = `original` 
+**particleOrder** : newest | oldest | any = `any` 
 
-defines the draw order of particles, which can either be `newest` drawn last, `oldest` drawn last or `original` which uses a cylic buffer and reuses old particles so the draw order is indeterminant. The order applies to both particles and their trails.
+defines the draw order of particles, which can either be `newest` drawn last, `oldest` drawn last or `any` which uses a cylic buffer and reuses old particles so the draw order is indeterminant. The order applies to both particles and their trails.
 
 ---
 **particleSize** : number = `100`

@@ -55,7 +55,7 @@ const ATTR_TO_DEFINES = {
 }
 
 const UV_TYPE_STRINGS = ["overtime", "interval"]
-const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "original"]
+const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "any"]
 const AXES_NAMES = ["x", "y", "z"]
 
 // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
@@ -169,7 +169,7 @@ AFRAME.registerComponent("sprite-particles", {
     model: { type: "selector" },
     modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase },
     direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
-    particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
+    particleOrder: { default: "any", oneOf: PARTICLE_ORDER_STRINGS },
     ribbonUVMultiplier: { default: 1 },
     materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase },
     screenDepthOffset: { default: 0 },
@@ -403,10 +403,6 @@ AFRAME.registerComponent("sprite-particles", {
       if (oldData.model) { oldData.model.removeEventListener("object3dset", this.handleObject3DSet) }
       this.updateModelMesh(data.model.getObject3D(MODEL_MESH))
       if (data.model) { data.model.addEventListener("object3dset", this.handleObject3DSet) }
-    }
-
-    if (data.particleOrder !== "original" && data.source) {
-      console.warn(`changing particleOrder to 'original' (was '${data.particleOrder}'), because particles use a source`)
     }
 
     if (!this.mesh) {
@@ -1438,7 +1434,7 @@ void main() {
 #elif PARTICLE_ORDER == 1
   float particleID = particleID0 - rawParticleID; // oldest last
 #else
-  float particleID = rawParticleID > particleID0 ? rawParticleID - particleCount : rawParticleID; // cyclic (original)
+  float particleID = rawParticleID > particleID0 ? rawParticleID - particleCount : rawParticleID; // cyclic (any)
 #endif
 
 #endif // defined(USE_PARTICLE_SOURCE)
@@ -1486,7 +1482,7 @@ void main() {
   float trailID = trailID0 - rawTrailID; // oldest last
 #else
   float trailID = floor( trailID0 / trailCount ) * trailCount;
-  trailID += rawTrailID > mod( trailID0, trailCount ) ? rawTrailID - trailCount : rawTrailID; // cyclic (original)
+  trailID += rawTrailID > mod( trailID0, trailCount ) ? rawTrailID - trailCount : rawTrailID; // cyclic (any order)
 #endif
 
   float trailStartAge = trailID * trailInterval;
