@@ -24,6 +24,9 @@ AFRAME.registerComponent("instance", {
         this.freeInstance()
         this.blockIndex = instancePool.reserveBlock(1)
         this.instancePool = instancePool
+        if (this.blockIndex === undefined) {
+          console.warn(`no more instances available`)
+        }
       } else {
         console.warn(`no 'instance-pool' found on src`)
       }
