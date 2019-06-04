@@ -83,7 +83,7 @@ AFRAME.registerComponent("svg-ui", {
     const data = this.data
 
     if (oldData.template !== data.template) {
-      aframeHelper.loadTemplate(data.template, (text) => {
+      aframeHelper.loadTemplate(data.template, "<svg", (text) => {
         this.templateContent = text
         if (!isSVG(text)) {
           console.warn(`template '${data.template}' doesn't look like SVG: ${text}`)

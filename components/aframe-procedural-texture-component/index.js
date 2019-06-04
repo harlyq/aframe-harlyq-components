@@ -1,6 +1,4 @@
-import { rgbcolor } from "harlyq-helpers"
-import { attribute } from "harlyq-helpers"
-import { threeHelper } from "harlyq-helpers"
+import { aframeHelper, attribute, rgbcolor, threeHelper } from "harlyq-helpers"
 
 AFRAME.registerSystem("procedural-texture", {
   init() {
@@ -66,6 +64,8 @@ AFRAME.registerComponent("procedural-texture", {
   },
 
   updateSchema(newData) {
+    var isDeferred = false // must be a 'var' so the change in value at the end of this function is reflected in the closure
+
     if (typeof newData !== "object") {
       console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
     }
@@ -75,15 +75,15 @@ AFRAME.registerComponent("procedural-texture", {
       this.uniforms = {}
 
       if (newData.shader) {
-        let shaderEl = document.querySelector(newData.shader)
-        if (shaderEl) {
-          this.shaderProgram = shaderEl.textContent
-        } else if (/main\(/.test(newData.shader)) {
-          this.shaderProgram = newData.shader
-        } else {
-          console.warn(`unknown shader: ${newData.shader}`)
-        }
-        this.uniforms = this.parseShaderUniforms(this.shaderProgram)
+        // if the loading is deferred i.e. from a file, then procedural texture
+        // is generated once the file is loaded, but the schema will not be updated
+        aframeHelper.loadTemplate( newData.shader, "main(", (text) => {
+          this.shaderProgram = text 
+          this.uniforms = this.parseShaderUniforms( this.shaderProgram )
+          if (isDeferred) {
+            this.updateProceduralTexture()
+          }
+        } )
       }
     }
 
@@ -97,6 +97,8 @@ AFRAME.registerComponent("procedural-texture", {
     if (Object.keys(newSchema).length > 0) {
       this.extendSchema(newSchema)
     }
+
+    isDeferred = true
   },
 
   update(oldData) {
@@ -118,21 +120,25 @@ AFRAME.registerComponent("procedural-texture", {
     }
 
     if (this.canvas && this.shaderProgram) {
-      if (!this.scene) {
-        this.setupScene(this.canvas, this.shaderProgram)
-      }
-
-      this.updateUniforms(this.uniforms, data)
-      this.renderScene()
-
-      threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.canvas)
-      this.system.updateProceduralTexturesUsingThisCanvas(this.canvas)
-      this.canvas.dispatchEvent(new CustomEvent("loaded", {bubbles: false}));
+      this.updateProceduralTexture()
     }
 
     if (this.usesComponentTime()) {
       this.el.sceneEl.addBehavior(this) // can be called multiple times
     }
+  },
+
+  updateProceduralTexture() {
+    if (!this.scene) {
+      this.setupScene(this.canvas, this.shaderProgram)
+    }
+
+    this.updateUniforms(this.uniforms, this.data)
+    this.renderScene()
+
+    threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, this.canvas)
+    this.system.updateProceduralTexturesUsingThisCanvas(this.canvas)
+    this.canvas.dispatchEvent(new CustomEvent("loaded", {bubbles: false}));
   },
 
   usesComponentTime() {

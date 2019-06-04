@@ -36,12 +36,14 @@ AFRAME.registerComponent('prefab', {
 
   update(oldData) {
     const data = this.data
+    
     if (oldData.template !== data.template) {
-      aframeHelper.loadTemplate( data.template, (text) => this.templateContent = text )
+      aframeHelper.loadTemplate( data.template, "", (text) => {
+        this.templateContent = text
+        this.destroyPrefab()
+        this.createPrefab()
+      } )
     }
-
-    this.destroyPrefab()
-    this.createPrefab()
   },
 
   createPrefab() {
