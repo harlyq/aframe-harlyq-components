@@ -109,8 +109,8 @@ AFRAME.registerComponent("face-color", {
       for (let i = 0, n = colors.count, faceIndex = 0; i < n; i += VERTICES_PER_TRIANGLE, faceIndex++) {
         let paintTriangle = false
 
-        if (data.faces.includes(faceIndex)) {
-          paintTriangle = true
+        if (data.faces.length > 0 && !data.faces.includes(faceIndex)) {
+          paintTriangle = false
         } else {
           paintTriangle = true
 
@@ -144,7 +144,7 @@ AFRAME.registerComponent("face-color", {
 
       const material = mesh.material
       material.vertexColors = THREE.VertexColors
-      material.color.setRGB(1,1,1)
+      // material.color.setRGB(1,1,1)
 
       if (rebuildMesh) {
         console.info(`face-color rebuilding mesh '${data.meshName}'`)
