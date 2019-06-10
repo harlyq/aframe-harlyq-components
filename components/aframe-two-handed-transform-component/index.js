@@ -1,4 +1,9 @@
-AFRAME.registerSystem("two-handed-transform", {
+import { domHelper } from "harlyq-helpers"
+
+const UNIFORM_SCALE = new THREE.Vector3(1,1,1)
+const UP_VECTOR = new THREE.Vector3(0,1,0)
+
+AFRAME.registerComponent("two-handed-transform", {
   schema: {
     left: { type: "selector" },
     right: { type: "selector" },
@@ -6,6 +11,7 @@ AFRAME.registerSystem("two-handed-transform", {
     endEvent: { default: "gripup"},
     target: { type: "selector" },
     enable: { default: true },
+    debug: { default: false },
   },
 
   init() {
@@ -16,7 +22,15 @@ AFRAME.registerSystem("two-handed-transform", {
 
     this.left = { hand: undefined, active: false, startPosition: new THREE.Vector3() }
     this.right = { hand: undefined, active: false, startPosition: new THREE.Vector3() }
-    this.target = { object3D: undefined, startMatrix: new THREE.Matrix4(), startPosition: new THREE.Vector3(), handGap: new THREE.Vector3(), handPivot: new THREE.Vector3(), rotationPivot: new THREE.Vector3() }
+    this.target = { 
+      object3D: undefined, 
+      startPosition: new THREE.Vector3(), 
+      startQuaternion: new THREE.Quaternion(),
+      startScale: new THREE.Vector3(),
+      handGap: new THREE.Vector3(), 
+      startGap: new THREE.Vector3(),
+      invPivotMatrix: new THREE.Matrix4(),
+    }
   },
 
   update(oldData) {
@@ -73,6 +87,10 @@ AFRAME.registerSystem("two-handed-transform", {
   },
 
   onStartEvent(e) {
+    if (this.data.debug) {
+      console.log( domHelper.getDebugName(this.el), this.attrName, "onStartEvent", e.type, domHelper.getDebugName(e.target) )
+    }
+
     if (e.target == this.left.hand) {
       this.activate(this.left)
     } else if (e.target == this.right.hand) {
@@ -81,6 +99,10 @@ AFRAME.registerSystem("two-handed-transform", {
   },
 
   onEndEvent(e) {
+    if (this.data.debug) {
+      console.log( domHelper.getDebugName(this.el), this.attrName, "onEndEvent", e.type, domHelper.getDebugName(e.target) )
+    }
+
     if (e.target == this.left.hand) {
       this.deactivate(this.left)
     } else if (e.target == this.right.hand) {
@@ -90,6 +112,9 @@ AFRAME.registerSystem("two-handed-transform", {
 
   addListeners(hand) {
     if (hand) {
+      if (this.data.debug) {
+        console.log( domHelper.getDebugName(this.el), this.attrName, "addListeners", this.data.startEvent, this.data.endEvent, domHelper.getDebugName(hand) )
+      }
       hand.addEventListener(this.data.startEvent, this.onStartEvent)
       hand.addEventListener(this.data.endEvent, this.onEndEvent)
     }
@@ -97,6 +122,9 @@ AFRAME.registerSystem("two-handed-transform", {
 
   removeListeners(hand) {
     if (hand) {
+      if (this.data.debug) {
+        console.log( domHelper.getDebugName(this.el), this.attrName, "removeListeners", this.data.startEvent, this.data.endEvent, domHelper.getDebugName(hand) )
+      }
       hand.removeEventListener(this.data.startEvent, this.onStartEvent)
       hand.removeEventListener(this.data.endEvent, this.onEndEvent)
     }
@@ -113,12 +141,12 @@ AFRAME.registerSystem("two-handed-transform", {
   },
 
   captureStartPositions: (function() {
-    const inverseTargetWorldMatrix = new THREE.Matrix4()
-    const leftPositionWorld = new THREE.Vector3()
-    const rightPositionWorld = new THREE.Vector3()
+    const pivotPos = new THREE.Vector3()
+    const pivotQuat = new THREE.Quaternion()
+    const invHandMatrix = new THREE.Matrix4()
 
     return function captureStartPositions() {
-      const target3D = this.data.target ? this.data.target.object3D : undefined
+      const target3D = this.data.target ? this.data.target.object3D : this.el.object3D
       this.target.object3D = target3D
 
       if (target3D) {
@@ -129,19 +157,19 @@ AFRAME.registerSystem("two-handed-transform", {
           this.right.startPosition.copy(this.right.hand.object3D.position)
         }
   
-        this.target.startMatrix.copy(target3D.matrix)
         this.target.startPosition.copy(target3D.position)
+        this.target.startQuaternion.copy(target3D.quaternion)
+        this.target.startScale.copy(target3D.scale)
   
         if (this.right.active && this.left.active) {
-          this.left.hand.object3D.getWorldPosition(leftPositionWorld)
-          this.right.hand.object3D.getWorldPosition(rightPositionWorld)
-          this.target.handGap.copy(rightPositionWorld).sub(leftPositionWorld)
-          this.target.handPivot.copy(this.right.hand.object3D.position).add(this.left.hand.object3D.position).multiplyScalar(0.5)
-
-          // the rotationPivot is in target local space
-          inverseTargetWorldMatrix.getInverse(this.target.object3D.matrixWorld)
-          this.target.rotationPivot.copy(rightPositionWorld).add(leftPositionWorld).multiplyScalar(0.5)
-          this.target.rotationPivot.applyMatrix4(inverseTargetWorldMatrix)
+          const left3D = this.left.hand.object3D
+          const right3D = this.right.hand.object3D
+          this.target.handGap.copy(right3D.position).sub(left3D.position)
+          this.calcMatrixFromHands(pivotPos, pivotQuat, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
+          invHandMatrix.compose( pivotPos, pivotQuat, UNIFORM_SCALE )
+          invHandMatrix.getInverse( invHandMatrix )
+          this.target.startGap.copy(right3D.position).applyMatrix4(invHandMatrix).normalize()
+          this.target.invPivotMatrix.copy(invHandMatrix).multiply(target3D.matrix)
         }
       } else {
         console.warn(`unable to find Object3D for '${this.data.target}'`)
@@ -151,60 +179,77 @@ AFRAME.registerSystem("two-handed-transform", {
   })(),
 
   oneHanded: (function() {
-    const tempPosition = new THREE.Vector3()
+    const newTranslate = new THREE.Vector3()
+    const newScale = new THREE.Vector3(1,1,1)
+    const newEuler = new THREE.Euler(0,0,0,"YXZ")
+    const newQuaternion = new THREE.Quaternion()
 
     return function oneHanded(side) {
       const target3D = this.target.object3D
       if (target3D) {
-        target3D.position.copy( tempPosition.copy(side.hand.object3D.position).sub(side.startPosition).add(this.target.startPosition) )
+        newTranslate.copy(side.hand.object3D.position).sub(side.startPosition)
+
+        // const scale = side.hand.object3D.position.distanceTo(side.startPosition)
+        // newScale.set(scale, scale, scale)
+
+        target3D.position.copy( newTranslate.add(this.target.startPosition) )
+        // target3D.quaternion.copy( newQuaternion.multiply( this.target.startQuaternion ) )
+        // target3D.scale.copy( newScale.multiply( this.target.startScale ) )
       }
     }
   })(),
 
   twoHanded: (function() {
-    const leftPosition = new THREE.Vector3()
-    const rightPosition = new THREE.Vector3()
+    const firstPosition = new THREE.Vector3()
+    const secondPosition = new THREE.Vector3()
     const newHandGap = new THREE.Vector3()
-    const newPosition = new THREE.Vector3()
-    const newTranslate = new THREE.Vector3()
-    const flatNewHandGap = new THREE.Vector3()
-    const flatRigHandGap = new THREE.Vector3()
-    const rightRigHandGap = new THREE.Vector3()
+    const rotationGap = new THREE.Vector3()
+    const newRotationGap = new THREE.Vector3()
+    const newPivot = new THREE.Vector3()
+    const newScale = new THREE.Vector3(1,1,1)
+    const newQuaternion = new THREE.Quaternion()
     const newMatrix = new THREE.Matrix4()
+    const secondQuaternion = new THREE.Quaternion()
+    const invNewMatrix = new THREE.Matrix4()
 
     return function twoHanded() {
       const target3D = this.target.object3D
       if (target3D) {
-        leftPosition.copy(this.left.hand.object3D.position)
-        rightPosition.copy(this.right.hand.object3D.position)
-        newHandGap.copy(rightPosition).sub(leftPosition)
+        const left3D = this.left.hand.object3D
+        const right3D = this.right.hand.object3D
+        firstPosition.copy(left3D.position)
+        secondPosition.copy(right3D.position)
+        newHandGap.copy(secondPosition).sub(firstPosition)
 
-        const scale = newHandGap.length()/this.target.handGap.length()
+        const scale = newHandGap.length() / this.target.handGap.length()
+        newScale.set(scale, scale, scale)
 
-        flatNewHandGap.copy(newHandGap).y = 0
-        flatRigHandGap.copy(this.target.handGap).y = 0
-        rightRigHandGap.set(-flatRigHandGap.z, 0, flatRigHandGap.x)
-        const angle = flatNewHandGap.angleTo(flatRigHandGap)*( rightRigHandGap.dot(flatNewHandGap) > 0 ? -1 : 1 )
+        target3D.scale.copy( newScale.multiply( this.target.startScale ) )
 
-        newTranslate.copy(rightPosition).add(leftPosition).multiplyScalar(0.5).sub(this.target.handPivot)
+        this.calcMatrixFromHands(newPivot, secondQuaternion, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
+        newMatrix.compose(newPivot, secondQuaternion, UNIFORM_SCALE)
 
-        const c = Math.cos(angle)
-        const s = Math.sin(angle)
-        const px = this.target.rotationPivot.x, pz = this.target.rotationPivot.z
+        invNewMatrix.getInverse(newMatrix)
+        newRotationGap.copy(secondPosition).applyMatrix4(invNewMatrix).normalize()
+        newQuaternion.setFromUnitVectors(this.target.startGap, newRotationGap)
+        secondQuaternion.multiply( newQuaternion )
+        newMatrix.compose(newPivot, secondQuaternion, UNIFORM_SCALE)
+        
+        newMatrix.multiply( this.target.invPivotMatrix )
+        newMatrix.decompose(newPivot, secondQuaternion, newScale)
 
-        newMatrix.set(
-          c*scale  ,0     ,s*scale ,-c*scale*(px) - s*scale*(pz) + px,
-          0        ,scale ,0       ,0,
-          -s*scale ,0     ,c*scale , s*scale*(px) - c*scale*(pz) + pz,
-          0        ,0     ,0       ,1)
-  
-        newMatrix.premultiply(this.target.startMatrix)
-        newMatrix.decompose(newPosition, target3D.quaternion, target3D.scale)
-
-        // position is applied independently because we don't want it to be influenced by the scaling in the startMatrix
-        newPosition.add(newTranslate)
-        target3D.position.copy(newPosition)
+        target3D.position.copy(newPivot)
+        target3D.quaternion.copy(secondQuaternion)
       }
     }
   })(),
+
+  calcMatrixFromHands(outPos, outQuat, handAPos, handAQuat, handBPos, handBQuat) {
+    outPos.copy(handBPos).sub(handAPos).normalize()
+    outQuat.setFromUnitVectors(UP_VECTOR, outPos)
+
+    outPos.copy(handAPos).add(handBPos).multiplyScalar(0.5)
+    outQuat.copy(handAQuat).slerp(handBQuat, .5)
+  },
+
 })
