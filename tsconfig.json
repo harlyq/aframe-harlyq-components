@@ -5,6 +5,7 @@
     "checkJs": true,
     "newLine": "LF",
     "module": "es6",
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "noEmit": true
   },
-} // this config generates "Cannot write file ... because it would overwrite input file"
+}
