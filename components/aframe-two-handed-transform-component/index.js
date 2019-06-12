@@ -1,12 +1,11 @@
-import { domHelper } from "harlyq-helpers"
+import { domHelper, utils } from "harlyq-helpers"
 
 const UNIFORM_SCALE = new THREE.Vector3(1,1,1)
 const UP_VECTOR = new THREE.Vector3(0,1,0)
 
 AFRAME.registerComponent("two-handed-transform", {
   schema: {
-    left: { type: "selector" },
-    right: { type: "selector" },
+    handSelectors: { type: "selectorAll" },
     startEvent: { default: "gripdown" },
     endEvent: { default: "gripup"},
     target: { type: "selector" },
@@ -20,8 +19,8 @@ AFRAME.registerComponent("two-handed-transform", {
 
     this.isEnabled = false
 
-    this.left = { hand: undefined, active: false, grabPosition: new THREE.Vector3() }
-    this.right = { hand: undefined, active: false, grabPosition: new THREE.Vector3() }
+    this.sides = []
+    this.activeHands = []
     this.target = { 
       object3D: undefined,
       startPosition: new THREE.Vector3(), 
@@ -37,10 +36,14 @@ AFRAME.registerComponent("two-handed-transform", {
   update(oldData) {
     const data = this.data
 
-    this.left.hand = data.left
-    this.left.active = false
-    this.right.hand = data.right
-    this.right.active = false
+    if (data.handSelectors !== oldData.handSelectors) {
+      this.sides.length = 0
+      if (data.handSelectors) {
+        for (let i = 0; i < data.handSelectors.length; i++) {
+          this.sides.push( { handEl: data.handSelectors[i], grabPosition: new THREE.Vector3() } )
+        }
+      }
+    }
 
     if (oldData.enable !== data.enable) {
       if (data.enable) {
@@ -62,27 +65,28 @@ AFRAME.registerComponent("two-handed-transform", {
   },
 
   tick() {
-    if (this.left.active !== this.right.active) {
-      this.oneHanded(this.left.active ? this.left : this.right)
-    } else if (this.left.active && this.right.active) {
-      this.twoHanded()
+    if (this.activeHands.length === 1) {
+      this.oneHanded(this.activeHands[0])
+    } else if (this.activeHands.length === 2) {
+      this.twoHanded(this.activeHands)
     }
   },
 
   enable() {
     if (!this.isEnabled) {
-      this.addListeners(this.left.hand)
-      this.addListeners(this.right.hand)
+      for (let side of this.sides) {
+        this.addListeners(side.handEl)
+      }
       this.isEnabled = true
     }
   },
 
   disable() {
     if (this.isEnabled) {
-      this.left.active = false
-      this.right.active = false
-      this.removeListeners(this.left.hand)
-      this.removeListeners(this.right.hand)
+      this.activeHands.length = 0
+      for (let side of this.sides) {
+        this.removeListeners(side.handEl)
+      }
       this.isEnabled = false
     }
   },
@@ -92,10 +96,10 @@ AFRAME.registerComponent("two-handed-transform", {
       console.log( domHelper.getDebugName(this.el), this.attrName, "onStartEvent", e.type, domHelper.getDebugName(e.target) )
     }
 
-    if (e.target == this.left.hand) {
-      this.activate(this.left)
-    } else if (e.target == this.right.hand) {
-      this.activate(this.right)
+    for (let side of this.sides) {
+      if (e.target === side.handEl) {
+        this.activate(side)
+      }
     }
   },
 
@@ -104,41 +108,47 @@ AFRAME.registerComponent("two-handed-transform", {
       console.log( domHelper.getDebugName(this.el), this.attrName, "onEndEvent", e.type, domHelper.getDebugName(e.target) )
     }
 
-    if (e.target == this.left.hand) {
-      this.deactivate(this.left)
-    } else if (e.target == this.right.hand) {
-      this.deactivate(this.right)
+    for (let side of this.sides) {
+      if (e.target === side.handEl) {
+        this.deactivate(side)
+      }
     }
   },
 
-  addListeners(hand) {
-    if (hand) {
+  addListeners(handEl) {
+    if (handEl) {
       if (this.data.debug) {
-        console.log( domHelper.getDebugName(this.el), this.attrName, "addListeners", this.data.startEvent, this.data.endEvent, domHelper.getDebugName(hand) )
+        console.log( domHelper.getDebugName(this.el), this.attrName, "addListeners", this.data.startEvent, this.data.endEvent, domHelper.getDebugName(handEl) )
       }
-      hand.addEventListener(this.data.startEvent, this.onStartEvent)
-      hand.addEventListener(this.data.endEvent, this.onEndEvent)
+      handEl.addEventListener(this.data.startEvent, this.onStartEvent)
+      handEl.addEventListener(this.data.endEvent, this.onEndEvent)
     }
   },
 
-  removeListeners(hand) {
-    if (hand) {
+  removeListeners(handEl) {
+    if (handEl) {
       if (this.data.debug) {
-        console.log( domHelper.getDebugName(this.el), this.attrName, "removeListeners", this.data.startEvent, this.data.endEvent, domHelper.getDebugName(hand) )
+        console.log( domHelper.getDebugName(this.el), this.attrName, "removeListeners", this.data.startEvent, this.data.endEvent, domHelper.getDebugName(handEl) )
       }
-      hand.removeEventListener(this.data.startEvent, this.onStartEvent)
-      hand.removeEventListener(this.data.endEvent, this.onEndEvent)
+      handEl.removeEventListener(this.data.startEvent, this.onStartEvent)
+      handEl.removeEventListener(this.data.endEvent, this.onEndEvent)
     }
   },
 
   activate(side) {
-    side.active = true
-    this.captureStartPositions()
+    const i = this.activeHands.indexOf(side)
+    if (i === -1) {
+      this.activeHands.push(side)
+      this.captureStartPositions()
+    }
   },
 
   deactivate(side) {
-    side.active = false
-    this.captureStartPositions()
+    const i = this.activeHands.indexOf(side)
+    if (i !== -1) {
+      this.activeHands.splice(i, 1)
+      this.captureStartPositions()
+    }
   },
 
   captureStartPositions: (function() {
@@ -151,13 +161,8 @@ AFRAME.registerComponent("two-handed-transform", {
       this.target.object3D = target3D
 
       if (target3D) {
-        if (this.left.active) {
-          this.left.hand.object3D.getWorldPosition(this.left.grabPosition)
-          // this.left.startPosition.copy(this.left.hand.object3D.position)
-        }
-        if (this.right.active) {
-          this.right.hand.object3D.getWorldPosition(this.right.grabPosition)
-          // this.right.startPosition.copy(this.right.hand.object3D.position)
+        for (let side of this.activeHands) {
+          side.handEl.object3D.getWorldPosition( side.grabPosition )
         }
 
         target3D.updateMatrixWorld()
@@ -167,9 +172,9 @@ AFRAME.registerComponent("two-handed-transform", {
         this.target.startQuaternion.copy(target3D.quaternion)
         this.target.startScale.copy(target3D.scale)
   
-        if (this.right.active && this.left.active) {
-          const left3D = this.left.hand.object3D
-          const right3D = this.right.hand.object3D
+        if (this.activeHands.length >= 2) {
+          const left3D = this.activeHands[0].handEl.object3D
+          const right3D = this.activeHands[1].handEl.object3D
           this.target.handGap.copy(right3D.position).sub(left3D.position)
           this.calcMatrixFromHands(pivotPos, pivotQuat, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
           invHandMatrix.compose( pivotPos, pivotQuat, UNIFORM_SCALE )
@@ -195,7 +200,7 @@ AFRAME.registerComponent("two-handed-transform", {
     return function oneHanded(side) {
       const target3D = this.target.object3D
       if (target3D) {
-        const side3D = side.hand.object3D
+        const side3D = side.handEl.object3D
         side3D.getWorldPosition(newTranslate).sub(side.grabPosition)
 
         startGap.copy(side.grabPosition).sub(this.target.startWorldPosition)
@@ -207,8 +212,8 @@ AFRAME.registerComponent("two-handed-transform", {
         newEuler.setFromQuaternion(newQuaternion, "YXZ")
         newQuaternion.setFromEuler(newEuler)
 
-        // target3D.position.copy( newTranslate.add(this.target.startPosition) )
-        target3D.quaternion.copy( newQuaternion.multiply( this.target.startQuaternion ) )
+        target3D.position.copy( newTranslate.add(this.target.startPosition) )
+        // target3D.quaternion.copy( newQuaternion.multiply( this.target.startQuaternion ) )
         // target3D.scale.copy( newScale.multiply( this.target.startScale ) )
       }
     }
@@ -218,7 +223,6 @@ AFRAME.registerComponent("two-handed-transform", {
     const firstPosition = new THREE.Vector3()
     const secondPosition = new THREE.Vector3()
     const newHandGap = new THREE.Vector3()
-    const rotationGap = new THREE.Vector3()
     const newRotationGap = new THREE.Vector3()
     const newPivot = new THREE.Vector3()
     const newScale = new THREE.Vector3(1,1,1)
@@ -230,8 +234,8 @@ AFRAME.registerComponent("two-handed-transform", {
     return function twoHanded() {
       const target3D = this.target.object3D
       if (target3D) {
-        const left3D = this.left.hand.object3D
-        const right3D = this.right.hand.object3D
+        const left3D = this.activeHands[0].handEl.object3D
+        const right3D = this.activeHands[1].handEl.object3D
         firstPosition.copy(left3D.position)
         secondPosition.copy(right3D.position)
         newHandGap.copy(secondPosition).sub(firstPosition)
@@ -260,9 +264,6 @@ AFRAME.registerComponent("two-handed-transform", {
   })(),
 
   calcMatrixFromHands(outPos, outQuat, handAPos, handAQuat, handBPos, handBQuat) {
-    // outPos.copy(handBPos).sub(handAPos).normalize()
-    // outQuat.setFromUnitVectors(UP_VECTOR, outPos)
-
     outPos.copy(handAPos).add(handBPos).multiplyScalar(0.5)
     outQuat.copy(handAQuat).slerp(handBQuat, .5)
   },

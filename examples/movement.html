@@ -9,7 +9,7 @@
   <body>
     <a-scene id="scene">
       <a-entity
-        arm-swinger="left: #leftHand; right: #rightHand; startEvent: trackpaddown; endEvent: trackpadup; cameraRig: #cameraRig; scaling: .3" 
+        arm-swinger="handSelectors: #leftHand,#rightHand; startEvent: trackpaddown; endEvent: trackpadup; cameraRig: #cameraRig; scaling: .3" 
         climb="debug: true; cameraRig: #cameraRig;"
         simple-hands="debug: true; handSelectors: #leftHand,#rightHand; grabSelectors: a-box"
       ></a-entity>

@@ -3,7 +3,7 @@
 A component for moving an entity based upon arm movement. The direction of travel is determined by the forward direction of the arm movement, and the speed by the speed of arm movement
 
 e.g.
-<a-entity id="cameraRig" arm-swinger="left: #leftHand; right: #rightHand; startEvent: trackpaddown; endEvent: trackpadup; scaling: .3">
+<a-entity id="cameraRig" arm-swinger="handSelectors: #leftHand, #rightHand; startEvent: trackpaddown; endEvent: trackpadup; scaling: .3">
   <a-camera id="camera"></a-camera>
   <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
   <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
@@ -26,14 +26,9 @@ If false, all motion is disabled
 All motion is stopped when this controller event is received
 
 ---
-**left** : Selector = ""
+**handSelectors** : SelectorAll = ""
 
-A selector representing the left controller
-
----
-**right** : Selector = ""
-
-A selector representing the right controller
+Selectors representing the left and right controllers
 
 ---
 **scaling** : number = `1`

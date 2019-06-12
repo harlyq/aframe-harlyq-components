@@ -4,8 +4,7 @@ const MAX_HISTORY_LENGTH = 3
 
 AFRAME.registerComponent("arm-swinger", {
   schema: {
-    left: { type: "selector" },
-    right: { type: "selector" },
+    handSelectors: { type: "selectorAll" },
     startEvent: { default: "gripdown" },
     endEvent: { default: "gripup"},
     cameraRig: { type: "selector" },
@@ -21,13 +20,22 @@ AFRAME.registerComponent("arm-swinger", {
     this.newOffset = new THREE.Vector3()
     this.isMoving = false
     this.isEnabled = false
+
+    this.sides = []
   },
 
   update(oldData) {
     const data = this.data
 
-    this.left = { hand: data.left, positions: [], forwards: [] }
-    this.right = { hand: data.right, positions: [], forwards: [] }
+    if (oldData.handSelectors !== data.handSelectors) {
+      this.sides.length = 0
+
+      if (data.handSelectors) {
+        for (let handEl of data.handSelectors) {
+          this.sides.push( { handEl, active: false, positions: [], forwards: [] } )
+        }
+      }
+    }
 
     if (oldData.enabled !== data.enabled) {
       if (data.enabled) {
@@ -52,8 +60,8 @@ AFRAME.registerComponent("arm-swinger", {
     const data = this.data
     const dt = deltaTime*0.001
 
-    let [dLeft, forwardLeft] = this.tickHand(this.left)
-    let [dRight, forwardRight] = this.tickHand(this.right)
+    let [dLeft, forwardLeft] = this.sides.length > 0 ? this.tickSide(this.sides[0]) : [undefined, undefined]
+    let [dRight, forwardRight] = this.sides.length > 1 ? this.tickSide(this.sides[1]) : [undefined, undefined]
 
     this.isMoving = false
     if (forwardLeft || forwardRight) {
@@ -88,60 +96,65 @@ AFRAME.registerComponent("arm-swinger", {
 
   enable() {
     if (!this.isEnabled) {
-      this.addListeners(this.left.hand)
-      this.addListeners(this.right.hand)
+      for (let side of this.sides) {
+        this.addListeners(side.handEl)
+      }
       this.isEnabled = true
     }
   },
 
   disable() {
     if (this.isEnabled) {
-      this.left.active = false
-      this.right.active = false
-      this.removeListeners(this.left.hand)
-      this.removeListeners(this.right.hand)
+      for (let side of this.sides) {
+        this.deactivate(side)
+        this.removeListeners(side.handEl)
+      }
       this.isEnabled = false
     }
   },
 
   onStartEvent(e) {
-    if (e.target == this.left.hand) {
-      this.activate(this.left)
-    } else if (e.target == this.right.hand) {
-      this.activate(this.right)
+    for (let side of this.sides) {
+      if (e.target === side.handEl) {
+        this.activate(side)
+      }
     }
   },
 
   onEndEvent(e) {
-    if (e.target == this.left.hand) {
-      this.left.active = false
-    } else if (e.target == this.right.hand) {
-      this.right.active = false
+    for (let side of this.sides) {
+      if (e.target === side.handEl) {
+        this.deactivate(side)
+      }
     }
   },
 
-  addListeners(hand) {
-    if (hand) {
-      hand.addEventListener(this.data.startEvent, this.onStartEvent)
-      hand.addEventListener(this.data.endEvent, this.onEndEvent)
+  addListeners(handEl) {
+    if (handEl) {
+      handEl.addEventListener(this.data.startEvent, this.onStartEvent)
+      handEl.addEventListener(this.data.endEvent, this.onEndEvent)
     }
   },
 
-  removeListeners(hand) {
-    if (hand) {
-      hand.removeEventListener(this.data.startEvent, this.onStartEvent)
-      hand.removeEventListener(this.data.endEvent, this.onEndEvent)
+  removeListeners(handEl) {
+    if (handEl) {
+      handEl.removeEventListener(this.data.startEvent, this.onStartEvent)
+      handEl.removeEventListener(this.data.endEvent, this.onEndEvent)
     }
   },
 
   activate(side) {
     side.active = true
-    side.positions = []
-    side.forwards = []
+    side.positions.length = 0
+    side.forwards.length = 0
   },
 
-  tickHand(side) {
-    if (!side.hand || !side.active) {
+  deactivate(side) {
+    side.active = false
+  },
+
+  tickSide(side) {
+    if (!side.active) {
       return [undefined, undefined]
     }
 
@@ -154,7 +167,7 @@ AFRAME.registerComponent("arm-swinger", {
       position = new THREE.Vector3()
       forward = new THREE.Vector3()
     }
-    const handMatrixWorld = side.hand.object3D.matrixWorld
+    const handMatrixWorld = side.handEl.object3D.matrixWorld
     side.positions.push( position.setFromMatrixPosition(handMatrixWorld) )
     side.forwards.push( forward.setFromMatrixColumn(handMatrixWorld, 0).cross(UP_VECTOR) )
 
