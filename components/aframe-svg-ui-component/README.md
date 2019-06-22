@@ -9,14 +9,15 @@ e.g.
 <a-entity laser-controls="hand: right" line="color: yellow" raycaster="objects: [svg-ui]; far: 5"></a-entity>
 <script id="ui_template" type="x-template">
   <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" version="1.1">
-    <circle cx="50" cy="50" r="30" fill="${_col}"/>
+    <style>.hover { stroke: red }</style>
+    <circle id="a" cx="50" cy="50" r="30" fill="${_col}"/>
   </svg>
 </script>
-<a-plane position="0 0 -2" svg-ui="template: #ui_template; clickSelectors: circle; _col=blue"
+<a-plane position="0 0 -2" svg-ui="template: #ui_template; clickSelectors: circle; hoverSelectors: #a; useHoverClass: true; _col=blue"
   wait-set="events: svg-ui-click; svg-ui._col=red"
 ></a-plane>
 ```
-The **laser-controls** setup a `yellow` laser in the `right` hand which intersects any element with an `svg-ui` attribute less than `5`m from the controller.  The UI is placed upon an **a-plane** and uses the template described in `#ui_template`.  This template is an svg `circle` near the middle, who's color is determined by the `${_col}` template expression.  The **_col** variable is set to `blue` on the `svg-ui` component, and the component will generate `svg-ui-click` events whenever the user clicks on elements that match the `clickSelectors: circle`.  The **wait-set** component takes the **svg-ui-click** events and sets the `svg-ui._col` to `red`, which will force a rebuild of the template and show a red circle on the UI texture
+The **laser-controls** setup a `yellow` laser in the `right` hand which intersects any element with an `svg-ui` attribute less than `5`m from the controller.  The UI is placed upon an **a-plane** and uses the template described in `#ui_template`.  This template is an svg `circle` near the middle, who's color is determined by the `${_col}` template expression.  The **_col** variable is set to `blue` on the `svg-ui` component, and the component will generate `svg-ui-click` events whenever the user clicks on elements that match the `clickSelectors: circle`.  The **wait-set** component takes the **svg-ui-click** events and sets the `svg-ui._col` to `red`, which will force a rebuild of the template and show a red circle on the UI texture. The `useHoverClass: true` applies the class `hover` whenever the raycaster hovers over `#a`, which will style the element `#a` will a `stroke: red`
 
 ## Events
 | EVENT | DESCRIPTION |
@@ -70,6 +71,11 @@ Enable or disable to generation of events from the svg-ui
 A selector which defines the svg elements that will generate `svg-ui-hoverstart` and `svg-ui-hoverend` events.  There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is hovering.  The **raycaster** component is provided automatically when using a **cursor** component
 
 ---
+**interactIfOccluded**: boolean = `false`
+
+If false, then the touch and hover interactions only work if this element is the first hit by the raycaster (i.e. picks the front-most svg-ui panel)
+
+---
 **resolution**: vec2 = `{x: 512, y:512}`
 
 The resolution of the texture onto which the SVG is generated. The lower the resolution the blurier the texture.  For WebGL1 the resolution dimensions will be forced to powers of 2 by the renderer
@@ -97,6 +103,11 @@ Maximum distance (m) for registering a touch for the **touchSelectors**
 **touchSelectors**: string = ""
 
 Selectors to define elements for touches, and generate `svg-ui-touchstart` and `svg-ui-touchend`.  Touches occur when the distance between the **raycaster** origin and contact point are less than **touchDistance**. There must a **raycaster** component somewhere which will generate the `raycaster-intersected` and `raycaster-intersected-cleared` events on this entity, which we can utilise to determine where the ray is touching.
+
+---
+**useHoverClass**: boolean = `false`
+
+If true, then the class `hover` is added to the element when hover is active.  This can be used by custom styles INSIDE the svg (external styles won't work)
 
 ---
 **\<attribute\>**: string = ""

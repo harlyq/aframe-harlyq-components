@@ -1,5 +1,6 @@
 import { domHelper, aframeHelper } from "harlyq-helpers"
 
+const HOVER_CLASS = "hover"
 const SVG_HTML_WIDTH = 256
 const SVG_HTML_HEIGHT = 256
 const isSVG = (str) => typeof str === "string" && /\<svg/.test(str)
@@ -25,6 +26,8 @@ AFRAME.registerComponent("svg-ui", {
     bubbles: { default: false },
     debug: { default: false },
     enabled: { default: true },
+    useHoverClass: { default: false },
+    interactIfOccluded: { default: false },
   },
 
   // copy new properties to the schema so they will appear in the Inspector
@@ -53,6 +56,8 @@ AFRAME.registerComponent("svg-ui", {
     this.raycasters = []
     this.hoverEls = []
     this.touchEls = new Map()
+    this.hasPendingUpdateSVGTexture = false
+
     this.onSetObject3D = this.onSetObject3D.bind(this)
     this.onRaycasterIntersected = this.onRaycasterIntersected.bind(this)
     this.onRaycasterIntersectedCleared = this.onRaycasterIntersectedCleared.bind(this)
@@ -90,7 +95,7 @@ AFRAME.registerComponent("svg-ui", {
         }
 
         this.createSVGFunction(text)
-        this.updateSVGTexture()
+        this.requestUpdateSVGTexture()
       })
       
     } else if (this.templateContent) {
@@ -98,16 +103,23 @@ AFRAME.registerComponent("svg-ui", {
         this.createSVGFunction(this.templateContent)
       }
 
-      this.updateSVGTexture()
+      this.requestUpdateSVGTexture()
     }
 
     this.addUIListeners()
   },
 
   tick() {
-    if (this.raycasters.length === 0) {
-      this.el.sceneEl.removeBehavior(this)
-    } else if (this.data.enabled) {
+    // if (this.raycasters.length === 0) {
+    //   this.el.sceneEl.removeBehavior(this)
+    // } else if (this.data.enabled) {
+    //   this.updateHoverAndTouch()
+    // }
+    if (this.hasPendingUpdateSVGTexture) {
+      this.updateSVGTexture()
+    }
+
+    if (this.data.enabled) {
       this.updateHoverAndTouch()
     }
   },
@@ -115,7 +127,7 @@ AFRAME.registerComponent("svg-ui", {
   // other components can set the template content directly
   setTemplate(newContent) {
     this.templateContent = newContent
-    this.updateSVGTexture()
+    this.requestUpdateSVGTexture()
   },
 
   isSelectable() {
@@ -181,14 +193,19 @@ AFRAME.registerComponent("svg-ui", {
       self.updatePendingContent()
     }
 
-    this.updateSVGTexture()
+    this.requestUpdateSVGTexture()
     this.showSVGTextureOnMesh()
+  },
+
+  requestUpdateSVGTexture() {
+    // queue the requests, so that we perform the (expensive) SVG update at most once per frame
+    this.hasPendingUpdateSVGTexture = true
   },
 
   updateSVGTexture() {
     if (this.templateContent) {
 
-      const generatedContent = this.processTemplate(this.templateContent)
+      let generatedContent = this.processTemplate(this.templateContent)
       if (this.data.debug) {
         console.log(generatedContent)
       }
@@ -201,7 +218,7 @@ AFRAME.registerComponent("svg-ui", {
           this.proxyEl.style.left = "0"
           this.proxyEl.style.zIndex = "-999"
 
-          document.body.appendChild(this.proxyEl)
+          this.el.appendChild(this.proxyEl)
         }
 
         this.proxyEl.innerHTML = generatedContent
@@ -209,11 +226,30 @@ AFRAME.registerComponent("svg-ui", {
         this.proxySVGEl = this.proxyEl.children[0]
         this.proxySVGEl.setAttribute("width", SVG_HTML_WIDTH)
         this.proxySVGEl.setAttribute("height", SVG_HTML_HEIGHT)
+
+        if (this.data.useHoverClass) {
+          // because we just updated the proxyEl, the elements have been recreated
+          // only the ids are valid
+          for (let hoverEl of this.hoverEls) {
+            if (!hoverEl.id) {
+              console.warn(`svg-ui hoverable element is missing an id`)
+            } else {
+              const newHoverEl = this.proxyEl.querySelector("#" + hoverEl.id)
+              if (newHoverEl) {
+                newHoverEl.classList.add(HOVER_CLASS)
+              }
+            }
+          }
+
+          generatedContent = this.proxyEl.innerHTML
+        }
       }
 
       this.pendingContent = generatedContent
       this.updatePendingContent()
     }
+
+    this.hasPendingUpdateSVGTexture = false
   },
 
   updatePendingContent() {
@@ -295,12 +331,25 @@ AFRAME.registerComponent("svg-ui", {
 
   updateHoverAndTouch() {
     let hoverElements = []
+    const interactIfOccluded = this.data.interactIfOccluded
+    const thisEl = this.el
+
+    function getIntersection(raycaster) {
+      const intersections = raycaster.components["raycaster"].intersections
+      if (interactIfOccluded) {
+        return intersections.find(intersection => intersection.object.el === thisEl)
+      } else {
+        // if the raycaster hits it's own entity, then ignore it and get the second intersection
+        return intersections.length > 0 ? ( intersections[0].object.el === raycaster ? intersections[1] : intersections[0] ) : undefined
+      }
+    }
 
     for (let raycaster of this.raycasters) {
-      if (raycaster) {
+      const intersection = getIntersection(raycaster)
+      if (intersection.object.el === this.el) {
         let touchElements = []
         let hasMoved = false
-        const intersection = raycaster.components.raycaster.getIntersection(this.el)
+        // const intersection = raycaster.components.raycaster.getIntersection(this.el)
         const touchInfo = this.touchEls.get(raycaster)
   
         if (intersection) {
@@ -342,18 +391,27 @@ AFRAME.registerComponent("svg-ui", {
       }
     }
 
+    const hoverIds = hoverElements.map(x => x.id)
+    let hoverChanged = false
+
     for (let el of this.hoverEls) {
       if (!hoverElements.find(otherEl => otherEl.id === el.id)) {
-        this.sendEvent("svg-ui-hoverend", { uiTarget: el, hovers: hoverElements.map(x => x.id) })
+        this.sendEvent("svg-ui-hoverend", { uiTarget: el, hovers: hoverIds })
+        hoverChanged = true
       }
     }
 
     for (let el of hoverElements) {
       if (!this.hoverEls.find(otherEl => otherEl.id === el.id)) {
-        this.sendEvent("svg-ui-hoverstart", { uiTarget: el, hovers: hoverElements.map(x => x.id) })
+        this.sendEvent("svg-ui-hoverstart", { uiTarget: el, hovers: hoverIds })
+        hoverChanged = true
       }
     }
-  
+
+    if (this.data.useHoverClass && hoverChanged) {
+      this.requestUpdateSVGTexture()
+    }
+
     this.hoverEls = hoverElements
   },
 
