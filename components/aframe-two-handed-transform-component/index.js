@@ -1,7 +1,6 @@
-import { domHelper, utils } from "harlyq-helpers"
+import { aframeHelper, domHelper } from "harlyq-helpers"
 
 const UNIFORM_SCALE = new THREE.Vector3(1,1,1)
-const UP_VECTOR = new THREE.Vector3(0,1,0)
 
 AFRAME.registerComponent("two-handed-transform", {
   schema: {
@@ -183,7 +182,7 @@ AFRAME.registerComponent("two-handed-transform", {
           this.target.invPivotMatrix.copy(invHandMatrix).multiply(target3D.matrix)
         }
       } else {
-        console.warn(`unable to find Object3D for '${this.data.target}'`)
+        aframeHelper.warn(`unable to find Object3D for '${this.data.target}'`)
       }
     }
   

@@ -39,7 +39,7 @@ function getPropertyAsString(target, prop) {
   if (path) {
     return attribute.stringify(path[prop])
   } else {
-    console.warn(`unknown path for getProperty() '${prop}'`)
+    aframeHelper.warn(`unknown path for getProperty() '${prop}'`)
   }
 }
 

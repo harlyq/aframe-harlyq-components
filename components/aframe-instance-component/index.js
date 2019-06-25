@@ -1,3 +1,5 @@
+import { aframeHelper } from "harlyq-helpers"
+
 AFRAME.registerComponent("instance", {
   schema: {
     src: { type: "selector" },
@@ -25,13 +27,13 @@ AFRAME.registerComponent("instance", {
         this.blockIndex = instancePool.reserveBlock(1)
         this.instancePool = instancePool
         if (this.blockIndex === undefined) {
-          console.warn(`no more instances available`)
+          aframeHelper.warn(`no more instances available`)
         }
       } else {
-        console.warn(`no 'instance-pool' found on src`)
+        aframeHelper.warn(`no 'instance-pool' found on src`)
       }
     } else {
-      console.error(`missing 'src' on 'instance' component`)
+      aframeHelper.error(`missing 'src' on 'instance' component`)
     }
 
     if (oldData.dynamic !== data.dynamic && data.dynamic) {

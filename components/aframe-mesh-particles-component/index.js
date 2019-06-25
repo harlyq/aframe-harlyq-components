@@ -1,7 +1,6 @@
 import { aframeHelper, attribute, interpolation, pseudorandom } from "harlyq-helpers"
 
 const toLowerCase = x => x.toLowerCase()
-const warn = msg => console.warn("mesh-particles", msg)
 
 const TWO_PI = 2*Math.PI
 const PI_2 = .5*Math.PI
@@ -39,7 +38,7 @@ function parseVec3RangeOptionArray(str) {
 
   const result = attribute.nestedSplit(str).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateVec3))) {
-    console.warn(`unrecognized array of vec3 range options '${str}'`)
+    aframeHelper.warn(`unrecognized array of vec3 range options '${str}'`)
     return undefined
   }
   return result
@@ -50,7 +49,7 @@ function parseFloatRangeOptionArray(str) {
 
   const result = attribute.nestedSplit(str).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateFloat))) {
-    console.warn(`unrecognized array of float range options '${str}'`)
+    aframeHelper.warn(`unrecognized array of float range options '${str}'`)
     return undefined
   }
   return result
@@ -65,7 +64,7 @@ function parseScaleArray(str) {
 
   const result = attribute.nestedSplit(str).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateVec3) || validateRangeOption(part, validateFloat))) {
-    console.warn(`unrecognized array of float or vec3 range options '${str}'`)
+    aframeHelper.warn(`unrecognized array of float or vec3 range options '${str}'`)
     return undefined
   }
   
@@ -80,7 +79,7 @@ function parseColorRangeOptionArray(str) {
 
   const result = attribute.nestedSplit(str.toLowerCase()).flatMap( str => attribute.parse(str) )
   if (!result.every(part => validateRangeOption(part, validateColor))) {
-    console.warn(`unrecognized array of color range options '${str}'`)
+    aframeHelper.warn(`unrecognized array of color range options '${str}'`)
     return undefined
   }
   return result
@@ -201,7 +200,7 @@ AFRAME.registerComponent("mesh-particles", {
         if (sourceEl && sourceEl.object3D) { 
           this.source = sourceEl.object3D
         } else {
-          warn(`unable to find object3D on source '${data.source}'`) 
+          aframeHelper.warn(`unable to find object3D on source '${data.source}'`) 
         }
       }
     }
@@ -213,7 +212,7 @@ AFRAME.registerComponent("mesh-particles", {
         if (destinationEl && destinationEl.object3D) { 
           this.destination = destinationEl.object3D
         } else {
-          warn(`unable to find object3D on destination '${data.destination}'`) 
+          aframeHelper.warn(`unable to find object3D on destination '${data.destination}'`) 
         }
       }
     }
@@ -234,15 +233,17 @@ AFRAME.registerComponent("mesh-particles", {
 
       if (this.instancePools.length === 0) {
         if (data.instancePools) {
-          warn(`no 'instance-pool' on the entities: '${data.instancePools}'`)
+          aframeHelper.warn(`no 'instance-pool' on the entities: '${data.instancePools}'`)
         } else {
-          warn(`no 'instance-pool' component on this element`)
+          aframeHelper.warn(`no 'instance-pool' component on this element`)
         }
       } else {
-        // this.instanceBlocks = this.instancePools.map(inst => inst.requestBlock(this.maxParticles))
-        // this.instanceBlocks.forEach((block,i) => { if (!block) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
         this.instanceIndices = this.instancePools.map( instance => instance.reserveBlock(Math.ceil( this.maxParticles / this.instancePools.length)) )
-        this.instanceIndices.forEach((index,i) => { if (index === undefined) warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) })
+        this.instanceIndices.forEach((index,i) => { 
+          if (index === undefined) {
+            aframeHelper.warn(`unable to reserve blocks for instance '${this.instancePools[i].el.id}'`) 
+          }
+        })
       }
     }
 

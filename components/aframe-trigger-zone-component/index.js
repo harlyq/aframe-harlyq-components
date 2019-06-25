@@ -1,4 +1,4 @@
-import { overlap, threeHelper, domHelper } from "harlyq-helpers"
+import { aframeHelper, domHelper, overlap, threeHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("trigger-zone", {
   schema: {
@@ -74,7 +74,7 @@ AFRAME.registerComponent("trigger-zone", {
     }
 
     if (this.triggerElements.length === 0) {
-      console.warn(`no trigger elements using '${data.triggerSelectors}' for trigger-zone`)
+      aframeHelper.warn(`no trigger elements using '${data.triggerSelectors}' for trigger-zone`)
     }
   },
 

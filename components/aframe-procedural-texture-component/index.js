@@ -273,7 +273,7 @@ AFRAME.registerComponent("procedural-texture", {
         const uniform = uniforms[name]
     
         if (typeof dataStr === "undefined") {
-          console.warn(`no attribute for uniform: ${name}`)
+          aframeHelper.warn(`no attribute for uniform: ${name}`)
         } else {
           const dataValues = (typeof dataStr === "string" ? attribute.nestedSplit(dataStr) : [dataStr.toString()]).map(x => x.trim())
             
@@ -338,7 +338,7 @@ AFRAME.registerComponent("procedural-texture", {
       case "bvec4":
         return { type: "int32array", value: new Int32Array(4*blockCount), size: 4, arrayCount }
       default:
-        console.warn(`unknown uniform type ${type}`)
+        aframeHelper.warn(`unknown uniform type ${type}`)
     }
   }, 
 })

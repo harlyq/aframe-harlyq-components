@@ -1,3 +1,5 @@
+import { aframeHelper } from "harlyq-helpers"
+
 // @ts-ignore
 const COLOR_FLOATS_PER_VERTEX = 3
 
@@ -61,7 +63,7 @@ AFRAME.registerComponent("vertex-color", {
       material.vertexColors = THREE.VertexColors
 
       if (materialColor.r < .3 && materialColor.g < .3 && materialColor.b < .3) {
-        console.warn("material color is very dark, vertex-color will also be dark")
+        aframeHelper.warn("material color is very dark, vertex-color will also be dark")
       }
 
       console.assert(geometry.isBufferGeometry, "vertex-color only supports buffer geometry")

@@ -1,3 +1,5 @@
+import { aframeHelper } from "harlyq-helpers"
+
 // @ts-ignore
 const COLOR_FLOATS_PER_VERTEX = 3
 const VERTICES_PER_TRIANGLE = 3
@@ -62,11 +64,11 @@ AFRAME.registerComponent("face-color", {
 
       const materialColor = mesh.material.color
       if (materialColor.r < .3 && materialColor.g < .3 && materialColor.b < .3) {
-        console.warn("material color is very dark, face-color will also be dark")
+        aframeHelper.warn("material color is very dark, face-color will also be dark")
       }
 
       if (geometry.isInstancedBufferGeometry) {
-        console.warn("face-color does not support InstancedBufferGeometry")
+        aframeHelper.warn("face-color does not support InstancedBufferGeometry")
         return
       }
 

@@ -13,12 +13,6 @@ AFRAME.registerComponent("climb", {
     this.onSceneLoaded = this.onSceneLoaded.bind(this)
 
     this.grab = { hand: undefined, target: undefined, position: new THREE.Vector3() }
-
-    this.el.sceneEl.addEventListener("loaded", this.onSceneLoaded)
-  },
-
-  remove() {
-    this.el.sceneEl.removeEventListener("loaded", this.onSceneLoaded)
   },
 
   tick: (function() {
@@ -71,11 +65,5 @@ AFRAME.registerComponent("climb", {
     if (e.detail.hand === this.grab.hand) {
       this.grab.hand = undefined
     }
-  },
-
-  onSceneLoaded() {
-    // if (!this.data.cameraRig) {
-    //   console.warn(`no cameraRig found`)
-    // }
   },
 })

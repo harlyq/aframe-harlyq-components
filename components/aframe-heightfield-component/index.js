@@ -50,7 +50,7 @@ AFRAME.registerComponent("heightfield", {
     if (texture && texture.image && texture.image instanceof HTMLElement) {
       this.createHeightfield(texture.image)
     } else {
-      console.warn(`heightfield: unable to access image '${this.data.src}'`)
+      aframeHelper.warn(`heightfield: unable to access image '${this.data.src}'`)
     }
   },
 

@@ -1,4 +1,4 @@
-import { hull } from "harlyq-helpers"
+import { aframeHelper, hull } from "harlyq-helpers"
 
 AFRAME.registerComponent( "hull", {
   schema: {
@@ -16,7 +16,7 @@ AFRAME.registerComponent( "hull", {
     let points
 
     if ( data.src === this.el ) {
-      console.error( `cannot set 'src' to yourself` )
+      aframeHelper.error( `cannot set 'src' to yourself` )
     }
 
     if ( data.src !== oldData.src ) {
@@ -29,7 +29,7 @@ AFRAME.registerComponent( "hull", {
           points = generatePointsFromObject3D( data.src.object3D )        
           data.src.addEventListener( "object3dset", this.onObject3DSet )
         } else {
-          console.warn( `'src' must point to an entity` )
+          aframeHelper.warn( `'src' must point to an entity` )
         }
       }
     }

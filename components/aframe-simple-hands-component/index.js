@@ -1,4 +1,4 @@
-import { proximity, extent, threeHelper, domHelper } from "harlyq-helpers"
+import { aframeHelper, domHelper, extent, proximity, threeHelper } from "harlyq-helpers"
 
 const TOO_MANY_ENTITIES_WARNING = 100
 
@@ -172,13 +172,13 @@ AFRAME.registerComponent("simple-hands", {
     this.grabEls = data.grabSelectors ? sceneEl.querySelectorAll( data.grabSelectors ) : []
 
     if ( this.grabEls.length > TOO_MANY_ENTITIES_WARNING ) {
-      console.warn( `many entities in grabSelectors (${ this.grabEls.length }), performance may be affected` )
+      aframeHelper.warn( `many entities in grabSelectors (${ this.grabEls.length }), performance may be affected` )
     }
 
     this.toolEls = data.toolSelectors ? sceneEl.querySelectorAll( data.toolSelectors ) : []
 
     if ( this.toolEls.length > TOO_MANY_ENTITIES_WARNING ) {
-      console.warn( `many entities in toolSelectors (${ this.toolEls.length }), performance may be affected` )
+      aframeHelper.warn( `many entities in toolSelectors (${ this.toolEls.length }), performance may be affected` )
     }
 
     const handEls = data.handSelectors ? sceneEl.querySelectorAll( data.handSelectors ) : []
@@ -287,10 +287,10 @@ AFRAME.registerComponent("simple-hands", {
 
     const data = this.data
     if (this.sides.length === 0) { 
-      console.warn(`unable to find any hand elements (${data.handSelectors})`)
+      aframeHelper.warn(`unable to find any hand elements (${data.handSelectors})`)
     }
     if (this.grabEls.length === 0 && this.toolEls.length === 0) {
-      console.warn(`no grab (${data.grabSelectors}) or tool (${data.toolSelectors}) elements`)
+      aframeHelper.warn(`no grab (${data.grabSelectors}) or tool (${data.toolSelectors}) elements`)
     }
   },
 

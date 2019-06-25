@@ -33,7 +33,7 @@ AFRAME.registerComponent("svg-ui", {
   // copy new properties to the schema so they will appear in the Inspector
   updateSchema(newData) {
     if (typeof newData !== "object") {
-      console.error(`invalid properties, expected format <property>:<value>; '${newData}'`)
+      aframeHelper.error(this, `invalid properties, expected format <property>:<value>; '${newData}'`)
     }
     
     const originalSchema = AFRAME.components[this.name].schema
@@ -91,7 +91,7 @@ AFRAME.registerComponent("svg-ui", {
       aframeHelper.loadTemplate(data.template, "<svg", (text) => {
         this.templateContent = text
         if (!isSVG(text)) {
-          console.warn(`template '${data.template}' doesn't look like SVG: ${text}`)
+          aframeHelper.warn(this, `template '${data.template}' doesn't look like SVG: ${text}`)
         }
 
         this.createSVGFunction(text)
@@ -110,11 +110,6 @@ AFRAME.registerComponent("svg-ui", {
   },
 
   tick() {
-    // if (this.raycasters.length === 0) {
-    //   this.el.sceneEl.removeBehavior(this)
-    // } else if (this.data.enabled) {
-    //   this.updateHoverAndTouch()
-    // }
     if (this.hasPendingUpdateSVGTexture) {
       this.updateSVGTexture()
     }
@@ -162,7 +157,6 @@ AFRAME.registerComponent("svg-ui", {
     this.imageEl.isReady = true
 
     const texture = this.texture = new THREE.Texture(this.imageEl)
-    const self = this
 
     // steps for successful rendering of the texture
     // - imageEl.src = <new svg>
@@ -183,14 +177,12 @@ AFRAME.registerComponent("svg-ui", {
     }
 
     this.imageEl.onerror = () => {
-      console.error("invalid svg", this.lastContent)
+      aframeHelper.error(this, "invalid svg", this.lastContent)
       texture.image.isReady = true
-      self.updatePendingContent()
     }
 
     texture.onUpdate = () => {
       texture.image.isReady = true
-      self.updatePendingContent()
     }
 
     this.requestUpdateSVGTexture()
@@ -232,7 +224,7 @@ AFRAME.registerComponent("svg-ui", {
           // only the ids are valid
           for (let hoverEl of this.hoverEls) {
             if (!hoverEl.id) {
-              console.warn(`svg-ui hoverable element is missing an id`)
+              aframeHelper.warn(this, `svg-ui hoverable element is missing an id`)
             } else {
               const newHoverEl = this.proxyEl.querySelector("#" + hoverEl.id)
               if (newHoverEl) {
@@ -269,7 +261,7 @@ AFRAME.registerComponent("svg-ui", {
 
         const materialColor = mesh.material.color
         if (materialColor && (materialColor.r < .95 || materialColor.g < .95 || materialColor.b < .95)) {
-          console.warn(`svg-ui material color is not white, it may be difficult to see the ui`)
+          aframeHelper.warn(this, `svg-ui material color is not white, it may be difficult to see the ui`)
         }
       }
     }
@@ -439,7 +431,6 @@ AFRAME.registerComponent("svg-ui", {
 
     this.touchEls.set(raycaster, { elements: [] })
     this.raycasters.push(raycaster)
-    this.el.sceneEl.addBehavior(this)
   },
 
   onRaycasterIntersectedCleared(e) {

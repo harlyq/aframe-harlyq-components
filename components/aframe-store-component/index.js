@@ -94,7 +94,7 @@ AFRAME.registerComponent('store', {
 
   bind(key, target, prop) {
     if (this.binds.find(item => item.target === target && item.prop === prop)) {
-      console.warn(`bind '${target}.${prop}' already exists`)
+      aframeHelper.warn(`bind '${target}.${prop}' already exists`)
     }
     this.binds.push({key, target, prop})
   },
@@ -104,7 +104,7 @@ AFRAME.registerComponent('store', {
     if (i >= 0) {
       this.binds.splice(i, 1)
     } else {
-      console.warn(`unable to find bind '${target}.${prop}' for store key '${key}'`)
+      aframeHelper.warn(`unable to find bind '${target}.${prop}' for store key '${key}'`)
     }
   }
 })
