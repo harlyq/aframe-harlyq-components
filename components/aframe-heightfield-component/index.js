@@ -1,3 +1,5 @@
+import { aframeHelper } from "harlyq-helpers"
+
 const VERTS_PER_CELL = 6
 
 const CHANNEL_MULTIPLIERS = {
