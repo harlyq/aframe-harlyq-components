@@ -84,6 +84,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
 https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/world-map.html
 ### texture-updater
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
 

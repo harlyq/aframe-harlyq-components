@@ -114,7 +114,7 @@ AFRAME.registerComponent("svg-ui", {
       this.updateSVGTexture()
     }
 
-    if (this.data.enabled) {
+    if (this.data.enabled && this.raycasters && this.proxySVGEl) {
       this.updateHoverAndTouch()
     }
   },

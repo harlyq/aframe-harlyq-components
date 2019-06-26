@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>World Globe</title>
+    <script src="../../aframe/aframe-0.9.2.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+    <script id="highlight" type="x-template">
+      <svg xmlns="http://www.w3.org/2000/svg"
+          xmlns:xlink="http://www.w3.org/1999/xlink"
+          version="1.1" baseProfile="full" preserveAspectRatio="none"
+          width="360" height="180" viewBox="0 0 360 180">
+
+        <style type="text/css">
+        path {
+          opacity:1;
+          fill-opacity:.7;
+          fill-rule:nonzero;
+          fill:#0080f0;
+          stroke:#0000ff;
+          stroke-width:.1;
+        }
+        </style>
+
+        <g id="positioner" transform="translate(180, 90) scale(1, -1)">
+          ${_country}
+        </g>
+      </svg>
+    </script>
+  </head>
+  <body>
+    <a-scene background="color: black">
+      <a-assets>
+        <a-mixin id="ray" raycaster="direction: 0 -.707 -.707; objects: #globe; far: 5"></a-mixin>
+      </a-assets>
+      <a-entity>
+        <a-entity laser-controls="hand: right" mixin="ray"></a-entity>
+        <a-entity laser-controls="hand: left" mixin="ray"></a-entity>
+      </a-entity>
+      <a-entity position="0 .65 -2" keyframe="rotation: 0 0 0,0 360 0; duration: 60">
+        <a-sphere id="globe" segments-height="64" segments-width="64" svg-ui="template: url(assets/BlankMap-Equirectangular.svg); resolution: 2048 2048; hoverSelectors: g;"></a-sphere>
+        <a-sphere id="overlay" material="transparent: true;" segments-height="64" segments-width="64" scale="1.001 1.001 1.001" svg-ui="_country:; template: #highlight; resolution: 2048 2048;"></a-sphere>
+      </a-entity>
+    </a-scene>
+    <script>
+      // the useHoverClass in the svg-ui is too slow, because it needs to rebuild the 1.7 MB SVG each time (twice), so instead
+      // create a much smaller SVG with just the path for the selected country
+      let countryMap
+      const globeEl = document.getElementById("globe")
+      const overlayEl = document.getElementById("overlay")
+      globeEl.addEventListener("svg-ui-hoverstart", hoverStart)
+      globeEl.addEventListener("svg-ui-hoverend", hoverEnd)
+
+      function hoverStart(evt) {
+        overlayEl.setAttribute("svg-ui", { _country: evt.detail.uiTarget.innerHTML })
+      }
+
+      function hoverEnd(evt) {
+        overlayEl.setAttribute("svg-ui", {_country:""})
+      }
+    </script>
+  </body>
+</html>
