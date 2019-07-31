@@ -4,7 +4,7 @@
     "allowJs": true,
     "checkJs": true,
     "newLine": "LF",
-    "module": "es6",
+    "module": "esnext",
     "moduleResolution": "node",
     "noEmit": true
   },

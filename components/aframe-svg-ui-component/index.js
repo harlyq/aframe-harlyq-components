@@ -220,11 +220,11 @@ AFRAME.registerComponent("svg-ui", {
         this.proxySVGEl.setAttribute("height", SVG_HTML_HEIGHT)
 
         if (this.data.useHoverClass) {
-          // because we just updated the proxyEl, the elements have been recreated
+          // because we just updated the proxyEl, the elements have been recreated,
           // only the ids are valid
           for (let hoverEl of this.hoverEls) {
             if (!hoverEl.id) {
-              aframeHelper.warn(this, `svg-ui hoverable element is missing an id`)
+              aframeHelper.warn(this, `an element (${domHelper.getDebugName(hoverEl)}) matching the hoverSelectors (${this.data.hoverSelectors}), does not have an id`)
             } else {
               const newHoverEl = this.proxyEl.querySelector("#" + hoverEl.id)
               if (newHoverEl) {
