@@ -1,5 +1,6 @@
 import { aframeHelper, attribute, interpolation, threeHelper } from "harlyq-helpers"
 
+const MAX_FRAME = 64
 const degToRad = THREE.Math.degToRad
 const VEC3_ZERO = new THREE.Vector3(0,0,0)
 
@@ -8,6 +9,8 @@ const SPAWN_GEOMETRY_FUNCTIONS = {
   "geometryedge": threeHelper.randomPointOnTriangleEdge,
   "geometryvertex": threeHelper.randomVertex,
 }
+
+const FRAME_STYLES = ["sequence", "random"]
 
 function toLowerCase(str) {
   return str.toLowerCase()
@@ -18,7 +21,7 @@ AFRAME.registerComponent('simple-emitter', {
     enabled: { default: true },
     count: { default: 100 },
     particles: { default: "particles" },
-    frameSize: { type: "vec2", default: {x:1, y:1} },
+    textureFrame: { type: "vec2", default: {x:0, y:0} }, // 0,0 implies use the default from the particle system
     lifeTime: { default: "1" },
     loopTime: { default: "0" },
     colors: { default: "" },
@@ -26,6 +29,7 @@ AFRAME.registerComponent('simple-emitter', {
     scales: { default: "" },
     opacities: { default: "" },
     frames: { default: "" },
+    frameStyle: { default: "sequence", oneOf: FRAME_STYLES, parse: toLowerCase },
     velocity: { default: "0 0 0" },
     acceleration: { default: "0 0 0" },
     radialVelocity: { default: "0" },
@@ -72,6 +76,7 @@ AFRAME.registerComponent('simple-emitter', {
     this.opacities = attribute.parseNumberArray(data.opacities)
     this.colors = attribute.parseColorArray(data.colors)
     this.frames = attribute.parseNumberArray(data.frames)
+    this.frameStyle = FRAME_STYLES.indexOf(data.frameStyle) ? FRAME_STYLES.indexOf(data.frameStyle) : 0
     this.velocity = attribute.parseVec3(data.velocity)
     this.acceleration = attribute.parseVec3(data.acceleration)
     this.radialVelocity = attribute.parseNumber(data.radialVelocity)
@@ -87,6 +92,14 @@ AFRAME.registerComponent('simple-emitter', {
     } else {
       this.spawnGeometryFunction = undefined
       this.spawnOffsets = undefined
+    }
+
+    if (data.textureFrame.x > MAX_FRAME || data.textureFrame.y > MAX_FRAME || data.textureFrame.x < 0 || data.textureFrame.y < 0) {
+      aframeHelper.error(this, `textureFrame (${data.textureFrame.x},${data.textureFrame.y}) is expected in the range (0,${MAX_FRAME}) x (0,${MAX_FRAME})`)
+    }
+
+    if (data.textureFrame.x !== ~~data.textureFrame.x || data.textureFrame.y !== ~~data.textureFrame.y) {
+      aframeHelper.error(this, `textureFrame must be an integer value`)
     }
 
     const particleSystem = this.particleSystem
@@ -161,7 +174,11 @@ AFRAME.registerComponent('simple-emitter', {
       particleSystem.setColorsAt(i, colors)
       particleSystem.setRotationsAt(i, rotations)
       particleSystem.setOpacitiesAt(i, opacities)
-      particleSystem.setFrameAt(i, frames.length > 0 ? frames[0] : 0, data.frameSize.x, data.frameSize.y) // TODO make this more flexible
+
+      const startFrame = frames.length > 0 ? frames[0] : 0
+      const endFrame = frames.length > 1 ? frames[1] : startFrame
+      particleSystem.setFrameAt(i, this.frameStyle, startFrame, endFrame, data.textureFrame.x, data.textureFrame.y)
+
       particleSystem.setTimingsAt(i, t, lifeTime, loopTime)
       particleSystem.setVelocityAt(i, velocity.x, velocity.y, velocity.z, radialVelocity)
       particleSystem.setAccelerationAt(i, acceleration.x, acceleration.y, acceleration.z, radialAcceleration)

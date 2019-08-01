@@ -56,15 +56,16 @@ AFRAME.registerComponent('simple-particles', {
     particleSize: { default: 10 },
     transparent: { default: false },
     alphaTest: { default: 0 },
-    fog: { default: true },
     depthWrite: { default: true },
     depthTest: { default: true },
     blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase },   
+    fog: { default: true },
     usePerspective: { default: true },
     useLinearMotion: { default: true },
     useOrbitalMotion: { default: true },
     useAngularMotion: { default: true },
     useRadialMotion: { default: true },
+    useFramesOrRotation: { default: true },
   },
 
   multiple: true,
@@ -90,7 +91,11 @@ AFRAME.registerComponent('simple-particles', {
     }
 
     if (data.textureFrame.x > MAX_FRAME || data.textureFrame.y > MAX_FRAME || data.textureFrame.x < 1 || data.textureFrame.y < 1) {
-      aframeHelper.error(`textureFrame (${data.textureFrame.x},${data.textureFrame.y}) is expected in the range (1,${MAX_FRAME}) x (1,${MAX_FRAME})`)
+      aframeHelper.error(this, `textureFrame (${data.textureFrame.x},${data.textureFrame.y}) is expected in the range (1,${MAX_FRAME}) x (1,${MAX_FRAME})`)
+    }
+
+    if (data.textureFrame.x !== ~~data.textureFrame.x || data.textureFrame.y !== ~~data.textureFrame.y) {
+      aframeHelper.error(this, `textureFrame must be an integer value`)
     }
 
     this.updateMaterial(this.material)
@@ -106,7 +111,7 @@ AFRAME.registerComponent('simple-particles', {
     this.geometry = new THREE.BufferGeometry()
     this.updateGeometry(this.geometry, particleCount)
 
-    this.material = new THREE.ShaderMaterial({
+    this.material = new THREE.RawShaderMaterial({
       uniforms: {
         map: { type: 't', value: WHITE_TEXTURE },
         textureFrame: { value: new THREE.Vector2(1,1) },
@@ -142,7 +147,7 @@ AFRAME.registerComponent('simple-particles', {
     geometry.addAttribute("rotations", new THREE.Float32BufferAttribute(new Float32Array(particleCount*NUM_KEYFRAMES), NUM_KEYFRAMES))
     geometry.addAttribute("colors", new THREE.Float32BufferAttribute(new Float32Array(particleCount*NUM_KEYFRAMES), NUM_KEYFRAMES)) // rgb is packed into a single float
     geometry.addAttribute("opacities", new THREE.Float32BufferAttribute(new Float32Array(particleCount*NUM_KEYFRAMES).fill(1), NUM_KEYFRAMES))
-    geometry.addAttribute("frame", new THREE.Float32BufferAttribute(new Float32Array(particleCount), 1))
+    geometry.addAttribute("frame", new THREE.Float32BufferAttribute(new Float32Array(particleCount*2), 2))
     geometry.addAttribute("timings", new THREE.Float32BufferAttribute(new Float32Array(particleCount*3), 3))
     geometry.addAttribute("velocity", new THREE.Float32BufferAttribute(new Float32Array(particleCount*4), 4)) // linearVelocity (xyz) + radialVelocity
     geometry.addAttribute("acceleration", new THREE.Float32BufferAttribute(new Float32Array(particleCount*4), 4)) // linearAcceleration (xyz) + radialAcceleration
@@ -175,6 +180,8 @@ AFRAME.registerComponent('simple-particles', {
     if (data.useRadialMotion) defines.USE_RADIAL_MOTION = true
     if (data.useOrbitalMotion) defines.USE_ORBITAL_MOTION = true
     if (data.useLinearMotion) defines.USE_LINEAR_MOTION = true
+    if (data.useFramesOrRotation) defines.USE_FRAMES_OR_ROTATION = true
+    if (data.fog) defines.USE_FOG = true
 
     material.defines = defines
     
@@ -266,10 +273,14 @@ AFRAME.registerComponent('simple-particles', {
     timings.setXYZ(i, spawnTime, lifeTime, loopTime)
   },
 
-  setFrameAt(i, f, width = 1, height = 1) {
+  setFrameAt(i, frameStyle, startFrame, endFrame, width = 0, height = 0) {
+    width = width || this.data.textureFrame.x
+    height = height || this.data.textureFrame.y
+
     const frame = this.geometry.getAttribute("frame")
-    const pack = width + .015625*height + .000003814697265625*f
-    frame.setX(i, pack)
+    const packA = ~~(width) + .015625*~~(height) + .000003814697265625*~~(startFrame)
+    const packB = frameStyle + .000003814697265625*~~(endFrame)
+    frame.setXY(i, packA, packB)
   },
 
   setScalesAt(i, scaleArray) {
@@ -350,23 +361,27 @@ AFRAME.registerComponent('simple-particles', {
   }
 })
 
-// USE_RIBBON is a define on the material
-// attribute vec3 position is added automatically
 const SIMPLE_PARTICLE_VERTEX = `
+precision highp float;
+precision highp int;
+
 attribute vec4 row1;
 attribute vec4 row2;
 attribute vec4 row3;
+attribute vec3 position;
 attribute vec3 scales;
 attribute vec3 rotations;
 attribute vec3 colors;
 attribute vec3 opacities;
 attribute vec3 timings;
-attribute float frame;
+attribute vec2 frame;
 attribute vec4 velocity;
 attribute vec4 acceleration;
 attribute vec4 angularvelocity;
 attribute vec4 angularacceleration;
 
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
 uniform vec2 textureFrame;
 uniform float particleSize;
 uniform float usePerspective;
@@ -398,7 +413,7 @@ vec3 unpackRGB( float pack )
 float interpolate( const vec3 keys, const float r )
 {
   float k = r*2.;
-  return r < .5 ? mix( keys.x, keys.y, k ) : mix( keys.y, keys.z, k - 1. );
+  return k < 1. ? mix( keys.x, keys.y, k ) : mix( keys.y, keys.z, k - 1. );
 }
 
 // assumes euler order is YXZ
@@ -494,13 +509,26 @@ void main()
 
   vUvTransform = mat3( 1. );
 
-  vec3 frameInfo = unpackFrame( frame );
-  vec2 invTextureFrame = 1. / textureFrame;
+#if defined(USE_FRAMES_OR_ROTATION)
 
-  float tx = mod( frameInfo.z, textureFrame.x ) * invTextureFrame.x;
-  float ty = 1. - floor( frameInfo.z * invTextureFrame.x ) * invTextureFrame.y;
-  float sx = invTextureFrame.x * frameInfo.x;
-  float sy = invTextureFrame.y * frameInfo.y;
+  vec3 frameInfoA = unpackFrame( frame.x );
+  vec3 frameInfoB = unpackFrame( frame.y );
+
+  float frameWidth = frameInfoA.x;
+  float frameHeight = frameInfoA.y;
+  float startFrame = frameInfoA.z;
+  float endFrame = frameInfoB.z;
+  float frameStyle = frameInfoB.x;
+  float invFrameWidth = 1./frameWidth;
+  float invFrameHeight = 1./frameHeight;
+  float numFrames = endFrame - startFrame + 1.;
+  float currentFrame = floor( mix( startFrame, endFrame + .99999, timeRatio ) );
+  currentFrame = frameStyle == 0. ? currentFrame : floor( pseudoRandom( currentFrame * 6311. + spawnTime ) * numFrames ) + startFrame;
+
+  float tx = mod( currentFrame, frameWidth ) * invFrameWidth;
+  float ty = 1. - floor( currentFrame * invFrameWidth ) * invFrameHeight;
+  float sx = invFrameWidth;
+  float sy = invFrameHeight;
   float cx = .5 * sx;
   float cy = -.5 * sy;
   float c = cos( rotation );
@@ -512,6 +540,8 @@ void main()
   mat3 uvcenter = mat3( vec3( 1., 0., 0. ), vec3( 0., 1., 0. ), vec3( -cx / sx, cy / sy, 1. ) );  
 
   vUvTransform = uvtrans * uvscale * uvrot * uvcenter;
+
+#endif // USE_FRAMES_OR_ROTATION
 
 #if defined(USE_RIBBON)
 #else
@@ -527,8 +557,10 @@ void main()
 }`
 
 const SIMPLE_PARTICLE_FRAGMENT = `
+precision highp float;
+precision highp int;
+
 uniform sampler2D map;
-uniform vec3 emitterColor;
 uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
@@ -540,8 +572,6 @@ varying float vFogDepth;
 
 void main()
 {
-  // vec3 outgoingLight = vec3( 0. );
-  vec4 diffuseColor = vec4( emitterColor, 1. );
 
 #if defined(USE_RIBBON)
   vec2 uv = ( vUvTransform * vec3( vUv, 1. ) ).xy;
@@ -549,18 +579,17 @@ void main()
   vec2 uv = ( vUvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
 #endif // USE_RIBBON
 
-  diffuseColor = vParticleColor;
+  vec4 diffuseColor = vParticleColor;
 
   vec4 mapTexel = texture2D( map, uv );
-  diffuseColor *= mapTexelToLinear( mapTexel );
+  // diffuseColor *= mapTexelToLinear( mapTexel );
+  diffuseColor *= mapTexel;
 
 #if defined(ALPHATEST)
   if ( diffuseColor.a < ALPHATEST ) {
     discard;
   }
 #endif // ALPHATEST
-
-  // outgoingLight = diffuseColor.rgb;
 
   gl_FragColor = diffuseColor;
 

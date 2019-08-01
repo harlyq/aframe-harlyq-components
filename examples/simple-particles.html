@@ -8,11 +8,11 @@
   </head>
   <body>
     <a-scene fog="color: grey; near: 5; far: 10" stats background="color: grey">
-      <a-entity simple-particles="name: checkerboard; count: 100002; texture: url(assets/numbered_8x8_1024x1024.jpg); textureFrame: 8 8; particleSize: 100; alphaTest: .9; useAngularMotion: false; useOrbitalMotion: false; useRotation: false"></a-entity>
+      <a-entity simple-particles="name: checkerboard; count: 110000; texture: url(assets/numbered_8x8_1024x1024.jpg); textureFrame: 8 8; particleSize: 100; alphaTest: .9; useAngularMotion: false; useOrbitalMotion: false;"></a-entity>
       <a-torus-knot id="example" visible="false"></a-torus-knot>
-      <a-entity position="0 0 -5" simple-emitter="particles: checkerboard; count: 50000; lifeTime: 4.5; loopTime: 1.25; velocity: 0 0 0; acceleration: 0 -.1 0; colors: red,black; scales: 0,.9,0; frames: 0..63; rotations: 0..45; spawnShape: geometrytriangle; spawnGeometry: #example"></a-entity>
       <a-box position="-5 0 -5" visible="false" simple-emitter="particles: checkerboard; count: 50000; lifeTime: 10; loopTime: 12; colors: blue; radialAcceleration: -.01; scales: 0,.1,0; frames: 0..63; rotations: 0..45; spawnShape: geometrytriangle; spawnGeometry2: #example"></a-box>
-      <a-entity position="5 0 -5" simple-emitter="particles: checkerboard; count: 2; lifeTime: 10; scales: 10; frameSize: 1 3; frames: 8; rotations: 0,360;"></a-entity>
+      <a-entity position="0 0 -5" simple-emitter="particles: checkerboard; count: 50000; lifeTime: 4.5; loopTime: 1.25; velocity: 0 0 0; acceleration: 0 -.1 0; colors: red,black; scales: 0,.9,0; frames: 0..63; rotations: 0..45; spawnShape: geometrytriangle; spawnGeometry: #example"></a-entity>
+      <a-entity position="5 0 -5" simple-emitter="particles: checkerboard; textureFrame: 8 4; count: 1; lifeTime: 10; scales: 10; frames: 5,9; frameStyle: random; rotations: 0,360;"></a-entity>
     </a-scene>
   </body>
 </html>
