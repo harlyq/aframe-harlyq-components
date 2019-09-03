@@ -1,4 +1,4 @@
-import { aframeHelper, attribute, domHelper, pseudorandom, utils } from "harlyq-helpers"
+import { aframeHelper, attribute, domHelper, jsonHelper, pseudorandom, utils } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or events
@@ -151,7 +151,7 @@ function processValue( value, el, event ) {
     if ( !event ) {
       console.log( `value of $event but no event received` )
     } else {
-      result = attribute.stringify( utils.getWithPath( event, value.slice( 6 ).split( "." ) ) )
+      result = attribute.stringify( jsonHelper.getWithPath( event, value.slice( 6 ).split( "." ) ) )
     }
   } else {
     result = attribute.stringify( aframeHelper.getProperty( el, value.slice( 1 ) ) )

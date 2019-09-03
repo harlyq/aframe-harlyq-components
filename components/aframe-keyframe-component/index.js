@@ -1,4 +1,4 @@
-import { aframeHelper, attribute, domHelper, interpolation, pseudorandom, utils } from "harlyq-helpers"
+import { aframeHelper, attribute, domHelper, interpolation, jsonHelper, pseudorandom, utils } from "harlyq-helpers"
 
 const MAX_FRAME_TIME_MS = 100
 
@@ -35,7 +35,7 @@ function getPropertyAsString(target, prop) {
   }
 
   // e.g. object3dmap.mesh.material.uniforms.color
-  const path = utils.getWithPath(target, parts)
+  const path = jsonHelper.getWithPath(target, parts)
   if (path) {
     return attribute.stringify(path[prop])
   } else {
