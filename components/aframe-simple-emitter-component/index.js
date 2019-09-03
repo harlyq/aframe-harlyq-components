@@ -10,7 +10,7 @@ const SPAWN_GEOMETRY_FUNCTIONS = {
   "geometryvertex": threeHelper.randomVertex,
 }
 
-const FRAME_STYLES = ["sequence", "random"]
+const FRAME_STYLES = ["sequence", "randomsequence", "random"]
 
 function toLowerCase(str) {
   return str.toLowerCase()

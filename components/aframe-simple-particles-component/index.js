@@ -148,7 +148,7 @@ AFRAME.registerComponent('simple-particles', {
     geometry.addAttribute("colors", new THREE.Float32BufferAttribute(new Float32Array(particleCount*NUM_KEYFRAMES), NUM_KEYFRAMES)) // rgb is packed into a single float
     geometry.addAttribute("opacities", new THREE.Float32BufferAttribute(new Float32Array(particleCount*NUM_KEYFRAMES).fill(1), NUM_KEYFRAMES))
     geometry.addAttribute("frame", new THREE.Float32BufferAttribute(new Float32Array(particleCount*2), 2))
-    geometry.addAttribute("timings", new THREE.Float32BufferAttribute(new Float32Array(particleCount*3), 3))
+    geometry.addAttribute("timings", new THREE.Float32BufferAttribute(new Float32Array(particleCount*4), 4))
     geometry.addAttribute("velocity", new THREE.Float32BufferAttribute(new Float32Array(particleCount*4), 4)) // linearVelocity (xyz) + radialVelocity
     geometry.addAttribute("acceleration", new THREE.Float32BufferAttribute(new Float32Array(particleCount*4), 4)) // linearAcceleration (xyz) + radialAcceleration
     geometry.addAttribute("angularvelocity", new THREE.Float32BufferAttribute(new Float32Array(particleCount*4), 4)) // angularVelocity (xyz) + orbitalVelocity
@@ -268,9 +268,9 @@ AFRAME.registerComponent('simple-particles', {
     this.setKeyframesAt(opacities, i, opacityArray, 1)
   },
 
-  setTimingsAt(i, spawnTime, lifeTime, loopTime) {
+  setTimingsAt(i, spawnTime, lifeTime, loopTime, seed = Math.random() ) {
     const timings = this.geometry.getAttribute("timings")
-    timings.setXYZ(i, spawnTime, lifeTime, loopTime)
+    timings.setXYZW(i, spawnTime, lifeTime, loopTime, seed)
   },
 
   setFrameAt(i, frameStyle, startFrame, endFrame, width = 0, height = 0) {
@@ -373,7 +373,7 @@ attribute vec3 scales;
 attribute vec3 rotations;
 attribute vec3 colors;
 attribute vec3 opacities;
-attribute vec3 timings;
+attribute vec4 timings;
 attribute vec2 frame;
 attribute vec4 velocity;
 attribute vec4 acceleration;
@@ -448,6 +448,7 @@ void main()
   float spawnTime = timings.x;
   float lifeTime = timings.y;
   float loopTime = timings.z;
+  float seed = timings.w;
   float age = mod( t - spawnTime, loopTime );
   float timeRatio = age / lifeTime;
 
@@ -523,7 +524,10 @@ void main()
   float invFrameHeight = 1./frameHeight;
   float numFrames = endFrame - startFrame + 1.;
   float currentFrame = floor( mix( startFrame, endFrame + .99999, timeRatio ) );
-  currentFrame = frameStyle == 0. ? currentFrame : floor( pseudoRandom( currentFrame * 6311. + spawnTime ) * numFrames ) + startFrame;
+
+  currentFrame = frameStyle == 0. ? currentFrame 
+    : frameStyle == 1. ? ( floor( pseudoRandom( currentFrame * 6311. + seed ) * numFrames ) + startFrame  )
+    : ( floor( seed * numFrames ) + startFrame );
 
   float tx = mod( currentFrame, frameWidth ) * invFrameWidth;
   float ty = 1. - floor( currentFrame * invFrameWidth ) * invFrameHeight;
