@@ -1,4 +1,4 @@
-import { aframeHelper, attribute, domHelper, interpolation, jsonHelper, pseudorandom, utils } from "harlyq-helpers"
+import { aframeHelper, attribute, domHelper, interpolation, jsonHelper, pseudorandom } from "harlyq-helpers"
 
 const MAX_FRAME_TIME_MS = 100
 

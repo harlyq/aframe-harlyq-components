@@ -1,6 +1,8 @@
 # uv-transform
 
-Wraps the threejs texture uvTransform logic, providing functionality to set the offset, repeat and rotation of a texture.  The transform is applied to the alphaMap, bumpMap, displacementMap, emissiveMap, map, metalnessMap, normalMap, and roughnessMap (if they exist)
+Wraps the threejs texture uvTransform logic, providing functionality to set the offset, repeat and rotation of a texture.  The transform is applied to the alphaMap, bumpMap, displacementMap, emissiveMap, map, metalnessMap, normalMap, and roughnessMap (if they exist).
+
+Note that 0,0 represents the bottom left of the texture and 1,1 is the top right.
 
 e.g.
 ```html
@@ -11,9 +13,9 @@ Applies an offset of `.2 .2`, rotation of `95` degrees (centered around the defa
 This component can appear multiple times on the same instance (typically for different meshes)
 
 ## Properties
-**center**: vec2 = `.5 .5`
+**frame**: number = `0`
 
-The pivot in UV coords about which this texture is rotated
+The frame to show (starting from 0).  The frame dimensions are set in **textureFrame**, and frame 0 represents the top leftmost frame, with frames numbered sequentially left to right, then continuing from the leftmost frame of the next row
 
 ---
 **maps**: string = `map`
@@ -31,14 +33,24 @@ Name of the mesh to apply the transform to
 Offset in UV coords for translating this texture
 
 ---
+**pivot**: vec2 = `.5 .5`
+
+The pivot in UV coords about which this texture is rotated
+
+---
 **repeat**: vec2 = `1 1`
 
 Number of times to repeat this texture
 
 ---
-**rotation**: number = `0`
+**rotate**: number = `0`
 
-Angle in degrees to rotate this texture about the **center**
+Angle in degrees to rotate this texture about the **pivot**.  Positive numbers represent anti-clockwise rotations
+
+---
+**textureFrame**: vec2 = `1 1`
+
+The frame dimensions of this texture. `1 1` indicates that there is only a single frame, frame 0. `4 8` would be 4 frames wide and 8 frames high
 
 ---
 **wrapS**: `repeat` | `clampToEdge` | `mirroredRepeat` = `repeat`
