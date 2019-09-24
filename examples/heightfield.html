@@ -5,7 +5,7 @@
     <script src="https://aframe.io/releases/0.9.2/aframe.js"></script>
     <!--script src="../../aframe/aframe-0.9.2.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
-    <script id="thingshader" type="x-shader/x-fragment">
+    <script id="heightmapshader" type="x-shader/x-fragment">
       #include <procedural-ext>
       uniform float multiplier;
       uniform float offset;
@@ -25,36 +25,72 @@
     </script>
   </head>
   <body>
-    <a-scene>
+    <a-scene background="color: pink">
       <a-assets>
-        <canvas id="thing" width="64" height="64">
+        <canvas id="heightmap" width="64" height="64">
         <canvas id="ramp" width="64" height="64">
+        <canvas id="island" width="64" height="64">
       </a-assets>
-      <a-entity id="island"
-        procedural-texture__thing="shader: #thingshader; canvas: #thing; multiplier: 3; offset: .1"
-        heightfield="src: #thing; channels: r; numRows: 32; numCols: 32; heightScale: .4; smooth: false" material="color: white; side: double;" position="0 1 -2"
+      <a-entity
+        procedural-texture__heightmap="shader: #heightmapshader; canvas: #heightmap; multiplier: 3; offset: .1"
+        procedural-texture__ramp="shader: #rampshader; canvas: #ramp;"
+        visible="false"
+        pixel-color__ground="color: brown; src: #heightmap; canvas: #island;"
+        pixel-color__snow="src: #heightmap; canvas: #island; color: grey; maxSlope: 80; minIntensity: .75"
+        pixel-color__tree="src: #heightmap; canvas: #island; color: green; maxSlope: 60; maxIntensity: .25"
+        pixel-color__sea= "src: #heightmap; canvas: #island; color: blue; maxIntensity: 0"
+      ></a-entity>
+      
+      <a-entity id="heightmap"
+        position="0 1 -3"
+        heightfield="src: #heightmap; channels: r; numRows: 32; numCols: 32; heightScale: .4; smooth: false" material="color: white; side: double;"
         face-color__ground="color: brown"
         face-color__snow="color: grey; maxSlope: 70; minPosition: 0 .3 0"
         face-color__tree="color: green; maxPosition: 1 .1 1; maxSlope: 40"
-        face-color__sea="color: blue; maxPosition: 1 0 1"></a-entity>
-      <a-box material="src: #thing; color: grey;" scale=".1 .1 .1" position="0 1 -1"></a-box>
+        face-color__sea="color: blue; maxPosition: 1 0 1"
+      >
+        <a-box material="src: #heightmap; color: grey;" scale=".1 .1 .1" position="0 0 1"></a-box>
+      </a-entity>
 
-      <a-entity id="smoothIsland"
-        position="1.5 1 -2"
-        procedural-texture__thing="shader: #thingshader; canvas: #thing; multiplier: 3; offset: .1"
-        heightfield="src: #thing; channels: r; numRows: 32; numCols: 32; heightScale: .4; smooth: true" material="color: white; side: double;" position="0 1 -2"
+      <a-entity id="smoothheightmap"
+        position="1.5 1 -3"
+        heightfield="src: #heightmap; channels: r; numRows: 32; numCols: 32; heightScale: .4; smooth: true" material="color: white; side: double;"
         vertex-color__ground="color: brown"
         vertex-color__snow="color: grey; maxSlope: 70; minPosition: 0 .3 0"
         vertex-color__tree="color: green; maxPosition: 1 .1 1; maxSlope: 40"
-        vertex-color__sea="color: blue; maxPosition: 1 0 1"></a-entity>
-      <a-box material="src: #thing; color: grey;" scale=".1 .1 .1" position="1.5 1 -1"></a-box>
+        vertex-color__sea="color: blue; maxPosition: 1 0 1"
+      >
+        <a-box material="src: #heightmap; color: grey;" scale=".1 .1 .1" position="0 0 1"></a-box>
+      </a-entity>
+
+      <a-plane id="displacementheightmap" 
+        position="3 1 -3"
+        rotation="-90 0 0"
+        segments-width="32"
+        segments-height="32"
+        material="src: #island; displacementMap: #heightmap; displacementBias: 0; flatShading: true; displacementScale: .4"
+      >
+        <a-box id ="displacementheightmapexample" material="src: #island; color: grey;" scale=".1 .1 .1" position="0 -1 0"></a-box>
+      </a-plane>
+
+      <a-plane id="smoothDisplacementheightmap" 
+        position="3 0 -3"
+        rotation="-90 0 0"
+        segments-width="32"
+        segments-height="32"
+        material="src: #island; displacementMap: #heightmap; displacementBias: 0; displacementScale: .5"
+      >
+        <a-box material="src: #island; color: grey;" scale=".1 .1 .1" position="0 -1 0"></a-box>
+      </a-plane>
 
       <a-entity id="test"
-        procedural-texture__ramp="shader: #rampshader; canvas: #ramp;"
+        position="-1.5 1 -3"
         heightfield="src: #ramp; channels: g; numRows: 32; numCols: 32; smooth: true"
-        material="wireframe: true; side: double; src: #ramp"
-        position="-1.5 1 -2"></a-entity>
-      <a-box material="src: #ramp;" scale=".1 .1 .1" position="-1.5 1 -1"></a-box>
+        material="wireframe: true; side: double; src: #ramp;"
+      >
+        <a-box material="src: #ramp;" scale=".1 .1 .1" position="0 0 1"></a-box>
+      </a-entity>
+      
 
       <a-box id="facecolor" position="2 2 -2" scale=".1 .1 .1" face-color__0="faces: 0,1; color: red" face-color__2="faces: 2,3; color: blue" face-color__4="faces: 4,5; color: yellow" face-color__6="faces: 6,7; color: magenta" face-color__8="faces: 8,9; color: cyan"></a-box-->
     </a-scene>

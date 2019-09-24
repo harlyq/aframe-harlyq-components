@@ -10,9 +10,11 @@
     <a-scene background="color: grey">
       <a-assets>
         <img id="checker" src="assets/numbered_8x8_1024x1024.jpg">
+        <img id="waterfall" src="assets/waterfall.jpg">
       </a-assets>
-      <a-plane id="A" position="-1 1 -2" scale=".5 .5" material="src:#checker" uv-transform="textureFrame: 1 1"></a-plane>
+      <a-plane id="A" position="-1 1 -2" scale=".5 .5" material="src:#checker" uv-transform="offset: .5 .5"></a-plane>
       <a-plane id="B" position="0 1 -2" scale=".5 .5" material="src:#checker" uv-transform="textureFrame: 8 8; frame: 63; rotate: 30" keyframe="duration: 20; uv-transform.rotate: 0,360; uv-transform.frame: 0,64"></a-plane>
+      <a-plane id="c" position="1 1 -2" scale=".25 .5" material="src:#waterfall" uv-transform="textureFrame: 4 1; repeat: 1 .8" keyframe__fall="duration: 5; uv-transform.offset: 0 0,0 1;" keyframe__rand="duration: .1; uv-transform.frame: 0..3"></a-plane>
     </a-scene>
   </body>
 </html>
