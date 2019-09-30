@@ -71,7 +71,7 @@ AFRAME.registerComponent('simple-emitter', {
 
     this.lifeTime = attribute.parseNumber(data.lifeTime)
     this.loopTime = attribute.parseNumber(data.loopTime)
-    this.rotations = attribute.parseNumberArray(data.rotations, false, degToRad)
+    this.rotations = attribute.parseNumberArray(data.rotations, degToRad)
     this.scales = attribute.parseNumberArray(data.scales)
     this.opacities = attribute.parseNumberArray(data.opacities)
     this.colors = attribute.parseColorArray(data.colors)

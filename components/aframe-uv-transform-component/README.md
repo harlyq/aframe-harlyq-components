@@ -30,7 +30,7 @@ Name of the mesh to apply the transform to
 ---
 **offset**: vec2 = `0 0`
 
-Offset in UV coords for translating this texture
+Offset in UV coords for translating this texture. 0 is for no-offset and 1 represents a 100% offset
 
 ---
 **pivot**: vec2 = `.5 .5`

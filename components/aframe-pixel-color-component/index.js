@@ -100,8 +100,7 @@ AFRAME.registerComponent("pixel-color", {
           const ySlope = ( y === 0 ? intensity - intensities[i + srcWidth]  : intensities[i - srcWidth] - intensity ) * srcHeight
           const slope = Math.max( Math.abs(xSlope), Math.abs(ySlope) )
           doPaint = slope >= minSlope && slope <= maxSlope
-          console.log(slope, doPaint)
-        }
+       }
 
         if (doPaint) {
           overlayImageData[j] = color256.r
