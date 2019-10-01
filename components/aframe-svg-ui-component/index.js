@@ -58,18 +58,18 @@ AFRAME.registerComponent("svg-ui", {
     this.touchEls = new Map()
     this.hasPendingUpdateSVGTexture = false
 
-    this.onSetObject3D = this.onSetObject3D.bind(this)
+    this.onObject3DSet = this.onObject3DSet.bind(this)
     this.onRaycasterIntersected = this.onRaycasterIntersected.bind(this)
     this.onRaycasterIntersectedCleared = this.onRaycasterIntersectedCleared.bind(this)
     this.onClick = this.onClick.bind(this)
 
-    this.el.addEventListener("setobject3d", this.onSetObject3D)
+    this.el.addEventListener("object3dset", this.onObject3DSet)
 
     this.createSVGTexture()
   },
 
   remove() {
-    this.el.removeEventListener("setobject3d", this.onSetObject3D)
+    this.el.removeEventListener("object3dset", this.onObject3DSet)
 
     if (this.proxyEl && this.proxyEl.parent) {
       this.proxyEl.parent.removeChild(this.proxyEl)
@@ -419,7 +419,7 @@ AFRAME.registerComponent("svg-ui", {
     }
   },
 
-  onSetObject3D(e) {
+  onObject3DSet(e) {
     this.showSVGTextureOnMesh()
   },
 

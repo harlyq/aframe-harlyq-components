@@ -7,12 +7,11 @@ const ATTEMPT_MULTIPLIER = 4
 
 AFRAME.registerComponent("foliage", {
   schema: {
+    instancePool: { type: "selector" },
     cellSize: { default: 10 },
-    model: { type: "asset" },
     modelScale: { type: "vec3", default: { x:1, y:1, z:1 } },
     avoidance: { default: 1 },
     densities: { default: "1" },
-    level: { default: 1 },
     intensityMap: { type: "selector" },
     debugCanvas: { type: "selector" },
     seed: { default: -1 }
@@ -23,13 +22,15 @@ AFRAME.registerComponent("foliage", {
   init() {
     this.cells = []
     this.lcg = pseudorandom.lcg()
-    this.model = null;
-    this.loader = new THREE.GLTFLoader();
 
-    // let dracoLoader = this.system.getDRACOLoader();
-    // if (dracoLoader) {
-    //   this.loader.setDRACOLoader(dracoLoader);
-    // }
+    this.onPoolAvailable = this.onPoolAvailable.bind(this)
+  },
+
+  remove() {
+    if (this.data.instancePool) {
+      this.data.instancePool.removeEventListener("pool-available", this.onPoolAvailable)
+    }
+    this.removeModels()
   },
 
   update(oldData) {
@@ -39,29 +40,17 @@ AFRAME.registerComponent("foliage", {
 
     this.drawCtx = data.debugCanvas instanceof HTMLCanvasElement ? data.debugCanvas.getContext("2d") : undefined
 
-    if (data.model) {
-      this.loadModel(data.model)
-    }
-  },
+    // if (data.model) {
+    //   this.loadModel(data.model)
+    // }
 
-  loadModel(name) {
-    const self = this
-
-    this.loader.load(name, 
-      (gltfModel) => {
-        self.model = gltfModel.scene || gltfModel.scenes[0];
-        // self.model.animations = gltfModel.animations;
-        // el.setObject3D('mesh', self.model);
-        self.el.emit('model-loaded', {format: 'gltf', model: self.model});
+    if (data.instancePool) {
+      this.pool = data.instancePool.components["instance-pool"]
+      data.instancePool.addEventListener("pool-available", this.onPoolAvailable)
+      if (this.pool.isAvailable()) {
         this.createFoliage()
-      }, 
-      undefined /* onProgress */, 
-      (error) => {
-        var message = (error && error.message) ? error.message : `Failed to load glTF model '${name}'`;
-        console.warn(message);
-        self.el.emit('model-error', {format: 'gltf', src: name});
       }
-    )
+    }
   },
 
   createFoliage() {
@@ -90,16 +79,20 @@ AFRAME.registerComponent("foliage", {
     } ) // in the range 0..1
 
     const sortedIndices = Array.from( intensities.keys() ).sort( (a,b) => intensities[b] - intensities[a] ) // descending
+    const levels = intensities.map(intensity => Math.trunc( intensity * ( maxDensities + 1 ) ) ) // +1 because we include the 0th
+    const estimatedCount = levels.reduce((t,x) => x > 0 ? t + this.densities[x - 1] : t, 0)
 
-    for (let cell of this.cells)
-      this.removeModels(cell)
+    this.removeModels()
+    this.poolIndex = this.pool.reserveBlock( estimatedCount )
 
     this.cells = []
     this.drawGrid2D(width, height, "black")
 
+    let start = this.poolIndex
+    this.el.sceneEl.object3D.updateMatrixWorld(true) // we want to capture the whole hierarchy, is there a better way to do this?
+
     for (let index of sortedIndices) {
-      const intensity = intensities[index]
-      const level = Math.trunc( intensity * ( maxDensities + 1 ) ) // +1 because we include the 0th
+      const level = levels[index]
       if (level === 0) {
         break
       }
@@ -109,32 +102,34 @@ AFRAME.registerComponent("foliage", {
       const newCell = this.populateCell(level, index, x, y, width, height, data.cellSize, density, data.avoidance, this.model, data.modelScale)
       this.cells[index] = newCell
 
-      this.addModels(newCell, width, height, data.cellSize)
+      start += this.addModels(newCell, start, width, height, data.cellSize)
     }
 
     threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, data.debugCanvas)
   },
 
-  addModels(cell, width, height, cellSize) {
+  addModels(cell, start, width, height, cellSize) {
+    const pos = new THREE.Vector3()
+    const foliage3D = this.el.object3D
+
     for (let k = 0; k < cell.objects.length; k++) {
       const obj = cell.objects[k]
 
-      if (obj.model) {
-        const model = obj.model.clone()
-        const x = (obj.x - width/2)*cellSize
-        const y = 0 
-        const z = (obj.y - height/2)*cellSize
+      pos.x = (obj.x - width/2)*cellSize
+      pos.y = 0
+      pos.z = (obj.y - height/2)*cellSize
+      pos.applyMatrix4(foliage3D.matrixWorld)
 
-        model.scale.copy(obj.modelScale)
-        model.position.set(x,y,z)
-        this.el.setObject3D( instanceName(cell.level, cell.id, k), model )
-      }
+      this.pool.setScaleAt(start + k, obj.modelScale.x, obj.modelScale.y, obj.modelScale.z)
+      this.pool.setPositionAt(start + k, pos.x, pos.y, pos.z)
     }
+
+    return cell.objects.length
   },
 
   removeModels(cell) {
-    for (let k = 0; k < cell.objects.length; k++) {
-      this.el.removeObject3D( instanceName(cell.level, cell.id, k) )
+    if (this.poolIndex) {
+      this.pool.releaseBlock( this.poolIndex )
     }
   },
 
@@ -179,6 +174,12 @@ AFRAME.registerComponent("foliage", {
     }
 
     return cell
+  },
+
+  onPoolAvailable(evt) {
+    if (evt.detail.pool === this.pool) {
+      this.createFoliage()
+    }
   },
 
   drawCircle2D(x, y, r, col, fill = false) {

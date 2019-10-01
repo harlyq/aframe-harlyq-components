@@ -2,8 +2,8 @@
 <html>
   <head>
     <title>Heightfield examples</title>
-    <script src="https://aframe.io/releases/0.9.2/aframe.js"></script>
-    <!--script src="../../aframe/aframe-0.9.2.js"></script-->
+    <!--script src="https://aframe.io/releases/0.9.2/aframe.js"></script-->
+    <script src="../../aframe/aframe-0.9.2.js"></script>
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="heightmapshader" type="x-shader/x-fragment">
       #include <procedural-ext>
@@ -57,6 +57,7 @@
         pixel-color__tree="src: #heightmap; canvas: #island; color: green; maxSlope: 60; maxIntensity: .25"
         pixel-color__sea= "src: #heightmap; canvas: #island; color: blue; maxIntensity: 0"
       ></a-entity>
+      <a-gltf-model id="treepool" src="#tree" instance-pool=""></a-gltf-model>
       <a-entity light="type: ambient; color: #BBB"></a-entity>
       <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="-0.5 1 1"></a-entity>
       
@@ -134,7 +135,7 @@
         position="-1.5 0 -3"
       >
         <a-plane position="0 0 -1" material="src: #debugCanvas; side: double"></a-plane>
-        <a-entity foliage__tree="intensityMap: #foliage; debugCanvas: #debugCanvas; seed: 73281; model: #tree; modelScale: .02 .02 .02; cellSize: .1; level: 3; densities: 1,5,10; avoidance: .01"></a-entity>
+        <a-entity foliage__tree="instancePool: #treepool; intensityMap: #foliage; debugCanvas: #debugCanvas; seed: 73281; model: #tree; modelScale: .02 .02 .02; cellSize: .1; level: 3; densities: 1,5,10; avoidance: .01"></a-entity>
         <a-box position="0 0 1" scale=".1 .1 .1" material="src: #foliage"></a-box>
       </a-entity>
       

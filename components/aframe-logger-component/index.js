@@ -88,13 +88,13 @@ AFRAME.registerComponent("logger", {
   init() {
     this.dirty = true
     this.messages = []
-    this.onSetObject3D = this.onSetObject3D.bind(this)
+    this.onObject3DSet = this.onObject3DSet.bind(this)
 
     this.system.registerLogger(this)
 
     this.createTexture()
 
-    this.el.addEventListener("setobject3d", this.onSetObject3D)
+    this.el.addEventListener("object3dset", this.onObject3DSet)
 
     // let count = 0x20
     // let str = ""
@@ -111,7 +111,7 @@ AFRAME.registerComponent("logger", {
   },
 
   remove() {
-    this.el.removeEventListener("setobject3d", this.onSetObject3D)
+    this.el.removeEventListener("object3dset", this.onObject3DSet)
 
     this.system.unregisterLogger(this)
   },
@@ -227,7 +227,7 @@ AFRAME.registerComponent("logger", {
     this.dirty = true
   },
 
-  onSetObject3D(e) {
+  onObject3DSet(e) {
     this.showTexture()
   },
 })

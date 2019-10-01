@@ -22,15 +22,16 @@ AFRAME.registerComponent("instance-pool", {
     this.reservedCount = 0
     this.occupiedBlocks = []
     this.freeBlocks = []
+    this.inCreateInstances = false
 
-    this.onSetObject3D = this.onSetObject3D.bind(this)
+    this.onObject3DSet = this.onObject3DSet.bind(this)
     this.onBeforeCompile = this.onBeforeCompile.bind(this)
 
-    this.el.addEventListener("setobject3d", this.onSetObject3D)
+    this.el.addEventListener("object3dset", this.onObject3DSet)
   },
 
   remove() {
-    this.el.removeEventListener("setobject3d", this.setobject3d)
+    this.el.removeEventListener("object3dset", this.setobject3d)
     this.destroyInstances()
   },
 
@@ -38,19 +39,21 @@ AFRAME.registerComponent("instance-pool", {
     this.createInstances()
   },
 
-  onSetObject3D(e) {
-    if (e.target === this.el && e.detail.type === "mesh") {
+  onObject3DSet(e) {
+    if ( !this.inCreateInstances && e.target === this.el && e.detail.type === "mesh" ) {
       this.destroyInstances()
       this.createInstances()
     }
   },
 
   createInstances() {
-    const mesh = this.el.getObject3D("mesh")
+    const obj3D = this.el.getObject3D("mesh")
+    const mesh = obj3D ? obj3D.getObjectByProperty("isMesh", true) : undefined // find the first mesh
     if (!mesh || !mesh.geometry || !mesh.material) {
       return
     }
 
+    this.inCreateInstances = true
     this.oldMesh = mesh
 
     const data = this.data
@@ -100,6 +103,9 @@ AFRAME.registerComponent("instance-pool", {
     this.reservedCount = 0
     this.freeBlocks = [[0, numInstances]] // blockIndex, number of instances
     this.occupiedBlocks = []
+
+    this.inCreateInstances = false
+    this.el.emit( "pool-available", { pool: this } )
   },
 
   destroyInstances() {
@@ -174,6 +180,10 @@ AFRAME.registerComponent("instance-pool", {
       shader.vertexShader = vertexShader
       shader.fragmentShader = fragmentShader
     }
+  },
+
+  isAvailable() {
+    return !!this.instancedGeoemtry
   },
 
   reserveBlock(requestedSize) {
