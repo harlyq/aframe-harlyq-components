@@ -187,6 +187,10 @@ AFRAME.registerComponent("instance-pool", {
   },
 
   reserveBlock(requestedSize) {
+    if (requestedSize <= 0) {
+      return undefined
+    }
+
     // search in reverse, prefer to reuse released blocks
     for (let j = this.freeBlocks.length - 1; j >= 0; j--) {
       const block = this.freeBlocks[j]

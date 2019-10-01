@@ -2,7 +2,6 @@ import { pseudorandom, threeHelper } from "harlyq-helpers"
 
 const indexFromXY = (x,y, width) => y*width + x
 const xyFromIndex = (i, width) => [ i % width, Math.trunc( i/width ) ]
-const instanceName = (level, index, count) => `${level}_${index}_${count}`
 const ATTEMPT_MULTIPLIER = 4
 
 AFRAME.registerComponent("foliage", {
@@ -82,13 +81,13 @@ AFRAME.registerComponent("foliage", {
     const levels = intensities.map(intensity => Math.trunc( intensity * ( maxDensities + 1 ) ) ) // +1 because we include the 0th
     const estimatedCount = levels.reduce((t,x) => x > 0 ? t + this.densities[x - 1] : t, 0)
 
-    this.removeModels()
-    this.poolIndex = this.pool.reserveBlock( estimatedCount )
+    for (let cell of this.cells) {
+      this.removeModels(cell)
+    }
 
     this.cells = []
     this.drawGrid2D(width, height, "black")
 
-    let start = this.poolIndex
     this.el.sceneEl.object3D.updateMatrixWorld(true) // we want to capture the whole hierarchy, is there a better way to do this?
 
     for (let index of sortedIndices) {
@@ -102,17 +101,31 @@ AFRAME.registerComponent("foliage", {
       const newCell = this.populateCell(level, index, x, y, width, height, data.cellSize, density, data.avoidance, this.model, data.modelScale)
       this.cells[index] = newCell
 
-      start += this.addModels(newCell, start, width, height, data.cellSize)
+      this.addModels(newCell, width, height, data.cellSize)
     }
 
     threeHelper.updateMaterialsUsingThisCanvas(this.el.sceneEl.object3D, data.debugCanvas)
   },
 
-  addModels(cell, start, width, height, cellSize) {
+  addModels(cell, width, height, cellSize) {
     const pos = new THREE.Vector3()
     const foliage3D = this.el.object3D
+    const objectCount = cell.objects.length
 
-    for (let k = 0; k < cell.objects.length; k++) {
+    if (!cell.indexCount || cell.indexCount < objectCount) {
+      if (cell.indexCount) {
+        this.pool.releaseBlock(objectCount)
+      }
+      cell.index = this.pool.reserveBlock(objectCount)
+      cell.indexCount = objectCount
+    }
+
+    if (cell.index === undefined) {
+      return // objectCount is 0 or there are no instances available
+    }
+
+    const start = cell.index
+    for (let k = 0; k < objectCount; k++) {
       const obj = cell.objects[k]
 
       pos.x = (obj.x - width/2)*cellSize
@@ -128,8 +141,10 @@ AFRAME.registerComponent("foliage", {
   },
 
   removeModels(cell) {
-    if (this.poolIndex) {
-      this.pool.releaseBlock( this.poolIndex )
+    if (this.poolIndex && cell.indexCount > 0) {
+      this.pool.releaseBlock( cell.index )
+      cell.indexCount = 0
+      cell.index = undefined
     }
   },
 
