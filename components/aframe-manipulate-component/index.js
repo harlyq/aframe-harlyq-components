@@ -31,6 +31,8 @@ AFRAME.registerComponent("manipulate", {
       startGap: new THREE.Vector3(),
       invPivotMatrix: new THREE.Matrix4(),
       startWorldPosition: new THREE.Vector3(),
+      pivotPos: new THREE.Vector3(),
+      pivotQuat: new THREE.Quaternion(),
     }
   },
 
@@ -156,13 +158,12 @@ AFRAME.registerComponent("manipulate", {
   },
 
   captureStartPositions: (function() {
-    const pivotPos = new THREE.Vector3()
-    const pivotQuat = new THREE.Quaternion()
     const invHandMatrix = new THREE.Matrix4()
     const UNIFORM_SCALE = new THREE.Vector3(1,1,1)
 
     return function captureStartPositions() {
-      const target3D = this.data.target ? this.data.target.object3D : this.el.object3D
+      const data = this.data
+      const target3D = data.target ? data.target.object3D : this.el.object3D
       this.capture.object3D = target3D
 
       if (target3D) {
@@ -172,7 +173,7 @@ AFRAME.registerComponent("manipulate", {
         }
 
         target3D.updateMatrixWorld()
-        target3D.getWorldPosition( this.capture.startWorldPosition )
+        this.capture.startWorldPosition.copy( data.pivot ).applyMatrix4( target3D.matrixWorld )
 
         this.capture.startPosition.copy(target3D.position)
         this.capture.startQuaternion.copy(target3D.quaternion)
@@ -184,8 +185,8 @@ AFRAME.registerComponent("manipulate", {
           const left3D = this.activeSides[0].handEl.object3D
           const right3D = this.activeSides[1].handEl.object3D
           this.capture.handGap.copy(right3D.position).sub(left3D.position)
-          this.calcMatrixFromHands(pivotPos, pivotQuat, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
-          invHandMatrix.compose( pivotPos, pivotQuat, UNIFORM_SCALE )
+          this.calcMatrixFromHands(this.capture.pivotPos, this.capture.pivotQuat, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
+          invHandMatrix.compose( this.capture.pivotPos, this.capture.pivotQuat, UNIFORM_SCALE )
           invHandMatrix.getInverse( invHandMatrix )
           this.capture.startGap.copy(right3D.position).applyMatrix4(invHandMatrix).normalize()
           this.capture.invPivotMatrix.copy(invHandMatrix).multiply(target3D.matrix)
@@ -196,7 +197,7 @@ AFRAME.registerComponent("manipulate", {
           this.capture.invPivotMatrix.getInverse(hand3D.matrixWorld).multiply(target3D.matrixWorld)
         }
       } else {
-        aframeHelper.warn(`unable to find Object3D for '${this.data.target}'`)
+        aframeHelper.warn(`unable to find Object3D for '${data.target}'`)
       }
     }
   
@@ -207,8 +208,7 @@ AFRAME.registerComponent("manipulate", {
     const startGap = new THREE.Vector3()
     const newGap = new THREE.Vector3()
     const newScale = new THREE.Vector3(1,1,1)
-    // const newEuler = new THREE.Euler(0,0,0,"YXZ")
-    // const newQuaternion = new THREE.Quaternion()
+    const newQuaternion = new THREE.Quaternion()
     const invParentMatrix = new THREE.Matrix4()
     const newMatrix = new THREE.Matrix4()
 
@@ -225,19 +225,27 @@ AFRAME.registerComponent("manipulate", {
         if (this.oneHanded.uniformScale) {
           const scale = newGap.length()/startGap.length()
           newScale.set(scale, scale, scale)
+          target3D.scale.copy( newScale.multiply(this.capture.startScale) )
+        }
+        
+        if (this.oneHanded.scale) {
+          newScale.copy(newGap).divide(startGap)
+          this.applyMask(newScale, this.oneHanded.scale, 1)
+          target3D.scale.copy( newScale.multiply(this.capture.startScale) )
         }
 
         if (this.oneHanded.translate) {
           hand3D.getWorldPosition(newTranslate).sub(side.grabPosition)
+          this.applyMask(newTranslate, this.oneHanded.translate, 0)
           target3D.position.copy( newTranslate.add(this.capture.startPosition) )
         }
 
-        // newQuaternion.setFromUnitVectors(startGap.normalize(), newGap.normalize())
-        // newEuler.setFromQuaternion(newQuaternion, "YXZ")
-        // newQuaternion.setFromEuler(newEuler)
-
-        // target3D.quaternion.copy( newQuaternion.multiply( this.capture.startQuaternion ) )
-        // target3D.scale.copy( newScale.multiply( this.capture.startScale ) )
+        if (this.oneHanded.rotate) {
+          this.applyMask(startGap, this.oneHanded.rotate, 0)
+          this.applyMask(newGap, this.oneHanded.rotate, 0)
+          newQuaternion.setFromUnitVectors(startGap.normalize(), newGap.normalize())
+          target3D.quaternion.copy( newQuaternion.multiply(this.capture.startQuaternion) )
+        }
 
         if (this.oneHanded.grab) {
           invParentMatrix.getInverse(target3D.parent.matrixWorld)
@@ -252,13 +260,15 @@ AFRAME.registerComponent("manipulate", {
   tickTwoHanded: (function() {
     const firstPosition = new THREE.Vector3()
     const secondPosition = new THREE.Vector3()
-    const newHandGap = new THREE.Vector3()
+    const newGap = new THREE.Vector3()
+    const startGap = new THREE.Vector3()
     const newRotationGap = new THREE.Vector3()
-    const newPivot = new THREE.Vector3()
+    const pivotPosition = new THREE.Vector3()
     const newScale = new THREE.Vector3(1,1,1)
+    const newTranslate = new THREE.Vector3()
     const newQuaternion = new THREE.Quaternion()
     const newMatrix = new THREE.Matrix4()
-    const secondQuaternion = new THREE.Quaternion()
+    const pivotQuaternion = new THREE.Quaternion()
     const invNewMatrix = new THREE.Matrix4()
     const UNIFORM_SCALE = new THREE.Vector3(1,1,1)
 
@@ -269,29 +279,49 @@ AFRAME.registerComponent("manipulate", {
         const right3D = this.activeSides[1].handEl.object3D
         firstPosition.copy(left3D.position)
         secondPosition.copy(right3D.position)
-        newHandGap.copy(secondPosition).sub(firstPosition)
+        newGap.copy(secondPosition).sub(firstPosition)
+
+        this.calcMatrixFromHands(pivotPosition, pivotQuaternion, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
+        newMatrix.compose(pivotPosition, pivotQuaternion, UNIFORM_SCALE)
 
         if (this.twoHanded.uniformScale) {
-          const scale = newHandGap.length() / this.capture.handGap.length()
+          const scale = newGap.length() / this.capture.handGap.length()
           newScale.set(scale, scale, scale)
-          target3D.scale.copy( newScale.multiply( this.capture.startScale ) )
+          target3D.scale.copy( newScale.multiply(this.capture.startScale) )
+        }
+        
+        if (this.twoHanded.scale) {
+          newScale.copy(newGap).divide(this.capture.handGap)
+          this.applyMask(newScale, this.twoHanded.scale, 1)
+          target3D.scale.copy( newScale.multiply(this.capture.startScale) )
         }
 
-        if (this.twoHanded.grab) {
-          this.calcMatrixFromHands(newPivot, secondQuaternion, left3D.position, left3D.quaternion, right3D.position, right3D.quaternion)
-          newMatrix.compose(newPivot, secondQuaternion, UNIFORM_SCALE)
-  
+        if (this.twoHanded.translate) {
+          newTranslate.copy(pivotPosition).sub(this.capture.pivotPos)
+          this.applyMask(newTranslate, this.twoHanded.translate, 0)
+          target3D.position.copy( newTranslate.add(this.capture.startPosition) )
+        }
+
+        if (this.twoHanded.rotate) {
+          startGap.copy(this.capture.handGap)
+          this.applyMask(startGap, this.twoHanded.rotate, 0)
+          this.applyMask(newGap, this.twoHanded.rotate, 0)
+          newQuaternion.setFromUnitVectors(startGap.normalize(), newGap.normalize())
+          target3D.quaternion.copy( newQuaternion.multiply(this.capture.startQuaternion) )
+        }
+
+        if (this.twoHanded.grab) {  
           invNewMatrix.getInverse(newMatrix)
           newRotationGap.copy(secondPosition).applyMatrix4(invNewMatrix).normalize()
           newQuaternion.setFromUnitVectors(this.capture.startGap, newRotationGap)
-          secondQuaternion.multiply( newQuaternion )
-          newMatrix.compose(newPivot, secondQuaternion, UNIFORM_SCALE)
+          pivotQuaternion.multiply( newQuaternion )
+          newMatrix.compose(pivotPosition, pivotQuaternion, UNIFORM_SCALE)
           
           newMatrix.multiply( this.capture.invPivotMatrix )
-          newMatrix.decompose(newPivot, secondQuaternion, newScale)
+          newMatrix.decompose(pivotPosition, pivotQuaternion, newScale)
   
-          target3D.position.copy(newPivot)
-          target3D.quaternion.copy(secondQuaternion)
+          target3D.position.copy(pivotPosition)
+          target3D.quaternion.copy(pivotQuaternion)
         }
       }
     }
@@ -307,24 +337,32 @@ AFRAME.registerComponent("manipulate", {
     let list = str.split(",").map( x => x.trim() )
     for (let item of list) {
       switch (item) {
-        case "translate": constraint.translate = true; break
-        case "translate-x": constraint.translate = true; constraint.translateX = true; break
-        case "translate-y": constraint.translate = true; constraint.translateY = true; break
-        case "translate-z": constraint.translate = true; constraint.translateZ = true; break
-        case "rotate": constraint.rotate = true; break
-        case "rotate-x": constraint.rotate = true; constraint.rotateX = true; break
-        case "rotate-y": constraint.rotate = true; constraint.rotateY = true; break
-        case "rotate-z": constraint.rotate = true; constraint.rotateZ = true; break
-        case "scale": constraint.scale = true; break
-        case "scale-x": constraint.scale = true; constraint.scaleX = true; break
-        case "scale-y": constraint.scale = true; constraint.scaleY = true; break
-        case "scale-z": constraint.scale = true; constraint.scaleZ = true; break
-        case "uniformscale": constraint.scale = true; constraint.uniformScale = true; break
+        case "translate": constraint.translate = {x:true, y:true, z:true}; break
+        case "translate-x": constraint.translate = {...constraint.translate, x:true}; break // keep the axis we want to move along
+        case "translate-y": constraint.translate = {...constraint.translate, y:true}; break
+        case "translate-z": constraint.translate = {...constraint.translate, z:true}; break
+        case "rotate": constraint.rotate = {x:true, y:true, z:true}; break
+        case "rotate-x": constraint.rotate = {x:false, y:true, z:true}; break // drop the axis we want to rotate about
+        case "rotate-y": constraint.rotate = {x:true, y:false, z:true}; break
+        case "rotate-z": constraint.rotate = {x:true, y:true, z:false}; break
+        case "scale": constraint.scale = {x:true, y:true, z:true}; break
+        case "scale-x": constraint.scale = {...constraint.scale, x:true}; break
+        case "scale-y": constraint.scale = {...constraint.scale, y:true}; break
+        case "scale-z": constraint.scale = {...constraint.scale, z:true}; break
+        case "uniformscale": constraint.uniformScale = true; break
         case "grab": constraint.grab = true; break
+        case "": break
+        case "none": break
         default: aframeHelper.warn(this, `unknown constraint: ${item}`)
       }
     }
 
     return constraint
+  },
+
+  applyMask(vector, mask, unmaskedValue) {
+    for (let axis of ["x","y","z"]) {
+      vector[axis] = mask[axis] ? vector[axis] : unmaskedValue
+    }
   },
 })
