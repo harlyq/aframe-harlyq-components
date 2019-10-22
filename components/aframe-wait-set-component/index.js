@@ -1,4 +1,4 @@
-import { aframeHelper, attribute, domHelper, jsonHelper, pseudorandom, utils } from "harlyq-helpers"
+import { aframeHelper, attribute, domHelper, jsonHelper, pseudorandom } from "harlyq-helpers"
 
 //-----------------------------------------------------------------------------
 // "wait-set" component for setting attributes on this or other elements after a delay or events
