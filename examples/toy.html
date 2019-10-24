@@ -7,7 +7,7 @@
     <script src="../dist/aframe-harlyq-components.js"></script>
   </head>
   <body>
-    <a-scene background="color: grey">
+    <a-scene background="color: grey" grab-system="hands: [vive-controls]; debug: true">
       <a-entity id="lefthand" vive-controls="hand: left"></a-entity>
       <a-entity id="righthand" vive-controls="hand: right"></a-entity>
       <a-logger position="0 0 -5"></a-logger>
@@ -22,9 +22,9 @@
       <a-entity id="plane" position="1 1 -1" gltf-model="url(assets/plane/plane.gltf)" toy
         modifier__flying="startEvent: toygrabbed; endEvent: toydropped; mode: append; mixin: plane_flying">
       </a-entity-->
-      <a-box id="box" position="0 1 -1" scale=".5 .5 .5" color="red" toy="controls: [vive-controls]; debug: true"
-        wait-set__grabbed="events: toygrabbed; color: blue; debug: true"
-        wait-set__dropped="events: toydropped; color: red; debug: true"
+      <a-box id="box" position="0 1 -1" scale=".5 .5 .5" color="red" toy
+        wait-set__grabbed="events: grabstart; color: blue; debug: true"
+        wait-set__dropped="events: grabend; color: red; debug: true"
         wait-set__pad="events: trackpaddown; color: yellow; debug: true"
       >
       </a-box>
