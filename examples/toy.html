@@ -21,10 +21,14 @@
       </a-entity>
       <a-entity id="plane" position="1 1 -1" gltf-model="url(assets/plane/plane.gltf)" toy
         modifier__flying="startEvent: toygrabbed; endEvent: toydropped; mode: append; mixin: plane_flying">
-      </a-entity-->
+      </a-entity>
       <a-box id="box" position="0 1 -1" scale=".5 .5 .5" color="red" toy
         wait-set__grabbed="events: grabstart; color: blue; debug: true"
         wait-set__dropped="events: grabend; color: red; debug: true"
+        wait-set__pad="events: trackpaddown; color: yellow; debug: true"
+    -->
+      <a-box id="box" position="0 1 -1" scale=".5 .5 .5" color="red" toy
+        modifier__grabbed="startEvents: grabstart; endEvents: grabend; color: blue; debug: true"
         wait-set__pad="events: trackpaddown; color: yellow; debug: true"
       >
       </a-box>
