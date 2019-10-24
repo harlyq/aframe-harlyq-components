@@ -1,9 +1,16 @@
 import { aframeHelper, domHelper, extent, overlap, threeHelper } from "harlyq-helpers"
 
+const IDLE = Symbol("idle")
+const HOVER = Symbol("hover")
+const GRAB = Symbol("grab")
+
+// state of each hand is either (events are shown in braces)
+// IDLE -(hoverstart)-> HOVER -(hoverend)-> IDLE
+// IDLE -(hoverstart)-> HOVER -(hoverend, grabstart)-> GRAB -(grabend)-> IDLE
+
 AFRAME.registerSystem("grab-system", {
   schema: {
     hands: { type: "selectorAll" },
-    // routeEvents: { default: "buttondown, buttonup, touchstart, touchend, buttonchanged, axismoved, controllerconnected, controllerdisconnected, gripdown, gripup, gripchanged, trackpaddown, trackpadup, trackpadchanged, triggerdown, triggerup, triggerchanged" },
     routeEvents: { default: "controllerconnected, controllerdisconnected, gripdown, gripup, gripchanged, trackpaddown, trackpadup, trackpadchanged, triggerdown, triggerup, triggerchanged" },
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
@@ -36,7 +43,7 @@ AFRAME.registerSystem("grab-system", {
     if (oldData.hands !== data.hands) {
       this.grabEvents.forEach( type => this.removeHandListeners(type, this.onGrabEvent) )
       this.routeEvents.forEach( type => this.removeHandListeners(type, this.onRouteEvent) )
-      this.hands = data.hands.map(el => ( { el, target: undefined, isGrabbing: false, isNear: false } ) )
+      this.hands = data.hands.map(el => ( { el, target: undefined, state: IDLE } ) )
       this.grabEvents.forEach( type => this.addHandListeners(type, this.onGrabEvent) )
       this.routeEvents.forEach( type => this.addHandListeners(type, this.onRouteEvent) )
       if (data.debug) {
@@ -47,25 +54,25 @@ AFRAME.registerSystem("grab-system", {
 
   tick() {
     for (let hand of this.hands) {
-      if (!hand.isGrabbing) {
-        this.checkNear(hand)
+      if (hand.state !== GRAB) {
+        this.checkHover(hand)
       }
     }
   },
 
-  checkNear(hand) {
+  checkHover(hand) {
     const prevTarget = hand.target
     hand.target = this.findOverlapping(hand.el, this.targets)
-    hand.isNear = !!hand.target
+    hand.state = hand.target ? HOVER : IDLE
 
-    // if we've lost or changed targets send grabfar on the old target first
+    // if we've lost or changed targets send hoverend on the old target first
     if (prevTarget && prevTarget !== hand.target) {
-      this.sendEvent(prevTarget.el, "grabfar", { hand: hand.el })
+      this.sendEvent(prevTarget.el, "hoverend", { hand: hand.el })
     }
 
-    // if we've acquired or changed targets send grabnear on the new target second
+    // if we've acquired or changed targets send hoverstart on the new target second
     if (hand.target && prevTarget !== hand.target) {
-      this.sendEvent(hand.target.el, "grabnear", { hand: hand.el })
+      this.sendEvent(hand.target.el, "hoverstart", { hand: hand.el })
     }
   },
 
@@ -182,19 +189,21 @@ AFRAME.registerSystem("grab-system", {
   onGrabEvent(event) {
     const hand = this.hands.find(hand => hand.el === event.target)
     if (hand) {
-      if (hand.isGrabbing && hand.target && hand.target.grabEnd === event.type && hand.target.el) {
-        hand.isGrabbing = false
+      if (hand.state === GRAB && hand.target && hand.target.grabEnd === event.type && hand.target.el) {
         this.sendEvent(hand.target.el, "grabend", {hand: hand.el})
-      } else if (!hand.isGrabbing && hand.isNear && hand.target && hand.target.el && hand.target.grabStart === event.type) {
-        hand.isGrabbing = true
+        hand.state = IDLE
+        hand.target = undefined
+      } else if (hand.state === HOVER && hand.target && hand.target.el && hand.target.grabStart === event.type) {
+        this.sendEvent(hand.target.el, "hoverend", {hand: hand.el})
         this.sendEvent(hand.target.el, "grabstart", {hand: hand.el})
+        hand.state = GRAB
       }
     }
   },
 
   onRouteEvent(event) {
     const hand = this.hands.find(hand => hand.el === event.target)
-    if (hand && hand.isGrabbing) {
+    if (hand && hand.state === GRAB) {
       this.sendEvent(hand.target.el, event.type, { ...event.detail, hand: hand.el })
     }
   }

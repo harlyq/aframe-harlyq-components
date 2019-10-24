@@ -2,7 +2,7 @@ import { aframeHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("toy", {
   schema: {
-    debug: { default: true }
+    debug: { default: false }
   },
 
   init() {
