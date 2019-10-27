@@ -48,6 +48,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
 https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/zones.html
+### manipulate
+https://harlyq.github.io/aframe-harlyq-components/examples/manipulate.html
 ### materialx
 none
 ### merge-geometry
@@ -98,8 +100,6 @@ https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
 https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
 ### trigger-zone
 https://harlyq.github.io/aframe-harlyq-components/examples/zones.html
-### two-handed-transform
-https://harlyq.github.io/aframe-harlyq-components/examples/two-handed-transform.html
 ### uv-transform
 https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.html
 
