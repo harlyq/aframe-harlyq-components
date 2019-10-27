@@ -74,19 +74,19 @@
     </script>
   </head>
   <body>
-    <a-scene background="color: teal">
+    <a-scene background="color: teal" grab-system="hands: [vive-controls]; debug: false">
       <a-assets>
         <canvas id="canvas" width="1024" height="1024"></canvas>
       </a-assets>
       <a-logger position="0 0 -5"></a-logger>
-      <a-entity id="cameraRig" simple-hands="debug: false; toolSelectors: [tool]; grabSelectors: [handle]; handSelectors: #rightHand,#leftHand; watch: false;">
+      <a-entity id="cameraRig">
         <a-camera></a-camera>
         <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
         <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
       </a-entity>
       <a-entity position="0 1 0" chalk="color: blue;" tool raycaster="objects: .board, [svg-ui]; showLine: false; far: 0.06" 
         wait-set__touchstart="debug: false; events: svg-ui-touchstart; chalk.color: $event.detail.uiTarget.id"
-        wait-set__toolequip="debug: false; events: toolequip; rumble.controllers: $event.detail.hand"
+        wait-set__grabstart="debug: true; events: grabstart; rumble.controllers: $event.detail.hand"
         rumble="events: raycaster-intersection; controllers: ; force: .3"
       >
       </a-entity>

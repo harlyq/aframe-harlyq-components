@@ -6,18 +6,21 @@ AFRAME.registerComponent("toy", {
   },
 
   init() {
-    const system = this.el.sceneEl.systems["grab-system"]
-    system.registerTarget(this.el, 1)
     this.invGrabMatrix = new THREE.Matrix4()
     this.grabHand = undefined
     this.onGrabStart = this.onGrabStart.bind(this)
     this.onGrabEnd = this.onGrabEnd.bind(this)
 
+    const system = this.el.sceneEl.systems["grab-system"]
+    system.registerTarget(this.el, 1)
+  },
+
+  play() {
     this.el.addEventListener("grabstart", this.onGrabStart)
     this.el.addEventListener("grabend", this.onGrabEnd)
   },
 
-  remove() {
+  pause() {
     this.el.removeEventListener("grabstart", this.onGrabStart)
     this.el.removeEventListener("grabend", this.onGrabEnd)
   },

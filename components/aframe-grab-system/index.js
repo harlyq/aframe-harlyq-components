@@ -43,7 +43,7 @@ AFRAME.registerSystem("grab-system", {
     if (oldData.hands !== data.hands) {
       this.grabEvents.forEach( type => this.removeHandListeners(type, this.onGrabEvent) )
       this.routeEvents.forEach( type => this.removeHandListeners(type, this.onRouteEvent) )
-      this.hands = data.hands.map(el => ( { el, target: undefined, state: IDLE } ) )
+      this.hands = data.hands ? data.hands.map(el => ( { el, target: undefined, state: IDLE } ) ) : []
       this.grabEvents.forEach( type => this.addHandListeners(type, this.onGrabEvent) )
       this.routeEvents.forEach( type => this.addHandListeners(type, this.onRouteEvent) )
       if (data.debug) {

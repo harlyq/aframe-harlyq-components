@@ -20,6 +20,14 @@ https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
 https://harlyq.github.io/aframe-harlyq-components/examples/heightfield.html
 ### gltf-part
 none
+### grab-system
+https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/movement.html
+
+https://harlyq.github.io/aframe-harlyq-components/examples/toy.html
 ### heightfield
 https://harlyq.github.io/aframe-harlyq-components/examples/heightfield.html
 ### instance
@@ -36,8 +44,6 @@ https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.ht
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
 ### logger
 https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
-
-https://harlyq.github.io/aframe-harlyq-components/examples/simple-hands.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/svg-ui.html
 
@@ -64,12 +70,6 @@ https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.ht
 https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
 ### rumble
 https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
-### simple-hands
-https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
-
-https://harlyq.github.io/aframe-harlyq-components/examples/drum-keyboard.html
-
-https://harlyq.github.io/aframe-harlyq-components/examples/simple-hands.html
 ### sprite-particles
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 
