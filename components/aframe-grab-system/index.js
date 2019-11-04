@@ -11,7 +11,6 @@ const GRAB = Symbol("grab")
 AFRAME.registerSystem("grab-system", {
   schema: {
     hands: { type: "selectorAll" },
-    routeEvents: { default: "controllerconnected, controllerdisconnected, gripdown, gripup, gripchanged, trackpaddown, trackpadup, trackpadchanged, triggerdown, triggerup, triggerchanged" },
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
     debug: { default: false },
@@ -20,32 +19,21 @@ AFRAME.registerSystem("grab-system", {
   init() {
     this.grabEvents = new Set()
     this.onGrabEvent = this.onGrabEvent.bind(this)
-    this.onRouteEvent = this.onRouteEvent.bind(this)
     this.targets = []
-    this.routeEvents = []
     this.hands = []
   },
 
   remove() {
     this.grabEvents.forEach( type => this.removeHandListeners(type, this.onGrabEvent) )
-    this.routeEvents.forEach( type => this.removeHandListeners(type, this.onRouteEvent) )
   },
 
   update(oldData) {
     const data = this.data
 
-    if (oldData.routeEvents !== data.routeEvents) {
-      this.routeEvents.forEach( type => this.removeHandListeners(type, this.onRouteEvent) )
-      this.routeEvents = data.routeEvents.split(",").map(x => x.trim())
-      this.routeEvents.forEach( type => this.addHandListeners(type, this.onRouteEvent) )
-    }
-
     if (oldData.hands !== data.hands) {
       this.grabEvents.forEach( type => this.removeHandListeners(type, this.onGrabEvent) )
-      this.routeEvents.forEach( type => this.removeHandListeners(type, this.onRouteEvent) )
-      this.hands = data.hands ? data.hands.map(el => ( { el, target: undefined, state: IDLE } ) ) : []
+      this.hands = data.hands ? data.hands.map(el => ( { el, target: undefined, name: IDLE } ) ) : []
       this.grabEvents.forEach( type => this.addHandListeners(type, this.onGrabEvent) )
-      this.routeEvents.forEach( type => this.addHandListeners(type, this.onRouteEvent) )
       if (data.debug) {
         aframeHelper.log(this, `found ${this.hands.length} hands`)
       }
@@ -54,26 +42,15 @@ AFRAME.registerSystem("grab-system", {
 
   tick() {
     for (let hand of this.hands) {
-      if (hand.state !== GRAB) {
+      if (hand.name !== GRAB) {
         this.checkHover(hand)
       }
     }
   },
 
   checkHover(hand) {
-    const prevTarget = hand.target
-    hand.target = this.findOverlapping(hand.el, this.targets)
-    hand.state = hand.target ? HOVER : IDLE
-
-    // if we've lost or changed targets send hoverend on the old target first
-    if (prevTarget && prevTarget !== hand.target) {
-      this.sendEvent(prevTarget.el, "hoverend", { hand: hand.el })
-    }
-
-    // if we've acquired or changed targets send hoverstart on the new target second
-    if (hand.target && prevTarget !== hand.target) {
-      this.sendEvent(hand.target.el, "hoverstart", { hand: hand.el })
-    }
+    const target = this.findOverlapping(hand.el, this.targets)
+    this.transition(hand, { name: (target ? HOVER : IDLE), target })
   },
 
   registerTarget(el, maxHands, customGrabStart, customGrabEnd) {
@@ -184,27 +161,56 @@ AFRAME.registerSystem("grab-system", {
     return overlapping
   },
 
+  transition(state, action) {
+    const oldState = state.name
+
+    switch (oldState) {
+      case IDLE:
+        if (action.name === HOVER) {
+          this.sendEvent(action.target.el, "hoverstart", { hand: state.el })
+          state.name = HOVER
+          state.target = action.target
+        }
+        break
+
+      case HOVER:
+        if (action.name === IDLE) {
+          this.sendEvent(state.target.el, "hoverend", { hand: state.el })
+          state.name = IDLE
+          state.target = undefined
+        } else if (action.name === GRAB) {
+          this.sendEvent(state.target.el, "hoverend", { hand: state.el })
+          this.sendEvent(state.target.el, "grabstart", { hand: state.el })
+          state.name = GRAB
+        } else if (action.name === HOVER && action.target !== state.target) {
+          this.sendEvent(state.target.el, "hoverend", { hand: state.el })
+          this.sendEvent(action.target.el, "hoverstart", { hand: state.el })
+          state.target = action.target
+        }
+        break
+
+      case GRAB:
+        if (action.name === IDLE) {
+          this.sendEvent(state.target.el, "grabend", { hand: state.el })
+          state.name = IDLE
+          state.target = undefined
+        }
+        break
+    }
+
+    return state
+  },
+
   // grabStart and grabEnd may be bound to the same event e.g. gripdown on vive
   // so we need to deduce the state of the grab
   onGrabEvent(event) {
     const hand = this.hands.find(hand => hand.el === event.target)
     if (hand) {
-      if (hand.state === GRAB && hand.target && hand.target.grabEnd === event.type && hand.target.el) {
-        this.sendEvent(hand.target.el, "grabend", {hand: hand.el})
-        hand.state = IDLE
-        hand.target = undefined
-      } else if (hand.state === HOVER && hand.target && hand.target.el && hand.target.grabStart === event.type) {
-        this.sendEvent(hand.target.el, "hoverend", {hand: hand.el})
-        this.sendEvent(hand.target.el, "grabstart", {hand: hand.el})
-        hand.state = GRAB
+      if (hand.name === GRAB && hand.target && hand.target.grabEnd === event.type && hand.target.el) {
+        this.transition(hand, {name: IDLE})
+      } else if (hand.name === HOVER && hand.target && hand.target.el && hand.target.grabStart === event.type) {
+        this.transition(hand, {name: GRAB})
       }
     }
   },
-
-  onRouteEvent(event) {
-    const hand = this.hands.find(hand => hand.el === event.target)
-    if (hand && hand.state === GRAB) {
-      this.sendEvent(hand.target.el, event.type, { ...event.detail, hand: hand.el })
-    }
-  }
 })

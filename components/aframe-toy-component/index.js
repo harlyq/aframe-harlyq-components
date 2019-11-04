@@ -1,15 +1,18 @@
-import { aframeHelper } from "harlyq-helpers"
+import { aframeHelper, domHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("toy", {
   schema: {
+    routeEvents: { default: "controllerconnected, controllerdisconnected, gripdown, gripup, gripchanged, trackpaddown, trackpadup, trackpadchanged, triggerdown, triggerup, triggerchanged" },
     debug: { default: false }
   },
 
   init() {
     this.invGrabMatrix = new THREE.Matrix4()
     this.grabHand = undefined
+    this.routeEvents = []
     this.onGrabStart = this.onGrabStart.bind(this)
     this.onGrabEnd = this.onGrabEnd.bind(this)
+    this.onRouteEvent = this.onRouteEvent.bind(this)
 
     const system = this.el.sceneEl.systems["grab-system"]
     system.registerTarget(this.el, 1)
@@ -21,8 +24,16 @@ AFRAME.registerComponent("toy", {
   },
 
   pause() {
-    this.el.removeEventListener("grabstart", this.onGrabStart)
     this.el.removeEventListener("grabend", this.onGrabEnd)
+    this.el.removeEventListener("grabstart", this.onGrabStart)
+  },
+
+  update(oldData) {
+    const data = this.data
+
+    if (oldData.routeEvents !== data.routeEvents) {
+      this.routeEvents = data.routeEvents.split(",").map(x => x.trim())
+    }
   },
 
   tick() {
@@ -32,30 +43,6 @@ AFRAME.registerComponent("toy", {
     }
 
     this.stickToHand()
-  },
-
-  onGrabStart(event) {
-    if (this.data.debug) {
-      aframeHelper.log(this, `${event.type}`)
-    }
-
-    this.grabHand = event.detail.hand
-    const hand3D = this.grabHand.object3D
-    const self3D = this.el.object3D
-
-    this.invGrabMatrix.getInverse(hand3D.matrixWorld).multiply(self3D.matrixWorld)
-
-    this.el.sceneEl.addBehavior(this)
-  },
-
-  onGrabEnd(event) {
-    if (this.data.debug) {
-      aframeHelper.log(this, `${event.type}`)
-    }
-
-    if (this.grabHand === event.detail.hand) {
-      this.grabHand = undefined
-    }
   },
 
   stickToHand: (function() {
@@ -71,5 +58,48 @@ AFRAME.registerComponent("toy", {
       newMatrix.premultiply(invParentMatrix) // convert to a local matrix
       newMatrix.decompose(self3D.position, self3D.quaternion, self3D.scale)
     }  
-  })()
+  })(),
+
+  sendEvent(el, type, detail) {
+    if (this.data.debug) {
+      aframeHelper.log(this, `send '${type}' to '${domHelper.getDebugName(el)}'`)
+    }
+    el.emit(type, detail)
+  },
+
+  onGrabStart(event) {
+    if (this.data.debug) {
+      aframeHelper.log(this, `${event.type}`)
+    }
+
+    this.grabHand = event.detail.hand
+    const hand3D = this.grabHand.object3D
+    const self3D = this.el.object3D
+
+    this.invGrabMatrix.getInverse(hand3D.matrixWorld).multiply(self3D.matrixWorld)
+
+    for (let type of this.routeEvents) {
+      this.grabHand.addEventListener(type, this.onRouteEvent)
+    }
+
+    this.el.sceneEl.addBehavior(this)
+  },
+
+  onGrabEnd(event) {
+    if (this.data.debug) {
+      aframeHelper.log(this, `${event.type}`)
+    }
+
+    if (this.grabHand === event.detail.hand) {
+      for (let type of this.routeEvents) {
+        this.grabHand.removeEventListener(type, this.onRouteEvent)
+      }
+  
+      this.grabHand = undefined
+    }
+  },
+
+  onRouteEvent(event) {
+    this.sendEvent(this.el, event.type, { ...event.detail, hand: this.grabHand })
+  },
 })
