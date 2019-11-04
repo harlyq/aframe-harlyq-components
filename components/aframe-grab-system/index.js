@@ -10,7 +10,7 @@ const GRAB = Symbol("grab")
 
 AFRAME.registerSystem("grab-system", {
   schema: {
-    hands: { type: "selectorAll" },
+    hands: { type: "selectorAll", default: "[hand-controls], [oculus-touch-controls], [vive-controls], [windows-motion-controls]" },
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
     debug: { default: false },

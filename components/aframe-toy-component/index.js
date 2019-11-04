@@ -21,9 +21,11 @@ AFRAME.registerComponent("toy", {
   play() {
     this.el.addEventListener("grabstart", this.onGrabStart)
     this.el.addEventListener("grabend", this.onGrabEnd)
+    this.addRouteListeners()
   },
 
   pause() {
+    this.removeRouteListeners()
     this.el.removeEventListener("grabend", this.onGrabEnd)
     this.el.removeEventListener("grabstart", this.onGrabStart)
   },
@@ -67,10 +69,28 @@ AFRAME.registerComponent("toy", {
     el.emit(type, detail)
   },
 
+  addRouteListeners() {
+    if (this.grabHand) {
+      for (let type of this.routeEvents) {
+        this.grabHand.addEventListener(type, this.onRouteEvent)
+      }  
+    }
+  },
+
+  removeRouteListeners() {
+    if (this.grabHand) {
+      for (let type of this.routeEvents) {
+        this.grabHand.removeEventListener(type, this.onRouteEvent)
+      }  
+    }
+  },
+
   onGrabStart(event) {
     if (this.data.debug) {
       aframeHelper.log(this, `${event.type}`)
     }
+
+    this.removeRouteListeners()
 
     this.grabHand = event.detail.hand
     const hand3D = this.grabHand.object3D
@@ -78,9 +98,7 @@ AFRAME.registerComponent("toy", {
 
     this.invGrabMatrix.getInverse(hand3D.matrixWorld).multiply(self3D.matrixWorld)
 
-    for (let type of this.routeEvents) {
-      this.grabHand.addEventListener(type, this.onRouteEvent)
-    }
+    this.addRouteListeners()
 
     this.el.sceneEl.addBehavior(this)
   },
@@ -91,9 +109,7 @@ AFRAME.registerComponent("toy", {
     }
 
     if (this.grabHand === event.detail.hand) {
-      for (let type of this.routeEvents) {
-        this.grabHand.removeEventListener(type, this.onRouteEvent)
-      }
+      this.removeRouteListeners()
   
       this.grabHand = undefined
     }
