@@ -15,7 +15,7 @@ AFRAME.registerComponent("toy", {
     this.onRouteEvent = this.onRouteEvent.bind(this)
 
     const system = this.el.sceneEl.systems["grab-system"]
-    system.registerTarget(this.el, 1)
+    system.registerTarget(this.el)
   },
 
   play() {

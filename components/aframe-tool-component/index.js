@@ -26,7 +26,7 @@ AFRAME.registerComponent("tool", {
     this.invRotationMatrix = new THREE.Matrix4()
 
     const system = this.el.sceneEl.systems["grab-system"]
-    system.registerTarget(this.el, 1)
+    system.registerTarget(this.el)
   },
 
   play() {
