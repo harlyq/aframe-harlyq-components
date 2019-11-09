@@ -1,5 +1,7 @@
 import { aframeHelper, attribute, domHelper, jsonHelper, pseudorandom } from "harlyq-helpers"
 
+const domModifier = attribute.modifierStack( (target, attribute) => aframeHelper.getProperty(target, attribute), attribute.MODIFIER_NESTED )
+
 //-----------------------------------------------------------------------------
 // "modifier" component for setting attributes on this or other elements after 
 // a startEvent, and removing the setting after an endEvent
@@ -114,8 +116,8 @@ AFRAME.registerComponent("modifier", {
           console.log( domHelper.getDebugName( this.el ), this.attrName, "setProperties", "element=", domHelper.getDebugName(el), "property=", prop, "value=", value, "$event=", event)
         }
 
-        // aframeHelper.setProperty(el, prop, processedValue)
-        modifiers.addModifier(this, el, prop, processedValue)
+        const finalValue = domModifier.set(this, el, prop, processedValue)
+        aframeHelper.setProperty(el, prop, finalValue)
       }
 
       // for (let prop of this.toggles) {
@@ -135,7 +137,8 @@ AFRAME.registerComponent("modifier", {
 
     for (let el of elements) {
       for (let prop in this.rules) {
-        modifiers.removeModifier(this, el, prop)
+        const finalValue = domModifier.unset(this, el, prop)
+        aframeHelper.setProperty(el, prop, finalValue)
       }
     }
   },
@@ -177,51 +180,3 @@ function processValue( value, el, event ) {
   return result
 }
 
-const modifiers = (function() {
-  const map = new Map()
-  const INITIAL = Symbol('initial')
-
-  function addModifier(source, target, attribute, value) {
-    if (!map.has(target)) {
-      map.set(target, [])
-    }
-    const list = map.get(target)
-    if ( findAttributeIndex(list, attribute) === -1 ) {
-      list.push( { source: INITIAL, attribute, value: aframeHelper.getProperty(target, attribute) } )
-    }
-    list.push( {source, attribute, value} )
-    aframeHelper.setProperty(target, attribute, value)
-  }
-  
-  function removeModifier(source, target, attribute) {
-    if (map.has(target)) {
-      const list = map.get(target)
-      const index = list.findIndex( item => item.attribute === attribute && item.source === source )
-      if (index !== -1) {
-        list.splice(index, 1)
-        const nextIndex = findAttributeIndex(list, attribute)
-        if (nextIndex !== -1) {
-          aframeHelper.setProperty(target, attribute, list[nextIndex].value)
-          if (list[nextIndex].source === INITIAL) {
-            list.splice(nextIndex, 1)
-          }
-        }
-      }
-    }
-  }
-  
-  function findAttributeIndex(list, attribute) {
-    for (let i = list.length - 1; i >= 0; i--) {
-      const item = list[i]
-      if (item.attribute === attribute) {
-        return i
-      }
-    }
-    return -1
-  }
-
-  return {
-    addModifier,
-    removeModifier,
-  }
-})()
