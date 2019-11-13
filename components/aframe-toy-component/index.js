@@ -2,7 +2,7 @@ import { aframeHelper, domHelper } from "harlyq-helpers"
 
 AFRAME.registerComponent("toy", {
   schema: {
-    routeEvents: { default: "controllerconnected, controllerdisconnected, gripdown, gripup, gripchanged, trackpaddown, trackpadup, trackpadchanged, triggerdown, triggerup, triggerchanged" },
+    routeEvents: { default: "controllerconnected, controllerdisconnected, gripdown, gripup, gripchanged, trackpaddown, trackpadup, triggerdown, triggerup" },
     debug: { default: false }
   },
 
