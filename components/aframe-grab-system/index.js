@@ -53,22 +53,20 @@ AFRAME.registerSystem("grab-system", {
     this.transition(hand, { name: (target ? HOVER : IDLE), target })
   },
 
-  registerTarget(el, customObj3D, customGrabStart, customGrabEnd) {
-    const index = this.targets.findIndex(target => target.el === el)
+  registerTarget(el, customConfig = {}) {
+    const data = this.data
+    const config = Object.assign( {el, obj3D: el.object3D, grabStart: data.grabStart, grabEnd: data.grabEnd }, customConfig )
+    const index = this.targets.findIndex(target => target.el === el && target.obj3D == config.obj3D)
     if (index === -1) {
-      const data = this.data
-      const grabStart = customGrabStart || data.grabStart
-      const grabEnd = customGrabEnd || data.grabEnd
-      const obj3D = customObj3D || el.object3D
-      this.targets.push({ el, obj3D, grabStart, grabEnd })
+      this.targets.push( config )
 
-      this.grabEvents.add(grabStart)
-      this.grabEvents.add(grabEnd)
-      this.addHandListeners(grabStart, this.onGrabEvent)
-      this.addHandListeners(grabEnd, this.onGrabEvent)
+      this.grabEvents.add(config.grabStart)
+      this.grabEvents.add(config.grabEnd)
+      this.addHandListeners(config.grabStart, this.onGrabEvent)
+      this.addHandListeners(config.grabEnd, this.onGrabEvent)
 
       if (data.debug) {
-        aframeHelper.log(this, `registered: ${domHelper.getDebugName(el)}, grabStart: ${grabStart}, grabEnd: ${grabEnd}`)
+        aframeHelper.log(this, `registered: ${domHelper.getDebugName(el)}, grabStart: ${config.grabStart}, grabEnd: ${config.grabEnd}`)
       }
     }
   },
@@ -120,13 +118,10 @@ AFRAME.registerSystem("grab-system", {
     let minScore = Number.MAX_VALUE
     let overlapping = undefined
 
+    // generate the bounding boxes of hands and targets (this is useful for debugging, even if some are missing)
     const hand3D = handEl.object3D
     if (!hand3D.boundingSphere || !hand3D.boundingBox || hand3D.boundingBox.isEmpty()) {
       threeHelper.generateOrientedBoundingBox(hand3D, data.debug ? 0x00FFFF : undefined) // cyan
-    }
-
-    if (hand3D.boundingBox.isEmpty()) {
-      return
     }
 
     for (let target of targets) {
@@ -137,6 +132,17 @@ AFRAME.registerSystem("grab-system", {
 
       if (!target3D.boundingSphere || !target3D.boundingBox || target3D.boundingBox.isEmpty()) {
         threeHelper.generateOrientedBoundingBox(target3D, data.debug ? 0xFFFF00 : undefined) // yellow
+      }
+    }
+
+    if (hand3D.boundingBox.isEmpty()) {
+      return
+    }
+
+    for (let target of targets) {
+      const target3D = target.obj3D  
+      if (!target3D) { 
+        continue 
       }
 
       if (target3D.boundingBox.isEmpty()) { 
@@ -150,7 +156,7 @@ AFRAME.registerSystem("grab-system", {
         continue
       }
 
-      const score = extent.volume( target3D.boundingBox )
+      const score = this.getScore(hand3D, target)
       if (score < minScore) {
         minScore = score
         overlapping = target
@@ -212,4 +218,23 @@ AFRAME.registerSystem("grab-system", {
       }
     }
   },
+
+  getScore(hand3D, target) {
+    switch (target.score) {
+      case "horizontalnearest":
+        const handPos = new THREE.Vector3().setFromMatrixPosition(hand3D.matrixWorld)
+        const targetPos = new THREE.Vector3().setFromMatrixPosition(target.obj3D.matrixWorld)
+        const handForward = new THREE.Vector3().setFromMatrixColumn(target.obj3D.matrixWorld, 3)
+        const handToTarget = new THREE.Vector3().subVectors(handPos, targetPos)
+        handToTarget.setComponent(1, 0)
+        handToTarget.normalize()
+        handForward.setComponent(1, 0)
+        handForward.normalize()
+        return -handForward.dot(handToTarget)
+        
+      case "volume":
+      default:
+        return extent.volume(target.obj3D.boundingBox)
+    }
+  }
 })
