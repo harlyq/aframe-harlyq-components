@@ -36,10 +36,13 @@
         <a-entity laser-controls="hand: right" mixin="ray"></a-entity>
         <a-entity laser-controls="hand: left" mixin="ray"></a-entity>
       </a-entity>
-      <a-entity position="0 .65 -2" keyframe="rotation: 0 0 0,0 360 0; duration: 60">
+      <a-entity position="-1 .65 -2" keyframe="rotation: 0 0 0,0 360 0; duration: 60">
         <a-sphere id="globe" segments-height="64" segments-width="64" svg-ui="template: url(assets/BlankMap-Equirectangular.svg); resolution: 2048 2048; hoverSelectors: g;"></a-sphere>
         <a-sphere id="overlay" material="transparent: true;" segments-height="64" segments-width="64" scale="1.001 1.001 1.001" svg-ui="_country:; template: #highlight; resolution: 2048 2048;"></a-sphere>
       </a-entity>
+      <a-sphere scale=".5 .5 .5" segments-height="512" segments-width="512" position="1 .65 -2" 
+        keyframe="rotation: 0 0 0,0 360 0; duration: 60"
+        material="src: assets/8081_earthmap2k.jpg; displacementMap: assets/1024px-Srtm_ramp2.world.21600x10800.jpg; displacementScale: .05"></a-sphere>
     </a-scene>
     <script>
       // the useHoverClass in the svg-ui is too slow, because it needs to rebuild the 1.7 MB SVG each time (twice), so instead
