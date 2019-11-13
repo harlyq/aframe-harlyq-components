@@ -72,6 +72,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/procedural-texture.ht
 https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
 ### rumble
 https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+### sfxr
+https://harlyq.github.io/aframe-harlyq-components/examples/sfxr.html
 ### sprite-particles
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 
