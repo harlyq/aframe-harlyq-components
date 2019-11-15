@@ -11,7 +11,7 @@ e.g.
 performs an animation which loops every `5` seconds, alterating direction. The forward direction has a color from the original color to `red`, and from the original position to `1 1 1` halfway through, then finishing at `0 0 2`.  For the backward direction, the color goes from `red` to the original color, and from `0 0 2` to `1 1 1` at 2.5 seconds, then finishes at the original position
 
 ```html
-<a-box keyframe="duration: 10.5; direction: forward; material.color: ,red|black,,green..blue; "       
+<a-box keyframe="duration: 10.5; direction: forward; material.color: ,red|black,,green->blue; "       
        material="transparent: true; opacity: 0.1; color: yellow"></a-box>
 ```
 this animation is `10.5` seconds long.  It changes the **material.color** from the original color (`yellow`), to a random choice between `red` and `black`, then back to the original color (`yellow`), and finally to a random color between `green` and `blue`.  Each loop repeats the same sequence (`forward`)
@@ -53,10 +53,10 @@ If true, re-evaluate the random values before the start of each loop
 The seed to use for the random number generator. If -1 then a different random seed is chosen each time the component is invoked.  A fixed seed is useful for producing consistent random sequences
 
 ---
-**\<property\>** : value OR value1 | value2 | ... | valueN OR min..max []
+**\<property\>** : value OR value1 | value2 | ... | valueN OR min->max []
 
-Custom attribute which defines a property to set.  This property can use dot notation (e.g. component.property) and value is an array of either: a single value; a list of options (separated by `|`) where one is chosen at random; or a range of two values separated by `..` where a random number is chosen which is greater than or equal to the first value and less than the second value. For the range operator (`..`) the values may be either vectors of numbers (eg. a single number, vec2, vec3 or vec4) or colors
+Custom attribute which defines a property to set.  This property can use dot notation (e.g. component.property) and value is an array of either: a single value; a list of options (separated by `|`) where one is chosen at random; or a range of two values separated by `->` where a random number is chosen which is greater than or equal to the first value and less than the second value. For the range operator (`->`) the values may be either vectors of numbers (eg. a single number, vec2, vec3 or vec4) or colors
 
 The value can also be a comma separate list, with the first value for the start of the animation, the last for the end, and intermediate values are evenly distributed across the timeline.  All missing values are treated as maintaining their existing value
 
-When color values are used in a range e.g. `rgb(0,1,0)...red`, the interpolation is performed in RGB space
+When color values are used in a range e.g. `rgb(0,1,0)->red`, the interpolation is performed in RGB space

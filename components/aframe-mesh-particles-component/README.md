@@ -7,7 +7,7 @@ One of more insantances MUST BE PROVIDED (see the **instances** property) for th
 e.g.
 ```html
 <a-box id="box" instance="size: 10000" material="transparent:true"></a-box>
-<a-entity mesh-particles="instances: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1,2; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
+<a-entity mesh-particles="instances: #box; spawnRate: 5->10; radialPosition: 1.5; radialVelocity: 1,2; rotation: 0 0 0->360 360 360, 0 0 0; scale: .4->.2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
 ```
 Uses the `#box` box mesh instances as particles.  From 5 to 10 particles spawn every second, at a position of 1.5m in a ring around the z axis (default for radial), with an outward velocity of 1 m/s which increases to 2 m/s by the end of the particle's life.  The initial scale is between .4 and 2, and shrinks to .1 at the end of life.  Color starts as red, green or blue and blends to orange over the particle's lifetime.
 
@@ -146,6 +146,6 @@ The velocity in m/s for each particle. This value is overriden by **radialVeloci
 
 ## Option|Range
 
-Values defined as option|range can use an extended syntax which provides a generates a random value.  `..` is used to designate a range and will provide a value which is greater than or equal to the first value but less than the second value e.g. `1..2` will generate a number between 1 and 2.  `|` is the option syntax for which a value will be randonly chosen from one of the options e.g. `1|2|3` will choose 1, 2, or 3.  A value can be either an option or a range, but not both, and vector values will randomly generate values for each component e.g. `1 5 10..2 -6 3` will generate a vector who's x is between 1 and 2, y between 5 and -6 and z between 10 and 3.  Ranges also work for color values with a random value chosen in the RGB space.
+Values defined as option|range can use an extended syntax which provides a generates a random value.  `->` is used to designate a range and will provide a value which is greater than or equal to the first value but less than the second value e.g. `1->2` will generate a number between 1 and 2.  `|` is the option syntax for which a value will be randonly chosen from one of the options e.g. `1|2|3` will choose 1, 2, or 3.  A value can be either an option or a range, but not both, and vector values will randomly generate values for each component e.g. `1 5 10->2 -6 3` will generate a vector who's x is between 1 and 2, y between 5 and -6 and z between 10 and 3.  Ranges also work for color values with a random value chosen in the RGB space.
 
 Some option|range values occur as an array (e.g. **velocity**).  This indicates that the value can change over the lifetime of the particle.  The first entry is the value at the start of the particle's life and the final entry at the end.  Intermediate entries occur evenly spaced over the particle's lifetime, and the values are interpolated between one entry and the next.

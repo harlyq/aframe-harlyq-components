@@ -20,7 +20,7 @@ const RIBBON_WIDTH_PARAM = 16 // [4].x
 const RIBBON_UV_MULTIPLIER_PARAM = 17 // [4].y
 const RIBBON_UV_TYPE_PARAM = 18 // [4].z
 const RADIAL_Y_PARAM = 19 // [4].w
-const PARAMS_LENGTH = 5 // 0..4
+const PARAMS_LENGTH = 5 // 0->4
 
 const MODEL_MESH = "mesh"
 const VERTS_PER_RIBBON = 2
@@ -63,7 +63,7 @@ const flattenDeep = arr1 => arr1.reduce((acc, val) => Array.isArray(val) ? acc.c
 
 // Convert a vector range string into an array of elements. def defines the default elements for each vector
 const parseVecRange = (str, def) => {
-  let parts = str.split("..").map(a => a.trim().split(" ").map(b => {
+  let parts = str.split("->").map(a => a.trim().split(" ").map(b => {
     const num = Number(b)
     return isNaN(num) ? undefined : num
   }))
@@ -80,7 +80,7 @@ const parseVecRangeArray = (str, def) => {
 // parse a ("," separated) list of color range elements
 const parseColorRangeArray = (str) => {
   return flattenDeep( str.split(",").map(a => { 
-    let parts = a.split("..")
+    let parts = a.split("->")
     if (parts.length === 1) parts[1] = parts[0] // if there is no second part then copy the first part
     parts.length = 2
     return parts.map(b => new THREE.Color(b.trim())) 
@@ -93,15 +93,15 @@ function toLowerCase(x) { return x.toLowerCase() }
 // console.assert(AFRAME.utils.deepEqual(parseVecRange("5", [1,2,3]), [5,2,3,5,2,3]))
 // console.assert(AFRAME.utils.deepEqual(parseVecRange("5 6", [1,2,3]), [5,6,3,5,6,3]))
 // console.assert(AFRAME.utils.deepEqual(parseVecRange("5 6 7 8", [1,2,3]), [5,6,7,5,6,7]))
-// console.assert(AFRAME.utils.deepEqual(parseVecRange("8 9..10", [1,2,3]), [8,9,3,10,2,3]))
-// console.assert(AFRAME.utils.deepEqual(parseVecRange("..5 6 7", [1,2,3]), [1,2,3,5,6,7]))
-// console.assert(AFRAME.utils.deepEqual(parseVecRange("2 3 4..5 6 7", [1,2,3]), [2,3,4,5,6,7]))
-// console.assert(AFRAME.utils.deepEqual(parseVecRange("5 6 7..", [1,2,3]), [5,6,7,1,2,3]))
+// console.assert(AFRAME.utils.deepEqual(parseVecRange("8 9->10", [1,2,3]), [8,9,3,10,2,3]))
+// console.assert(AFRAME.utils.deepEqual(parseVecRange("->5 6 7", [1,2,3]), [1,2,3,5,6,7]))
+// console.assert(AFRAME.utils.deepEqual(parseVecRange("2 3 4->5 6 7", [1,2,3]), [2,3,4,5,6,7]))
+// console.assert(AFRAME.utils.deepEqual(parseVecRange("5 6 7->", [1,2,3]), [5,6,7,1,2,3]))
 
-// console.assert(AFRAME.utils.deepEqual(parseVecRangeArray("5 6 7..,9..10 11 12", [1,2,3]), [5,6,7,1,2,3,9,2,3,10,11,12]))
+// console.assert(AFRAME.utils.deepEqual(parseVecRangeArray("5 6 7->,9->10 11 12", [1,2,3]), [5,6,7,1,2,3,9,2,3,10,11,12]))
 // console.assert(AFRAME.utils.deepEqual(parseVecRangeArray("1,2,,,3", [10]), [1,1,2,2,10,10,10,10,3,3]))
 
-// console.assert(AFRAME.utils.deepEqual(parseColorRangeArray("black..red,blue,,#ff0..#00ffaa").map(a => a.getHexString()), ["000000","ff0000","0000ff","0000ff","ffffff","ffffff","ffff00","00ffaa"]))
+// console.assert(AFRAME.utils.deepEqual(parseColorRangeArray("black->red,blue,,#ff0->#00ffaa").map(a => a.getHexString()), ["000000","ff0000","0000ff","0000ff","ffffff","ffffff","ffff00","00ffaa"]))
 
 let WHITE_TEXTURE = new THREE.DataTexture(new Uint8Array(3).fill(255), 1, 1, THREE.RGBFormat)
 WHITE_TEXTURE.needsUpdate = true
@@ -1412,7 +1412,7 @@ void main() {
   vOverTimeRatio = -1.; // the vOverTimeRatio will be used for the lerps on over-time attributes
 
   // particles are either emitted in a burst (spawnType == 0) or spread evenly
-  // throughout 0..particleLoopTime (spawnType == 1).  We calculate the ID of the last spawned particle particleID0 
+  // throughout 0->particleLoopTime (spawnType == 1).  We calculate the ID of the last spawned particle particleID0 
   // for this frame, any vertex IDs after particleID0 are assumed to belong to the previous loop
 
   // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
@@ -1445,7 +1445,7 @@ void main() {
   float particleStartTime = particleLoop * particleLoopTime + particleID / spawnRate * spawnType;
 
   // we use the id as a seed for the randomizer, but because the IDs are fixed in 
-  // the range 0..particleCount we calculate a virtual ID by taking into account
+  // the range 0->particleCount we calculate a virtual ID by taking into account
   // the number of loops that have occurred (note, particles from the previous 
   // loop will have a negative particleID). We use the modoulo of the RANDOM_REPEAT_COUNT 
   // to ensure that the virtualID doesn't exceed the floating point precision

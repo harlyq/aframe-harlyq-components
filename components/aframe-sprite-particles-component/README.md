@@ -13,31 +13,31 @@ This component can appear multiple times on a single entity
 ## Examples
 ```html
 <a-entity sprite-particles="texture: assets/blob.png; velocity: .1 1 .1; 
-  acceleration: 0 -1 0..0 -2 0; color: red,yellow"></a-entity>
+  acceleration: 0 -1 0->0 -2 0; color: red,yellow"></a-entity>
 ```
 creates sprites using the `blob.png` texture, with an initial velocity of `.1 1 .1`, an random acceleration between `0 -1 0` and `0 -2 0`, that over the lifetime of the particle the color changes from `red` to `yellow`
 
 ```html
-<a-entity sprite-particles="spawnRate: 20; radialVelocity: 1..2; color: red"></a-entity>
+<a-entity sprite-particles="spawnRate: 20; radialVelocity: 1->2; color: red"></a-entity>
 ```
 creates an emitter that spawns `20` particles per second, each with a radial velocity from the center of between `1` and `2` m/s and all particles have a `red` color
 
 ## Values
-Some of the properties are listed as type (*range*), which is either a minimum and maximum value separated by `..` (the system will chose a value within that range for each particle) or just a single value
+Some of the properties are listed as type (*range*), which is either a minimum and maximum value separated by `->` (the system will chose a value within that range for each particle) or just a single value
 
 For example:
 
 `lifeTime: 1` all particles have a life time of 1 (number range)
 
-`lifeTime: 2..4` all particles have a life time between 2 and 4 inclusive (number range)
+`lifeTime: 2->4` all particles have a life time between 2 and 4 inclusive (number range)
 
-`velocity: 1 1 .1 .. 2 3 5` velocity value between 1 and 2 for x, 1 and 3 for y, .1 and 5 for z (vec3 range)
+`velocity: 1 1 .1 -> 2 3 5` velocity value between 1 and 2 for x, 1 and 3 for y, .1 and 5 for z (vec3 range)
 
-Some properties are listed as type (*range array*). This provides different values over the life-time of the particle.  The first value is for when the particle is created, linearly interpolating over values, until the last value is reached at the end of the particle's life.  By default there are a maximum of 5 elements for each over-time array, but this can be changed in the **overTimeSlots** parameter. Each element of the array is of type (*range*) so it may be either a single value or a min and max value separated by `..`
+Some properties are listed as type (*range array*). This provides different values over the life-time of the particle.  The first value is for when the particle is created, linearly interpolating over values, until the last value is reached at the end of the particle's life.  By default there are a maximum of 5 elements for each over-time array, but this can be changed in the **overTimeSlots** parameter. Each element of the array is of type (*range*) so it may be either a single value or a min and max value separated by `->`
 
 For example:
 
-`scale: 1..2,3,6,.5 .. 1,9` there are 5 values so each value represents 0%, 25%, 50%, 75% 100% of the particles life time. At 0% scale is between 1 and 2, then blend to 3 at 25%, then up to 6 at 50%, a value between .5 and 1 at 75%, then back up to 9 at 100% (number range[])
+`scale: 1->2,3,6,.5 -> 1,9` there are 5 values so each value represents 0%, 25%, 50%, 75% 100% of the particles life time. At 0% scale is between 1 and 2, then blend to 3 at 25%, then up to 6 at 50%, a value between .5 and 1 at 75%, then back up to 9 at 100% (number range[])
 
 `rotation: 0,360` there are 2 values, each particle starts at 0 rotation, and linearly interpolates counterclockwise to 360 (rotation about the XY plane) over the lifetime of the particle (number range[])
 

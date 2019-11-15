@@ -13,22 +13,22 @@ Multiple components can be placed on a single entity.
 
 **acceleration** : vec3 = `0 0 0`
 
-An option-range for the linear acceleration in meters per second squared along each axis. This can be a value, option or range e.g. `0 0 0` for 0 acceleration. `0 -1 0..0 -2 0` for an acceleration on the y-axis between -1 and -2 m/s^2. 
+An option-range for the linear acceleration in meters per second squared along each axis. This can be a value, option or range e.g. `0 0 0` for 0 acceleration. `0 -1 0->0 -2 0` for an acceleration on the y-axis between -1 and -2 m/s^2. 
 `1 2 3|4 5 6|-1 -2 -3` for accelerations of either 1 2 3 or 4 5 6 or -1 -2 -3 for each particle
 
 **angularAcceleration** : vec3 = `0 0 0`
 
 An option-range for the angular acceleration in degrees per second squared around each axis. This can be a value, option or range, e.g. `10 -20 330` is 10 deg/sec on the x-axis, -20 deg/sec on the y-axis and 330 deg/sec on the z-axis.
-`10 -10 0..20 -20 50` will picked a value between 10 and 20 for the x rotation, -10 and -20 for the y and 0 and 5 for the z. `0 0 0|10 0 0|0 10 0` will pick either 0 0 0 or 10 0 0 or 0 10 0 for each particle.
+`10 -10 0->20 -20 50` will picked a value between 10 and 20 for the x rotation, -10 and -20 for the y and 0 and 5 for the z. `0 0 0|10 0 0|0 10 0` will pick either 0 0 0 or 10 0 0 or 0 10 0 for each particle.
 
 **angularVelocity** : vec3 = `0 0 0`
 
 An option-range for the angular velocity in degrees per second around each axis. This can be a value, option or range, e.g. `10 -20 330` is 10 deg/sec on the x-axis, -20 deg/sec on the y-axis and 330 deg/sec on the z-axis.
-`10 -10 0..20 -20 50` will picked a value between 10 and 20 for the x rotation, -10 and -20 for the y and 0 and 5 for the z. `0 0 0|10 0 0|0 10 0` will pick either 0 0 0 or 10 0 0 or 0 10 0 for each particle.
+`10 -10 0->20 -20 50` will picked a value between 10 and 20 for the x rotation, -10 and -20 for the y and 0 and 5 for the z. `0 0 0|10 0 0|0 10 0` will pick either 0 0 0 or 10 0 0 or 0 10 0 for each particle.
 
 **colors** : color[] = `white`
 
-An over-time list of colors. Each element can be a value, option or range. e.g. `black,white` goes from black to white, `black..white` generates a random color for each particle, `black|white,red..green` starts each
+An over-time list of colors. Each element can be a value, option or range. e.g. `black,white` goes from black to white, `black->white` generates a random color for each particle, `black|white,red->green` starts each
 particle as either white or black, then transitions to a random color between orange and pink (this is a random color between the red, green and blue components of orange and pink)
 
 **count** : number = `100`
@@ -51,7 +51,7 @@ An array of 0 or more frames.  If no frames are specified, default to frame 0. I
 
 **lifeTime** : number = `1`
 
-The maximum lifetime of a particle in seconds.  This is an option-range value e.g. `2` is 2 seconds, `3..4` implies each particle lives for between 3 and 4 seconds, `5|6|1` sets each particle's lifetime to either 5, 6 or 1 seconds
+The maximum lifetime of a particle in seconds.  This is an option-range value e.g. `2` is 2 seconds, `3->4` implies each particle lives for between 3 and 4 seconds, `5|6|1` sets each particle's lifetime to either 5, 6 or 1 seconds
 
 **loopTime** : number = `0`
 
@@ -59,16 +59,16 @@ The number of seconds before a particle is reused.  If less than the maximum **l
 
 **opacities** : number[] = `1`
 
-An over-time array of opacities (1 for opaque, 0 for transparent) for each particle, an empty array defaults to 1. Each element can be a value, option or range e.g. `1,.5 .. .6,0` starts all pixels as opaque (1), 
+An over-time array of opacities (1 for opaque, 0 for transparent) for each particle, an empty array defaults to 1. Each element can be a value, option or range e.g. `1,.5 -> .6,0` starts all pixels as opaque (1), 
 then linearly interpolate to a value between .5 and .6 at their half-life , and finally interpolate down to invisible (0)
 
 **orbitalAcceleration** : number = `0`
 
-The acceleration in degrees per second squared on a random axis (the same axis is used for **oribalAcceleration** and **orbitalVelocity**) around the origin of the particle system. This does nothing if the particle spawned at the origin.  This number is an option-range, e.g. `10` is 10 deg/s^2, `9..-5` is a value between 9 and -5 deg/s^2 and `4.5|6|-3` is either 4.5, 6 or -3 deg/s^2
+The acceleration in degrees per second squared on a random axis (the same axis is used for **oribalAcceleration** and **orbitalVelocity**) around the origin of the particle system. This does nothing if the particle spawned at the origin.  This number is an option-range, e.g. `10` is 10 deg/s^2, `9->-5` is a value between 9 and -5 deg/s^2 and `4.5|6|-3` is either 4.5, 6 or -3 deg/s^2
 
 **orbitalVelocity** : number = `0`
 
-The velocity in degrees per second on a random axis (the same axis is used for **oribalAcceleration** and **orbitalVelocity**) around the origin of the particle system. This does nothing if the particle spawned at the origin.  This number is an option-range, e.g. `10` is 10 deg/s, `9..-5` is a value between 9 and -5 deg/s and `4.5|6|-3` is either 4.5, 6 or -3 deg/s
+The velocity in degrees per second on a random axis (the same axis is used for **oribalAcceleration** and **orbitalVelocity**) around the origin of the particle system. This does nothing if the particle spawned at the origin.  This number is an option-range, e.g. `10` is 10 deg/s, `9->-5` is a value between 9 and -5 deg/s and `4.5|6|-3` is either 4.5, 6 or -3 deg/s
 
 **particles** : string = `particles`
 

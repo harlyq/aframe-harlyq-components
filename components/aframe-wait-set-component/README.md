@@ -8,7 +8,7 @@ This component can appear multiple times on a single entity
 
 e.g.
 ```html
-<a-entity wait-set="events: start; delay: 1.5; target: .light; material.color=red|yellow; pulse=1..2.5"></a-entity>
+<a-entity wait-set="events: start; delay: 1.5; target: .light; material.color=red|yellow; pulse=1->2.5"></a-entity>
 ```
 waits `1.5` seconds after the event `start` has been received on this component's entity and then set the `material.color` to either `red` or `yellow`, and the `pulse` component to a number between `1` and `2.5` for all entities of the class `light`
 
@@ -19,7 +19,7 @@ waits `1.5` seconds after the event `start` has been received on this component'
 if true show debugging information when properties are set
 
 ---
-**delay** : : value OR value1 | value2 | ... | valueN OR min..max = `0`
+**delay** : : value OR value1 | value2 | ... | valueN OR min->max = `0`
 
 wait for this many seconds before setting the custom properties on the **target**. If **events** is specified, then only start the delay once **events** is received
 
@@ -54,8 +54,8 @@ Selector for sending events to.  This selector can be scoped with **targetScope*
 Limit the scope of the **target** attribute to part of the document tree. It can either be the entire document (`document`), the children of the current entity (`self`), the children of the current entities parent (`parent`), or children of the event (`event`).  If **target** is empty, then the set is performed on the document (`document`), the parent (`parent`), this component's entity (`self`) or the initial target of the event (`event`)
 
 ---
-**\<property\>** : value OR value1 | value2 | ... | valueN OR min..max
+**\<property\>** : value OR value1 | value2 | ... | valueN OR min->max
 
-Custom attribute which defines a property to set.  This property can use dot notation (e.g. component.property) and value is either: a single value; a list of options (separated by `|`) where one is chosen at random; or a range of two values separated by `..` where a random number is chosen which is greater than or equal to the first value and less than the second value. For the range operator (`..`) the values may be either vectors of numbers (eg. a single number, vec2, vec3 or vec4) or colors (anything else will be treated as options rather than a range).
+Custom attribute which defines a property to set.  This property can use dot notation (e.g. component.property) and value is either: a single value; a list of options (separated by `|`) where one is chosen at random; or a range of two values separated by `->` where a random number is chosen which is greater than or equal to the first value and less than the second value. For the range operator (`->`) the values may be either vectors of numbers (eg. a single number, vec2, vec3 or vec4) or colors (anything else will be treated as options rather than a range).
 
 Values can also have a special `$` form, which will pull data from the current entity e.g. `$material.color` will return the `color` value of the `material` component on the current entity. `$event` can be used to get data from the received event e.g. `$event.target.id` will return the `id` of the `target` of the received event.
