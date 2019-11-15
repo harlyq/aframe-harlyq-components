@@ -28,14 +28,14 @@ AFRAME.registerComponent("wait-emit", {
 
   remove() {
     this.eventListener.remove()
-    this.waitClock.clearAllTimeouts()
+    this.delayClock.clearAllTimeouts()
   },
 
   update(oldData) {
     const data = this.data
 
     if (data.events !== oldData.events || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.eventListener.set( data.events, data.source, data.sourceScope, data.events )
+      this.eventListener.set( data.events, data.source, data.sourceScope )
     }
 
     // must be last as the waitTimer may trigger immediately

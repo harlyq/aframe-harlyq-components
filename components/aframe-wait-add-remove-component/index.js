@@ -74,7 +74,7 @@ AFRAME.registerComponent("wait-add-remove", {
   update(oldData) {
     const data = this.data
     if (oldData.events !== data.events || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
-      this.eventListener.set(data.events, data.source, data.sourceScope, data.events)
+      this.eventListener.set(data.events, data.source, data.sourceScope)
     }
     
     // must be last as the waitTimer may trigger immediately
