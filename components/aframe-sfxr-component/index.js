@@ -63,6 +63,7 @@ AFRAME.registerComponent("sfxr", {
     hpFilterCutoffSweep: { default: 0, min: -1, max: 1 },
     masterVolume: { default: 0, min: 0, max: 1 },
     enabled: { default: true },
+    playOnChange: { default: false },
   },
 
   multiple: true,
@@ -175,6 +176,10 @@ AFRAME.registerComponent("sfxr", {
         data.hpFilterCutoffSweep,
         data.masterVolume
       ])
+
+      if (data.playOnChange) {
+        this.player.play()
+      }
     }
 
     if (data.events !== oldData.events) {
