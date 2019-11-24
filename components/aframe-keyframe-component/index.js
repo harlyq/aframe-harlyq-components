@@ -256,7 +256,7 @@ AFRAME.registerComponent("keyframe", {
     
           if (emptyRange || emptyOption) {
             // if missing the first rule then replace it with the existing value
-            let info = i == 0 ? attribute.parsePart(getPropertyAsString(this.el, prop)) : lastKey
+            let info = i == 0 ? attribute.parsePartAny(getPropertyAsString(this.el, prop)) : lastKey
             if (emptyRange) rule.range = rule.range.map(x => x === "" ? info : x)
             if (emptyOption) rule.options = rule.options.map(x => x === "" ? info : x)
           }

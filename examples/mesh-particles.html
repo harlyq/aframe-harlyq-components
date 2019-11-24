@@ -15,25 +15,25 @@
       <a-sphere id="sphere" instance-pool="size: 300" material="transparent:true"></a-sphere>
       <a-instance src="#box" color="cyan" dynamic="true" scale=".1 .1 .1" animation="property: position; from: 10 4 -10; to: -10 4 -10; loop: true; dur: 40000"></a-instance>
       <a-entity id="radial" position="0 0 -15" 
-        mesh-particles="instancePools: #box; spawnRate: 5..10; radialPosition: 1.5; radialVelocity: 1,1; radialAcceleration: -1,-1; rotation: 0 0 0..360 360 360, 0 0 0; scale: .4...2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
+        mesh-particles="instancePools: #box; spawnRate: 5->10; radialPosition: 1.5; radialVelocity: 1,1; radialAcceleration: -1,-1; rotation: 0 0 0->360 360 360, 0 0 0; scale: .4->.2,.1; color: red|green|blue,orange; lifeTime: 3"></a-entity>
       <a-entity id="fountain" position="-5 0 -15">
         <a-entity animation="property: rotation; from: 0 0 0; to: 0 360 0; loop: true; easing: linear; dur: 5000">
           <a-entity id="fountainTarget" position="2 0 0"></a-entity>
         </a-entity>
         <a-entity animation="property: rotation; from: 0 0 0; to: 0 -360 0; loop: true; easing: linear; dur: 7000">
-          <a-entity id="fountainSource" position="-1 0 0" mesh-particles="instancePools: #box; spawnRate: 15; velocity: -.3 4 .3.. .3 3 .3; acceleration: 0 -3 0,0 -3 0; scale: .1; color: blue..green,black; lifeTime: 2; destination: #fountainTarget; destinationWeight: .8; destinationOffset: 0 1 0"></a-entity>
+          <a-entity id="fountainSource" position="-1 0 0" mesh-particles="instancePools: #box; spawnRate: 15; velocity: -.3 4 .3-> .3 3 .3; acceleration: 0 -3 0,0 -3 0; scale: .1; color: blue->green,black; lifeTime: 2; destination: #fountainTarget; destinationWeight: .8; destinationOffset: 0 1 0"></a-entity>
         </a-entity>
       </a-entity>
       <a-entity id="cube" position="5 0 -15" 
-        mesh-particles="instancePools: #box; spawnRate: 50; position: -1 -1 -1..1 1 1; scale: .3; color: red..orange,black; lifeTime: 5; opacity: 1,1,0"></a-entity>
+        mesh-particles="instancePools: #box; spawnRate: 50; position: -1 -1 -1->1 1 1; scale: .3; color: red->orange,black; lifeTime: 5; opacity: 1,1,0"></a-entity>
       <a-entity id="spiral" position="10 0 -15" 
-        mesh-particles="instancePools: #box; spawnRate: 8..10; radialType: circlexz; radialPosition: 1; scale: .3; velocity: 0 1 0,0 1 0; angularVelocity: 0 20 0,0 40 0; lifeTime: 2; color: purple; radialAcceleration: -.2..-.3; opacity: 1,0"></a-entity>
+        mesh-particles="instancePools: #box; spawnRate: 8->10; radialType: circlexz; radialPosition: 1; scale: .3; velocity: 0 1 0,0 1 0; angularVelocity: 0 20 0,0 40 0; lifeTime: 2; color: purple; radialAcceleration: -.2->-.3; opacity: 1,0"></a-entity>
       <a-entity id="atoms" position="-10 0 -15" 
-        mesh-particles="instancePools: #box; spawnRate: 1; radialType: sphere; radialPosition: 1; scale: .1; color: red,orange,yellow,white; orbitalVelocity: 305..260; lifeTime: 10"></a-entity>
+        mesh-particles="instancePools: #box; spawnRate: 1; radialType: sphere; radialPosition: 1; scale: .1; color: red,orange,yellow,white; orbitalVelocity: 305->260; lifeTime: 10"></a-entity>
       <a-entity id="multiple" position="-15 0 -15" 
-        mesh-particles="instancePools: #box,#sphere; spawnRate: 60; position: -.5 1 -.2.. .5 1 .2; scale: 0,.2; color: red|blue; acceleration: 0 -1 0; lifeTime: 3"></a-entity>
+        mesh-particles="instancePools: #box,#sphere; spawnRate: 60; position: -.5 1 -.2-> .5 1 .2; scale: 0,.2; color: red|blue; acceleration: 0 -1 0; lifeTime: 3"></a-entity>
       <a-entity id="tumbler" position="0 -5 -15" 
-        mesh-particles="instancePools: #sphere; spawnRate: 1; radialType: sphere; radialPosition: 1; angularVelocity: 2 0 0..260 0 0; color: green|orange|black; lifeTime: 5; enabled: false">
+        mesh-particles="instancePools: #sphere; spawnRate: 1; radialType: sphere; radialPosition: 1; angularVelocity: 2 0 0->260 0 0; color: green|orange|black; lifeTime: 5; enabled: false">
       </a-entity>
       <a-entity id="events" position="5 -5 -15" 
         mesh-particles="events: ping; instancePools: #sphere; spawnRate: 20; radialType: circleyz; radialPosition: 2; scale: 0,.5,0; color: teal; lifeTime: 1; duration: 1">
