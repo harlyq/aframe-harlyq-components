@@ -1,5 +1,4 @@
 const NUM_FACES = 6
-const NUM_SIDES = 6
 const UNEXPOSED_FRAME = 7
 const TEXTURE_COLS = 4
 const TEXTURE_ROWS = 2
@@ -29,6 +28,10 @@ AFRAME.registerComponent("cube-puzzle", {
 
     this.state = {
       name: "idle",
+      hold: {
+        side: -1,
+        matrix: new THREE.Matrix4(),
+      },
       turn: {
         side: -1,
         pieces: [],
@@ -38,7 +41,6 @@ AFRAME.registerComponent("cube-puzzle", {
       },
       snapped: true,
       activeHands: [],
-      holdMatrix: new THREE.Matrix4(),
     }
 
     this.cube = this.createCube()
@@ -101,11 +103,12 @@ AFRAME.registerComponent("cube-puzzle", {
       case "grab":
         if (state.name === "idle") {
           state.name = "hold"
+          state.hold.side = -1
           state.activeHands.push(action.hand)
-          this.updateHoldMatrix(state.holdMatrix, state.activeHands[0])
+          this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
 
         } else if (state.name === "hold") {
-          const side = this.calcBestSide(action.hand)
+          const side = this.calcBestSide(action.hand, state.hold.side)
           if (side !== -1) {
             if (state.snapped) {
               const pieces = this.getSidePieces(side)
@@ -142,7 +145,7 @@ AFRAME.registerComponent("cube-puzzle", {
           state.name = "hold"
           const i = state.activeHands.indexOf(action.hand)
           state.activeHands.splice(i, 1)
-          this.updateHoldMatrix(state.holdMatrix, state.activeHands[0])
+          this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
         }
         break
 
@@ -160,9 +163,14 @@ AFRAME.registerComponent("cube-puzzle", {
           state.snapped = true
         }
         break
+
+      case "hover":
+        if (state.name === "hold") {
+          state.hold.side = action.side
+        }
     }
 
-    if (state.name !== oldStateName) {
+    if (this.data.debug && state.name !== oldStateName) {
       console.log("newState", state.name)
     }
   },
@@ -187,13 +195,19 @@ AFRAME.registerComponent("cube-puzzle", {
     let pieces = EMPTY_ARRAY
 
     if (hand) {
-      const bestSide = this.calcBestSide(hand)
+      const bestSide = this.calcBestSide(hand, state.hold.side)
       if (bestSide >= 0) {
         if (state.snapped) {
           pieces = this.getSidePieces(bestSide)
         } else if (state.turn.side === bestSide) {
           pieces = state.turn.pieces
         }
+      }
+
+      if (pieces !== EMPTY_ARRAY && state.hold.side !== bestSide) {
+        this.dispatch( { name: "hover", side: bestSide } )
+      } else if (pieces === EMPTY_ARRAY && state.hold.side !== -1) {
+        this.dispatch( { name: "hover", side: -1 } )
       }
     }
       
@@ -275,7 +289,7 @@ AFRAME.registerComponent("cube-puzzle", {
     return function stickToHand(hand) {
       const self3D = this.el.object3D
       invParentMatrix.getInverse(this.el.object3D.parent.matrixWorld)  
-      newMatrix.multiplyMatrices(hand.object3D.matrixWorld, this.state.holdMatrix) // determine new hover3D world matrix
+      newMatrix.multiplyMatrices(hand.object3D.matrixWorld, this.state.hold.matrix) // determine new hover3D world matrix
       newMatrix.premultiply(invParentMatrix) // convert to a local matrix
       newMatrix.decompose(self3D.position, self3D.quaternion, self3D.scale)
     }
@@ -300,7 +314,7 @@ AFRAME.registerComponent("cube-puzzle", {
             }
           }
 
-          highlighted = pieces.slice()
+          highlighted = pieces
       }
     }
   })(),
@@ -525,12 +539,12 @@ AFRAME.registerComponent("cube-puzzle", {
     const pos = new THREE.Vector3()
     const sideNormals = [{x:1,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}, {x:0,y:-1,z:0}, {x:0,y:0,z:1}, {x:0,y:0,z:-1}]
 
-    return function calcBestSide(hand) {
+    return function calcBestSide(hand, prevSide) {
       matrixLocal.getInverse(this.el.object3D.matrixWorld).multiply(hand.object3D.matrixWorld)
       pos.setFromMatrixPosition(matrixLocal)
       pos.normalize()
   
-      for (let side = 0; side < NUM_SIDES; side++) {
+      for (let side = 0; side < sideNormals.length; side++) {
         const normal = sideNormals[side]
         if (pos.dot(normal) > 0.7) {
           return side
