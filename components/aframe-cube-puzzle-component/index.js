@@ -3,6 +3,8 @@ const UNEXPOSED_FRAME = 7
 const TEXTURE_COLS = 4
 const TEXTURE_ROWS = 2
 const EMPTY_ARRAY = []
+const INNER_SIDE = 6
+const NO_SIDE = -1
 
 AFRAME.registerComponent("cube-puzzle", {
   schema: {
@@ -10,7 +12,7 @@ AFRAME.registerComponent("cube-puzzle", {
     grabStart: { default: "triggerdown" },
     grabEnd: { default: "triggerup" },
     highlightColor: { type: "color", default: "#555" },
-    snapAngle: { default: 15 },
+    snapAngle: { default: 20 },
     debug: { default: false },
   },
 
@@ -29,11 +31,11 @@ AFRAME.registerComponent("cube-puzzle", {
     this.state = {
       name: "idle",
       hold: {
-        side: -1,
+        side: NO_SIDE,
         matrix: new THREE.Matrix4(),
       },
       turn: {
-        side: -1,
+        side: NO_SIDE,
         pieces: [],
         matrices: [],
         handStart: new THREE.Matrix4(),
@@ -45,6 +47,8 @@ AFRAME.registerComponent("cube-puzzle", {
 
     this.cube = this.createCube()
     this.el.setObject3D("mesh", this.cube)
+
+    this.shuffleCube()
 
     // this.rotateCube("U")
     // this.rotateCube("R'")
@@ -58,8 +62,6 @@ AFRAME.registerComponent("cube-puzzle", {
     // this.rotateCube("B'")
     // this.rotateCube("R")
     // this.rotateCube("R")
-
-    this.shuffleCube()
 
     // this.rotateCube("R")
     // this.rotateCube("R")
@@ -101,40 +103,45 @@ AFRAME.registerComponent("cube-puzzle", {
 
     switch (action.name) {      
       case "grab":
+        state.activeHands.push(action.hand)
+
         if (state.name === "idle") {
           state.name = "hold"
-          state.hold.side = -1
-          state.activeHands.push(action.hand)
+          state.hold.side = NO_SIDE
           this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
 
         } else if (state.name === "hold") {
-          const side = this.calcBestSide(action.hand, state.hold.side)
-          if (side !== -1) {
-            if (state.snapped) {
-              const pieces = this.getSidePieces(side)
+          const holdSide = state.hold.side
 
-              state.name = "turn"
-              state.turn.side = side
-              state.turn.pieces = pieces
-              state.turn.matrices = pieces.map( piece => piece.matrix.clone() )
-              state.turn.handStart.copy( action.hand.object3D.matrixWorld )
-              state.turn.startAngle = 0
-            } else {
-              state.name = "turning"
-              state.turn.handStart.copy( action.hand.object3D.matrixWorld )
-            }
+          if (state.snapped && holdSide !== NO_SIDE) {
+            const pieces = this.getSidePieces(holdSide)
 
-            state.activeHands.push(action.hand)
+            state.name = "turn"
+            state.turn.side = holdSide
+            state.turn.pieces = pieces
+            state.turn.matrices = pieces.map( piece => piece.matrix.clone() )
+            state.turn.handStart.copy( action.hand.object3D.matrixWorld )
+            state.turn.startAngle = 0
+            console.log("grabbed turn", holdSide, pieces.length)
+          } else if (!state.snapped && holdSide === state.turn.side) {
+            state.name = "turning"
+            state.turn.handStart.copy( action.hand.object3D.matrixWorld )
+            console.log("grabbed turning", holdSide)
           }
-
         }
         break
 
       case "release":
         if (state.name === "hold") {
-          state.name = "idle"
-          state.activeHands.length = 0
 
+          const i = state.activeHands.indexOf(action.hand)
+          state.activeHands.splice(i, 1)
+          if (state.activeHands.length > 0) {
+            this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
+          } else {
+            state.name = "idle"
+          }
+  
         } else if (state.name === "turn" || state.name === "turning") {
 
           if (state.name === "turning") {
@@ -142,10 +149,13 @@ AFRAME.registerComponent("cube-puzzle", {
             state.turn.startAngle += this.calcAngleBetween(state.turn.handStart, turnHand.object3D.matrixWorld)
           }
 
-          state.name = "hold"
           const i = state.activeHands.indexOf(action.hand)
           state.activeHands.splice(i, 1)
-          this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
+          if (state.activeHands.length > 0) {
+            this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
+          }
+  
+          state.name = "hold"
         }
         break
 
@@ -191,23 +201,23 @@ AFRAME.registerComponent("cube-puzzle", {
   tickHold() {
     const state = this.state
     this.stickToHand(state.activeHands[0])
-    const hand = this.data.hands.find(hand => state.activeHands[0] !== hand && this.isNear(hand))
+    const hand = this.data.hands.find(hand => !state.activeHands.includes(hand) && this.isNear(hand))
     let pieces = EMPTY_ARRAY
 
     if (hand) {
-      const bestSide = this.calcBestSide(hand, state.hold.side)
-      if (bestSide >= 0) {
-        if (state.snapped) {
+      let bestSide = state.turn.side
+
+      if (state.snapped) {
+        bestSide = this.calcBestSide(hand, state.hold.side)
+        if (bestSide >= 0) {
           pieces = this.getSidePieces(bestSide)
-        } else if (state.turn.side === bestSide) {
-          pieces = state.turn.pieces
         }
+      } else {
+        pieces = state.turn.pieces
       }
 
-      if (pieces !== EMPTY_ARRAY && state.hold.side !== bestSide) {
+      if (state.hold.side !== bestSide) {
         this.dispatch( { name: "hover", side: bestSide } )
-      } else if (pieces === EMPTY_ARRAY && state.hold.side !== -1) {
-        this.dispatch( { name: "hover", side: -1 } )
       }
     }
       
@@ -242,7 +252,7 @@ AFRAME.registerComponent("cube-puzzle", {
     const inSnapAngle = Math.abs(angle - rightAngle) < this.snapAngle
     const revisedAngle = inSnapAngle ? rightAngle : angle
 
-    switch (state.turn.side) {
+    switch (state.turn.side % INNER_SIDE) {
       case 0: rotationMatrix.makeRotationX(revisedAngle); break
       case 1: rotationMatrix.makeRotationX(-revisedAngle); break
       case 2: rotationMatrix.makeRotationY(revisedAngle); break
@@ -540,18 +550,23 @@ AFRAME.registerComponent("cube-puzzle", {
     const sideNormals = [{x:1,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}, {x:0,y:-1,z:0}, {x:0,y:0,z:1}, {x:0,y:0,z:-1}]
 
     return function calcBestSide(hand, prevSide) {
+      // in cube space, the cube is (-.5,-.5,-.5) to (.5,.5,.5)
       matrixLocal.getInverse(this.el.object3D.matrixWorld).multiply(hand.object3D.matrixWorld)
       pos.setFromMatrixPosition(matrixLocal)
-      pos.normalize()
   
+      let bestSide = -1
+      let longestNormal = 0
+
       for (let side = 0; side < sideNormals.length; side++) {
         const normal = sideNormals[side]
-        if (pos.dot(normal) > 0.7) {
-          return side
+        const alongNormal = pos.dot(normal)
+        if (alongNormal > longestNormal) {
+          bestSide = side
+          longestNormal = alongNormal
         }
       }
-  
-      return -1
+
+      return longestNormal > .6 ? bestSide : (prevSide % INNER_SIDE + INNER_SIDE)
     }
   })(),
 
@@ -572,12 +587,18 @@ AFRAME.registerComponent("cube-puzzle", {
   getSidePieces: (function() {
     const pos = new THREE.Vector3()
     const sideTests = [
-      (pos) => pos.x > .3,
+      (pos) => pos.x > .3, // outser sides
       (pos) => pos.x < -.3,
       (pos) => pos.y > .3,
       (pos) => pos.y < -.3,
       (pos) => pos.z > .3,
       (pos) => pos.z < -.3,
+      (pos) => pos.x > -.1, // outer sides + adjacent centers
+      (pos) => pos.x < .1,
+      (pos) => pos.y > -.1,
+      (pos) => pos.y < .1,
+      (pos) => pos.z > -.1,
+      (pos) => pos.z < .1,
     ]
 
     return function getSidePieces(side) {
