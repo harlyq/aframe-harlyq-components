@@ -36,9 +36,9 @@
         wait-set__pad="events: trackpaddown; color: cyan; debug: false"
       >
       </a-box>
-      <a-box id="stick" tool="handPosition: -.5 0 0; handRotation: 0 90 45; maxHands: 2" position="-1 1 -1" scale=".01 .01 2" rotation="90 0 0" color="yellow"></a-box>
+      <a-box id="stick" tool="handPosition: -.5 0 0; handRotation: 0 90 45; maxHands: 2" position="1 1 -1" scale=".01 .01 2" rotation="90 0 0" color="yellow"></a-box>
       <!--a-entity position="1 1 -1" picture="src: #pic"></a-entity-->
-      <a-entity position="1 1 -1" scale=".1 .1 .1" cube-puzzle></a-entity>
+      <a-entity position="-1 1 -1" scale=".1 .1 .1" cube-puzzle="moves: U R' B' L2 B U2 R B' R2"></a-entity>
     </a-scene>
   </body>
 </html>

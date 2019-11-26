@@ -1,3 +1,5 @@
+import { aframeHelper } from "harlyq-helpers"
+
 const NUM_FACES = 6
 const UNEXPOSED_FRAME = 7
 const TEXTURE_COLS = 4
@@ -5,6 +7,31 @@ const TEXTURE_ROWS = 2
 const EMPTY_ARRAY = []
 const INNER_SIDE = 6
 const NO_SIDE = -1
+const PI_2 = Math.PI*.5
+const PI = Math.PI
+
+const VALID_MOVES = {
+  "F2": { side: 4, euler: new THREE.Euler(0,0,-PI) },
+  "R2": { side: 0, euler: new THREE.Euler(-PI,0,0) },
+  "U2": { side: 2, euler: new THREE.Euler(0,-PI,0) },
+  "L2": { side: 1, euler: new THREE.Euler(PI,0,0) },
+  "D2": { side: 3, euler: new THREE.Euler(0,PI,0) },
+  "B2": { side: 5, euler: new THREE.Euler(0,0,PI) },
+  "F'": { side: 4, euler: new THREE.Euler(0,0,PI_2) },
+  "R'": { side: 0, euler: new THREE.Euler(PI_2,0,0) },
+  "U'": { side: 2, euler: new THREE.Euler(0,PI_2,0) },
+  "L'": { side: 1, euler: new THREE.Euler(-PI_2,0,0) },
+  "D'": { side: 3, euler: new THREE.Euler(0,-PI_2,0) },
+  "B'": { side: 5, euler: new THREE.Euler(0,0,-PI_2) },
+  "F": { side: 4, euler: new THREE.Euler(0,0,-PI_2) },
+  "R": { side: 0, euler: new THREE.Euler(-PI_2,0,0) },
+  "U": { side: 2, euler: new THREE.Euler(0,-PI_2,0) },
+  "L": { side: 1, euler: new THREE.Euler(PI_2,0,0) },
+  "D": { side: 3, euler: new THREE.Euler(0,PI_2,0) },
+  "B": { side: 5, euler: new THREE.Euler(0,0,PI_2) },
+}
+
+function toUpperCase(str) { return str.trim().toUpperCase() }
 
 AFRAME.registerComponent("cube-puzzle", {
   schema: {
@@ -13,6 +40,7 @@ AFRAME.registerComponent("cube-puzzle", {
     grabEnd: { default: "triggerup" },
     highlightColor: { type: "color", default: "#555" },
     snapAngle: { default: 20 },
+    moves: { default: "", parse: toUpperCase },
     debug: { default: false },
   },
 
@@ -47,38 +75,9 @@ AFRAME.registerComponent("cube-puzzle", {
 
     this.cube = this.createCube()
     this.el.setObject3D("mesh", this.cube)
-
-    this.shuffleCube()
-
-    // this.rotateCube("U")
-    // this.rotateCube("R'")
-    // this.rotateCube("B'")
-    // this.rotateCube("L")
-    // this.rotateCube("L")
-    // this.rotateCube("B")
-    // this.rotateCube("U'")
-    // this.rotateCube("U'")
-    // this.rotateCube("R")
-    // this.rotateCube("B'")
-    // this.rotateCube("R")
-    // this.rotateCube("R")
-
-    // this.rotateCube("R")
-    // this.rotateCube("R")
-    // this.rotateCube("B")
-    // this.rotateCube("R'")
-    // this.rotateCube("U")
-    // this.rotateCube("U")
-    // this.rotateCube("B'")
-    // this.rotateCube("L")
-    // this.rotateCube("L")
-    // this.rotateCube("B")
-    // this.rotateCube("R")
-    // this.rotateCube("U'")
-
   },
 
-  update() {
+  update(oldData) {
     const data = this.data
     for (let hand of data.hands) {
       hand.addEventListener(data.grabStart, this.onGrabStart)
@@ -87,6 +86,15 @@ AFRAME.registerComponent("cube-puzzle", {
 
     this.highlightColor.set(data.highlightColor)
     this.snapAngle = THREE.Math.degToRad( Math.abs(data.snapAngle) )
+
+    if (data.moves !== oldData.moves) {
+      this.resetCube()
+      data.moves.split(" ").forEach(move => {
+        if (move && !this.rotateCube(move)) {
+          aframeHelper.error(this, `unknown move "${move}"`)
+        }
+      })
+    }
   },
 
   tick() {
@@ -363,13 +371,22 @@ AFRAME.registerComponent("cube-puzzle", {
 
           const cubeMaterial = new THREE.MeshStandardMaterial({map: cubeTexture})
           const mesh = new THREE.Mesh(geo, cubeMaterial)
-          mesh.pieceOrigin = new THREE.Vector3(x*size, y*size, z*size)
+          mesh.pieceOrigin = pos.clone()
           cubeGroup.add(mesh)
         }
       }
     }
 
     return cubeGroup
+  },
+
+  resetCube() {
+    const identity = new THREE.Matrix4()
+    for (let child of this.cube.children) {
+      child.position.set(0,0,0)
+      child.quaternion.set(0,0,0,1)
+      child.matrix.copy(identity)
+    }
   },
 
   setUVs(geo, face, frame) {
@@ -467,11 +484,11 @@ AFRAME.registerComponent("cube-puzzle", {
     return geo
   },
 
-  shuffleCube() {
-    const moves = ["F","R","U","L","D","B","F'","R'","U'","L'","D'","B'"]
-    for (let i = 0; i < 50; i++) {
-      const index = ~~(Math.random()*moves.length)
-      this.rotateCube(moves[index])
+  shuffleCube(turns = 30) {
+    const moves = Object.keys(VALID_MOVES)
+    for (let i = 0; i < turns; i++) {
+      const moveIndex = ~~( Math.random()*moves.length )
+      this.rotateCube( moves[moveIndex] )
     }
   },
 
@@ -479,68 +496,23 @@ AFRAME.registerComponent("cube-puzzle", {
     const rotationMatrix = new THREE.Matrix4()
     const newMatrix = new THREE.Matrix4()
 
-    return function rotateCube(move, angle = 90) {
-      let side = 0
-      const deg = THREE.Math.degToRad(angle)
-      
-      switch(move) {
-        case "F":
-          side = 4
-          rotationMatrix.makeRotationZ(-deg)
-          break
-        case "R":
-          side = 0
-          rotationMatrix.makeRotationX(-deg)
-          break
-        case "U":
-          side = 2
-          rotationMatrix.makeRotationY(-deg)
-          break
-        case "L":
-          side = 1
-          rotationMatrix.makeRotationX(deg)
-          break
-        case "D":
-          side = 3
-          rotationMatrix.makeRotationY(deg)
-          break
-        case "B":
-          side = 5
-          rotationMatrix.makeRotationZ(deg)
-          break
-        case "F'":
-          side = 4
-          rotationMatrix.makeRotationZ(deg)
-          break
-        case "R'":
-          side = 0
-          rotationMatrix.makeRotationX(deg)
-          break
-        case "U'":
-          side = 2
-          rotationMatrix.makeRotationY(deg)
-          break
-        case "L'":
-          side = 1
-          rotationMatrix.makeRotationX(-deg)
-          break
-        case "D'":
-          side = 3
-          rotationMatrix.makeRotationY(-deg)
-          break
-        case "B'":
-          side = 5
-          rotationMatrix.makeRotationZ(-deg)
-          break
-      }
-  
-      const pieces = this.getSidePieces(side)
+    return function rotateCube(move) {
+      const isValid = VALID_MOVES[move]
 
-      for (let piece of pieces) {
-        newMatrix.copy(piece.matrix).premultiply(rotationMatrix)
-        newMatrix.decompose(piece.position, piece.quaternion, piece.scale)
-        piece.matrix.copy(newMatrix)
+      if (isValid) {
+        const side = VALID_MOVES[move].side
+        const pieces = this.getSidePieces(side)
+
+        rotationMatrix.makeRotationFromEuler( VALID_MOVES[move].euler )
+
+        for (let piece of pieces) {
+          newMatrix.copy(piece.matrix).premultiply(rotationMatrix)
+          newMatrix.decompose(piece.position, piece.quaternion, piece.scale)
+          piece.matrix.copy(newMatrix)
+        }
       }
+
+      return isValid
     }
   })(),
 
