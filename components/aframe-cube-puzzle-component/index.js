@@ -9,29 +9,46 @@ const INNER_SIDE = 6
 const NO_SIDE = -1
 const PI_2 = Math.PI*.5
 const PI = Math.PI
+const FLOATS_PER_POSITION = 3
+const FLOATS_PER_QUATERNION = 4
+const FLOATS_PER_PACKED_FRAME = 1
+const MAX_BITS_PER_FRAME = 3
+const PACKED_FRAME_DIVISOR = 2 ** (NUM_FACES*MAX_BITS_PER_FRAME)
+
+function quaternionFromEuler(x,y,z) {
+  return new THREE.Quaternion().setFromEuler( new THREE.Euler(x,y,z) )
+}
 
 const VALID_MOVES = {
-  "F2": { side: 4, euler: new THREE.Euler(0,0,-PI) },
-  "R2": { side: 0, euler: new THREE.Euler(-PI,0,0) },
-  "U2": { side: 2, euler: new THREE.Euler(0,-PI,0) },
-  "L2": { side: 1, euler: new THREE.Euler(PI,0,0) },
-  "D2": { side: 3, euler: new THREE.Euler(0,PI,0) },
-  "B2": { side: 5, euler: new THREE.Euler(0,0,PI) },
-  "F'": { side: 4, euler: new THREE.Euler(0,0,PI_2) },
-  "R'": { side: 0, euler: new THREE.Euler(PI_2,0,0) },
-  "U'": { side: 2, euler: new THREE.Euler(0,PI_2,0) },
-  "L'": { side: 1, euler: new THREE.Euler(-PI_2,0,0) },
-  "D'": { side: 3, euler: new THREE.Euler(0,-PI_2,0) },
-  "B'": { side: 5, euler: new THREE.Euler(0,0,-PI_2) },
-  "F": { side: 4, euler: new THREE.Euler(0,0,-PI_2) },
-  "R": { side: 0, euler: new THREE.Euler(-PI_2,0,0) },
-  "U": { side: 2, euler: new THREE.Euler(0,-PI_2,0) },
-  "L": { side: 1, euler: new THREE.Euler(PI_2,0,0) },
-  "D": { side: 3, euler: new THREE.Euler(0,PI_2,0) },
-  "B": { side: 5, euler: new THREE.Euler(0,0,PI_2) },
+  "F2": { side: 4, quaternion: quaternionFromEuler(0,0,-PI) },
+  "R2": { side: 0, quaternion: quaternionFromEuler(-PI,0,0) },
+  "U2": { side: 2, quaternion: quaternionFromEuler(0,-PI,0) },
+  "L2": { side: 1, quaternion: quaternionFromEuler(PI,0,0) },
+  "D2": { side: 3, quaternion: quaternionFromEuler(0,PI,0) },
+  "B2": { side: 5, quaternion: quaternionFromEuler(0,0,PI) },
+  "F'": { side: 4, quaternion: quaternionFromEuler(0,0,PI_2) },
+  "R'": { side: 0, quaternion: quaternionFromEuler(PI_2,0,0) },
+  "U'": { side: 2, quaternion: quaternionFromEuler(0,PI_2,0) },
+  "L'": { side: 1, quaternion: quaternionFromEuler(-PI_2,0,0) },
+  "D'": { side: 3, quaternion: quaternionFromEuler(0,-PI_2,0) },
+  "B'": { side: 5, quaternion: quaternionFromEuler(0,0,-PI_2) },
+  "F": { side: 4, quaternion: quaternionFromEuler(0,0,-PI_2) },
+  "R": { side: 0, quaternion: quaternionFromEuler(-PI_2,0,0) },
+  "U": { side: 2, quaternion: quaternionFromEuler(0,-PI_2,0) },
+  "L": { side: 1, quaternion: quaternionFromEuler(PI_2,0,0) },
+  "D": { side: 3, quaternion: quaternionFromEuler(0,PI_2,0) },
+  "B": { side: 5, quaternion: quaternionFromEuler(0,0,PI_2) },
 }
 
 function toUpperCase(str) { return str.trim().toUpperCase() }
+
+function packFrames(frames) {
+  let packed = 0
+  for (let i = 0; i < frames.length; i++) {
+    packed += frames[i] * Math.pow(2, (frames.length - i - 1)*MAX_BITS_PER_FRAME)
+  }
+  return packed / PACKED_FRAME_DIVISOR // in the range (0,1]
+}
 
 AFRAME.registerComponent("cube-puzzle", {
   schema: {
@@ -47,6 +64,8 @@ AFRAME.registerComponent("cube-puzzle", {
   init() {
     this.onGrabStart = this.onGrabStart.bind(this)
     this.onGrabEnd = this.onGrabEnd.bind(this)
+    this.onBeforeCompile = this.onBeforeCompile.bind(this)
+
     this.actionTick = {
       "idle": this.tickIdle.bind(this),
       "hold": this.tickHold.bind(this),
@@ -127,14 +146,14 @@ AFRAME.registerComponent("cube-puzzle", {
             state.name = "turn"
             state.turn.side = holdSide
             state.turn.pieces = pieces
-            state.turn.matrices = pieces.map( piece => piece.matrix.clone() )
+            state.turn.quaternions = this.quaternions.slice()
             state.turn.handStart.copy( action.hand.object3D.matrixWorld )
             state.turn.startAngle = 0
-            console.log("grabbed turn", holdSide, pieces.length)
+
           } else if (!state.snapped && holdSide === state.turn.side) {
             state.name = "turning"
             state.turn.handStart.copy( action.hand.object3D.matrixWorld )
-            console.log("grabbed turning", holdSide)
+
           }
         }
         break
@@ -200,7 +219,7 @@ AFRAME.registerComponent("cube-puzzle", {
   tickIdle() {
     let hand = this.data.hands.find(hand => this.isNear(hand))
     if (hand) {
-      this.highlightPieces(this.cube.children)
+      this.highlightPieces(this.allPieces)
     } else {
       this.highlightPieces(EMPTY_ARRAY)
     }
@@ -245,44 +264,50 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   },
 
-  tickTurning() {
-    const state = this.state
-    const PI_2 = Math.PI*.5
-    this.stickToHand(state.activeHands[0])
-    this.highlightPieces(state.turn.pieces)
+  tickTurning: (function () {
+    const newQuat = new THREE.Quaternion()
+    const rotationQuat = new THREE.Quaternion()
+    const RIGHT = new THREE.Vector3(1,0,0)
+    const UP = new THREE.Vector3(0,1,0)
+    const FORWARD = new THREE.Vector3(0,0,1)
 
-    const turnHand = state.activeHands[1]
-    const angle = state.turn.startAngle + this.calcAngleBetween(state.turn.handStart, turnHand.object3D.matrixWorld)
-    const newMatrix = new THREE.Matrix4()
-    const rotationMatrix = new THREE.Matrix4()
-
-    const rightAngle = Math.round(angle/PI_2)*PI_2
-    const inSnapAngle = Math.abs(angle - rightAngle) < this.snapAngle
-    const revisedAngle = inSnapAngle ? rightAngle : angle
-
-    switch (state.turn.side % INNER_SIDE) {
-      case 0: rotationMatrix.makeRotationX(revisedAngle); break
-      case 1: rotationMatrix.makeRotationX(-revisedAngle); break
-      case 2: rotationMatrix.makeRotationY(revisedAngle); break
-      case 3: rotationMatrix.makeRotationY(-revisedAngle); break
-      case 4: rotationMatrix.makeRotationZ(revisedAngle); break
-      case 5: rotationMatrix.makeRotationZ(-revisedAngle); break
+    return function tickTurning() {
+      const state = this.state
+      this.stickToHand(state.activeHands[0])
+      this.highlightPieces(state.turn.pieces)
+  
+      const turnHand = state.activeHands[1]
+      const angle = state.turn.startAngle + this.calcAngleBetween(state.turn.handStart, turnHand.object3D.matrixWorld)
+  
+      const rightAngle = Math.round(angle/PI_2)*PI_2
+      const inSnapAngle = Math.abs(angle - rightAngle) < this.snapAngle
+      const revisedAngle = inSnapAngle ? rightAngle : angle
+  
+      switch (state.turn.side % INNER_SIDE) {
+        case 0: rotationQuat.setFromAxisAngle(RIGHT, revisedAngle); break
+        case 1: rotationQuat.setFromAxisAngle(RIGHT, -revisedAngle); break
+        case 2: rotationQuat.setFromAxisAngle(UP, revisedAngle); break
+        case 3: rotationQuat.setFromAxisAngle(UP, -revisedAngle); break
+        case 4: rotationQuat.setFromAxisAngle(FORWARD, revisedAngle); break
+        case 5: rotationQuat.setFromAxisAngle(FORWARD, -revisedAngle); break
+      }
+  
+      for (let i = 0; i < state.turn.pieces.length; i++) {
+        const piece = state.turn.pieces[i]
+        newQuat.fromArray(state.turn.quaternions, piece*FLOATS_PER_QUATERNION)
+        newQuat.premultiply(rotationQuat)
+        newQuat.toArray(this.quaternions, piece*FLOATS_PER_QUATERNION)
+      }
+  
+      this.instanceQuaternion.needsUpdate = true
+  
+      if (inSnapAngle && !state.snapped) {
+        this.dispatch( { name: "snap" } )
+      } else if (state.snapped && !inSnapAngle) {
+        this.dispatch( { name: "unsnap" } )
+      }
     }
-
-    for (let i = 0; i < state.turn.pieces.length; i++) {
-      const piece = state.turn.pieces[i]
-      const startMatrix = state.turn.matrices[i]
-      newMatrix.copy(startMatrix).premultiply(rotationMatrix)
-      newMatrix.decompose(piece.position, piece.quaternion, piece.scale)
-      piece.matrix.copy(newMatrix)
-    }
-
-    if (inSnapAngle && !state.snapped) {
-      this.dispatch( { name: "snap" } )
-    } else if (state.snapped && !inSnapAngle) {
-      this.dispatch( { name: "unsnap" } )
-    }
-  },
+  })(),
 
   calcAngleBetween: (function() {
     const startForward = new THREE.Vector3()
@@ -322,16 +347,12 @@ AFRAME.registerComponent("cube-puzzle", {
         highlighted.some(piece => !pieces.includes(piece)) 
       ) ) {
 
-          const highlightHex = this.highlightColor.getHex()
-
-          for (let piece of this.cube.children) {
-            if (pieces.includes(piece)) {
-              piece.material.emissive.setHex(highlightHex)
-            } else {
-              piece.material.emissive.setHex(0)
-            }
+          this.highlights.fill(0)
+          for (let piece of pieces) {
+            this.highlights[piece] = 1
           }
 
+          this.instanceHighlight.needsUpdate = true
           highlighted = pieces
       }
     }
@@ -339,23 +360,35 @@ AFRAME.registerComponent("cube-puzzle", {
 
   createCube() {
     const size = 1/3
-    const cubeTexture = this.createCubeTexture()
-    const cubeGroup = new THREE.Group()
-    const posMatrix = new THREE.Matrix4()
-    const pos = new THREE.Vector3()
+    const cubeMaterial = this.createCubeMaterial()
+    const numInstances = 3*3*3 - 1
 
+    const pieceGeo = new THREE.BoxBufferGeometry(size, size, size)
+    const instanceGeo = new THREE.InstancedBufferGeometry().copy(pieceGeo)
+
+    this.positions = new Float32Array(numInstances*FLOATS_PER_POSITION)
+    this.quaternions = new Float32Array(numInstances*FLOATS_PER_QUATERNION)
+    this.packedFrames = new Float32Array(numInstances*FLOATS_PER_PACKED_FRAME)
+    this.highlights = new Float32Array(numInstances)
+    this.allPieces = new Uint8Array(numInstances)
+
+    let k = 0
     for (let x = -1; x <= 1; x++) {
       for (let y = -1; y <= 1; y++) {
         for (let z = -1; z <= 1; z++) {
           if (x === 0 && y === 0 && z === 0) {
             continue
           }
-          
-          const geo = this.createPieceGeo(size)
-          pos.set(x*size, y*size, z*size)
-          posMatrix.setPosition(pos)
-          geo.applyMatrix(posMatrix)
 
+          let i = k*FLOATS_PER_POSITION
+          this.positions[i] = x*size
+          this.positions[i+1] = y*size
+          this.positions[i+2] = z*size
+
+          i = k*FLOATS_PER_QUATERNION
+          this.quaternions[i+3] = 1
+
+          let frames = []
           for (let face = 0; face < NUM_FACES; face++) {
             let isExposed = false
             switch (face) {
@@ -366,44 +399,35 @@ AFRAME.registerComponent("cube-puzzle", {
               case 4: isExposed = z === 1; break
               case 5: isExposed = z === -1; break
             }
-            this.setUVs(geo, face, isExposed ? face : UNEXPOSED_FRAME)
+            frames.push(isExposed ? face : UNEXPOSED_FRAME)
           }
 
-          const cubeMaterial = new THREE.MeshStandardMaterial({map: cubeTexture})
-          const mesh = new THREE.Mesh(geo, cubeMaterial)
-          mesh.pieceOrigin = pos.clone()
-          cubeGroup.add(mesh)
+          this.packedFrames[k] = packFrames(frames)
+          this.highlights[k] = 0
+          this.allPieces[k] = k
+
+          k++
         }
       }
     }
 
-    return cubeGroup
+    this.instancePosition = new THREE.InstancedBufferAttribute(this.positions, FLOATS_PER_POSITION)
+    this.instanceQuaternion = new THREE.InstancedBufferAttribute(this.quaternions, FLOATS_PER_QUATERNION)
+    this.instancePackedFrame = new THREE.InstancedBufferAttribute(this.packedFrames, FLOATS_PER_PACKED_FRAME)
+    this.instanceHighlight = new THREE.InstancedBufferAttribute(this.highlights, 1)
+
+    instanceGeo.addAttribute("instancePosition", this.instancePosition)
+    instanceGeo.addAttribute("instanceQuaternion", this.instanceQuaternion)
+    instanceGeo.addAttribute("instancePackedFrame", this.instancePackedFrame)
+    instanceGeo.addAttribute("instanceHighlight", this.instanceHighlight)
+    instanceGeo.maxInstanceCount = numInstances
+
+    const mesh = new THREE.Mesh(instanceGeo, cubeMaterial)
+
+    return mesh
   },
 
-  resetCube() {
-    const identity = new THREE.Matrix4()
-    for (let child of this.cube.children) {
-      child.position.set(0,0,0)
-      child.quaternion.set(0,0,0,1)
-      child.matrix.copy(identity)
-    }
-  },
-
-  setUVs(geo, face, frame) {
-    const uvs = geo.getAttribute("uv")
-    const u0 = 0.25*(frame % TEXTURE_COLS), u1 = u0 + .25
-    const v0 = 0.5*Math.floor(frame/TEXTURE_COLS), v1 = v0 + .5
-
-    let i = face*6
-    uvs.setXY(i++, u0, v1)
-    uvs.setXY(i++, u0, v0)
-    uvs.setXY(i++, u1, v1)
-    uvs.setXY(i++, u0, v0)
-    uvs.setXY(i++, u1, v0)
-    uvs.setXY(i++, u1, v1)
-  },
-
-  createCubeTexture() {
+  createCubeMaterial() {
     const w = 128
     const h = 64
     const canvas = document.createElement("canvas")
@@ -434,54 +458,22 @@ AFRAME.registerComponent("cube-puzzle", {
     ctx.fillRect(mw + w/TEXTURE_COLS, mh, dw, dh)
     ctx.fillStyle = "grey" // grey for don't care
     ctx.fillRect(mw + 2*w/TEXTURE_COLS, mh, dw, dh)
-    // 7th frame is black
+    // frame 7 is black
 
-    return new THREE.CanvasTexture(canvas)
+    const texture = new THREE.CanvasTexture(canvas)
+    const material = new THREE.MeshStandardMaterial( { map: texture } )
+    material.onBeforeCompile = this.onBeforeCompile
+
+    return material
   },
 
-  createPieceGeo(size) {
-    const geo = new THREE.BufferGeometry()
-    const A = [ .5, .5, .5]
-    const B = [ .5, .5,-.5]
-    const C = [ .5,-.5, .5]
-    const D = [ .5,-.5,-.5]
-    const E = [-.5, .5,-.5]
-    const F = [-.5, .5, .5]
-    const G = [-.5,-.5,-.5]
-    const H = [-.5,-.5, .5]
-    const faceNormals = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]]
-    const verts = [A,C,B,C,D,B,E,G,F,G,H,F,E,F,B,F,A,B,H,G,C,G,D,C,F,H,A,H,C,A,B,D,E,D,G,E]
-    const positions = new Float32Array(verts.length*3)
-    const normals = new Float32Array(verts.length*3)
-    const uvs = new Float32Array(verts.length*2)
-
-    for (let i = 0; i < verts.length; i++) {
-      const j = i*3
-      const face = Math.floor(i/NUM_FACES)
-      const faceNormal = faceNormals[face]
-      positions[j] = verts[i][0]*size
-      positions[j+1] = verts[i][1]*size
-      positions[j+2] = verts[i][2]*size
-      normals[j] = faceNormal[0]
-      normals[j+1] = faceNormal[1]
-      normals[j+2] = faceNormal[2]
+  resetCube() {
+    const identity = new THREE.Matrix4()
+    for (let child of this.cube.children) {
+      child.position.set(0,0,0)
+      child.quaternion.set(0,0,0,1)
+      child.matrix.copy(identity)
     }
-
-    for (let i = 0; i < verts.length; i+=6) {
-      let k = i*2
-      uvs[k++] = 0; uvs[k++] = 1
-      uvs[k++] = 0; uvs[k++] = 0
-      uvs[k++] = 1; uvs[k++] = 1
-      uvs[k++] = 0; uvs[k++] = 0
-      uvs[k++] = 1; uvs[k++] = 0
-      uvs[k++] = 1; uvs[k++] = 1
-    }
-
-    geo.addAttribute("position", new THREE.BufferAttribute(positions, 3) )
-    geo.addAttribute("normal", new THREE.BufferAttribute(normals, 3) )
-    geo.addAttribute("uv", new THREE.BufferAttribute(uvs, 2) )
-
-    return geo
   },
 
   shuffleCube(turns = 30) {
@@ -493,24 +485,24 @@ AFRAME.registerComponent("cube-puzzle", {
   },
 
   rotateCube: (function () {
-    const rotationMatrix = new THREE.Matrix4()
-    const newMatrix = new THREE.Matrix4()
+    const newQuaternion = new THREE.Quaternion()
 
     return function rotateCube(move) {
       const isValid = VALID_MOVES[move]
 
       if (isValid) {
-        const side = VALID_MOVES[move].side
+        const moveInfo = VALID_MOVES[move]
+        const side = moveInfo.side
         const pieces = this.getSidePieces(side)
 
-        rotationMatrix.makeRotationFromEuler( VALID_MOVES[move].euler )
-
         for (let piece of pieces) {
-          newMatrix.copy(piece.matrix).premultiply(rotationMatrix)
-          newMatrix.decompose(piece.position, piece.quaternion, piece.scale)
-          piece.matrix.copy(newMatrix)
+          newQuaternion.fromArray(this.quaternions, piece*FLOATS_PER_QUATERNION)
+          newQuaternion.premultiply(moveInfo.quaternion)
+          newQuaternion.toArray(this.quaternions, piece*FLOATS_PER_QUATERNION)
         }
       }
+
+      this.instanceQuaternion.needsUpdate = true
 
       return isValid
     }
@@ -558,6 +550,7 @@ AFRAME.registerComponent("cube-puzzle", {
 
   getSidePieces: (function() {
     const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
     const sideTests = [
       (pos) => pos.x > .3, // outser sides
       (pos) => pos.x < -.3,
@@ -580,13 +573,90 @@ AFRAME.registerComponent("cube-puzzle", {
 
       const test = sideTests[side]
 
-      return this.cube.children.filter(mesh => {
-        pos.copy(mesh.pieceOrigin).applyMatrix4(mesh.matrix)
-        return test(pos)
-      })
+      let children = []
+
+      for (let piece of this.allPieces) {
+        pos.fromArray(this.positions, piece*FLOATS_PER_POSITION)
+        quat.fromArray(this.quaternions, piece*FLOATS_PER_QUATERNION)
+        pos.applyQuaternion(quat)
+
+        if (test(pos)) {
+          children.push(piece)
+        }
+      }
+
+      return children
     }
 
   })(),
+
+  onBeforeCompile(shader) {
+    let vertexShader = shader.vertexShader
+    let fragmentShader = shader.fragmentShader
+
+    vertexShader = vertexShader.replace('void main()', `
+    attribute vec3 instancePosition;
+    attribute vec4 instanceQuaternion;
+    attribute float instancePackedFrame;
+    attribute float instanceHighlight;
+
+    varying vec3 vHighlightColor;
+
+    vec3 applyQuaternion( const vec3 v, const vec4 q ) 
+    {
+      return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
+    }
+
+    void main()`)
+
+    // faceDot = f(normal) => f(1,0,0) = 0, f(-1,0,0) = 1, f(0,1,0) = 2, f(0,-1,0) = 3, f(0,0,1) = 4, f(0,0,-1) = 5
+    // frame = ( packedFrame << face*3 ) & 7
+    vertexShader = vertexShader.replace('#include <uv_vertex>', `
+    #include <uv_vertex>
+    {
+      float faceDot = dot( normal, vec3(1., 3., 5.) );
+      float face = abs( faceDot ) - max( 0., sign( faceDot ) );
+      
+      float singleMultipler = ${2**MAX_BITS_PER_FRAME}.0;
+      float faceMultipler = pow(2., face * ${MAX_BITS_PER_FRAME}.0);
+      float prevFaces = floor( instancePackedFrame * faceMultipler );
+      float frame = floor( instancePackedFrame * faceMultipler * singleMultipler ) - prevFaces * singleMultipler;
+
+      float u0 = mod(frame, ${TEXTURE_COLS}.0) / ${TEXTURE_COLS}.0;
+      float v0 = floor(frame / ${TEXTURE_COLS}.0) / ${TEXTURE_ROWS}.0;
+      vUv = mix( vec2(u0, v0), vec2(u0 + .25, v0 + .5), vUv );
+
+      vHighlightColor = mix(vec3(0.), vec3(.4), float( instanceHighlight ));
+    }`)
+
+    vertexShader = vertexShader.replace('#include <begin_vertex>', `
+    vec3 transformed = applyQuaternion( position + instancePosition, instanceQuaternion );`) // position before quaternion for cube-puzzle
+
+    vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
+    vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal, -instanceQuaternion );
+    
+    #ifdef FLIP_SIDED
+      transformedNormal = - transformedNormal;
+    #endif
+
+    #ifdef USE_TANGENT
+      vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent, -instanceQuaternion );
+      #ifdef FLIP_SIDED
+        transformedTangent = - transformedTangent;
+      #endif
+    #endif`)
+
+    fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
+    #include <color_pars_fragment>
+    varying vec3 vHighlightColor;`)
+
+    fragmentShader = fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', `
+    vec3 totalEmissiveRadiance = emissive;
+    totalEmissiveRadiance += vHighlightColor;`)
+
+    shader.vertexShader = vertexShader
+    shader.fragmentShader = fragmentShader
+  },
 
   onGrabStart(event) {
     const hand = event.target
