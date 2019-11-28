@@ -219,22 +219,33 @@ AFRAME.registerSystem("grab-system", {
     }
   },
 
-  getScore(hand3D, target) {
-    switch (target.score) {
-      case "horizontalnearest":
-        const handPos = new THREE.Vector3().setFromMatrixPosition(hand3D.matrixWorld)
-        const targetPos = new THREE.Vector3().setFromMatrixPosition(target.obj3D.matrixWorld)
-        const handForward = new THREE.Vector3().setFromMatrixColumn(target.obj3D.matrixWorld, 3)
-        const handToTarget = new THREE.Vector3().subVectors(handPos, targetPos)
-        handToTarget.setComponent(1, 0)
-        handToTarget.normalize()
-        handForward.setComponent(1, 0)
-        handForward.normalize()
-        return -handForward.dot(handToTarget)
-        
-      case "volume":
-      default:
-        return extent.volume(target.obj3D.boundingBox)
+  // more negative is better
+  getScore: (function() {
+    const handPos = new THREE.Vector3()
+    const targetPos = new THREE.Vector3()
+    const handForward = new THREE.Vector3()
+    const handToTarget = new THREE.Vector3()
+    const pointOnForward = new THREE.Vector3()
+
+    return function getScore(hand3D, target) {
+      switch (target.score) {
+        case "closestforward":
+          handPos.setFromMatrixPosition(hand3D.matrixWorld)
+          targetPos.setFromMatrixPosition(target.obj3D.matrixWorld)
+          handForward.setFromMatrixColumn(hand3D.matrixWorld, 2) // controller points in the -z direction
+          handToTarget.subVectors(targetPos, handPos)
+          handForward.normalize()
+  
+          // prefer targets that are in front of the controller origin, and closer to the forward axis
+          const scalar = handForward.dot(handToTarget)
+          pointOnForward.copy(handForward).multiplyScalar(scalar)
+          const score = pointOnForward.sub(handToTarget).length()
+          return scalar < 0 ? score : score*10 // prefer targets in front (-ve scalar)
+          
+        case "volume":
+        default:
+          return extent.volume(target.obj3D.boundingBox)
+      }
     }
-  }
+  })(),
 })

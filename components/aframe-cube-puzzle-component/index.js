@@ -1,4 +1,4 @@
-import { aframeHelper } from "harlyq-helpers"
+import { aframeHelper, threeHelper } from "harlyq-helpers"
 
 const NUM_FACES = 6
 const UNEXPOSED_FRAME = 7
@@ -135,7 +135,7 @@ AFRAME.registerComponent("cube-puzzle", {
         if (state.name === "idle") {
           state.name = "hold"
           state.hold.side = NO_SIDE
-          this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
+          threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
 
         } else if (state.name === "hold") {
           const holdSide = state.hold.side
@@ -164,7 +164,7 @@ AFRAME.registerComponent("cube-puzzle", {
           const i = state.activeHands.indexOf(action.hand)
           state.activeHands.splice(i, 1)
           if (state.activeHands.length > 0) {
-            this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
+            threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
           } else {
             state.name = "idle"
           }
@@ -179,7 +179,7 @@ AFRAME.registerComponent("cube-puzzle", {
           const i = state.activeHands.indexOf(action.hand)
           state.activeHands.splice(i, 1)
           if (state.activeHands.length > 0) {
-            this.updateHoldMatrix(state.hold.matrix, state.activeHands[0])
+            threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
           }
   
           state.name = "hold"
@@ -212,10 +212,6 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   },
 
-  updateHoldMatrix(holdMatrix, hand) {
-    holdMatrix.getInverse(hand.object3D.matrixWorld).multiply(this.el.object3D.matrixWorld)
-  },
-
   tickIdle() {
     let hand = this.data.hands.find(hand => this.isNear(hand))
     if (hand) {
@@ -227,7 +223,7 @@ AFRAME.registerComponent("cube-puzzle", {
 
   tickHold() {
     const state = this.state
-    this.stickToHand(state.activeHands[0])
+    threeHelper.applyOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
     const hand = this.data.hands.find(hand => !state.activeHands.includes(hand) && this.isNear(hand))
     let pieces = EMPTY_ARRAY
 
@@ -253,7 +249,7 @@ AFRAME.registerComponent("cube-puzzle", {
 
   tickTurn() {
     const state = this.state
-    this.stickToHand(state.activeHands[0])
+    threeHelper.applyOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
     this.highlightPieces(state.turn.pieces)
 
     const turnHand = state.activeHands[1]
@@ -273,7 +269,7 @@ AFRAME.registerComponent("cube-puzzle", {
 
     return function tickTurning() {
       const state = this.state
-      this.stickToHand(state.activeHands[0])
+      threeHelper.applyOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
       this.highlightPieces(state.turn.pieces)
   
       const turnHand = state.activeHands[1]
@@ -322,19 +318,6 @@ AFRAME.registerComponent("cube-puzzle", {
       const angleSign = endForward.dot(startRight) <= 0 ? 1 : -1
 
       return startForward.angleTo(endForward) * angleSign
-    }
-  })(),
-
-  stickToHand: (function() {
-    const invParentMatrix = new THREE.Matrix4()
-    const newMatrix = new THREE.Matrix4()
-
-    return function stickToHand(hand) {
-      const self3D = this.el.object3D
-      invParentMatrix.getInverse(this.el.object3D.parent.matrixWorld)  
-      newMatrix.multiplyMatrices(hand.object3D.matrixWorld, this.state.hold.matrix) // determine new hover3D world matrix
-      newMatrix.premultiply(invParentMatrix) // convert to a local matrix
-      newMatrix.decompose(self3D.position, self3D.quaternion, self3D.scale)
     }
   })(),
 
