@@ -1,7 +1,8 @@
 import { aframeHelper, threeHelper } from "harlyq-helpers"
 
-const WHITE_COORDS = "a1,b1,c1,d1,e1,f1,g1,h1,a2,b2,c2,d2,e2,f2,g2,h2".split(",")
-const BLACK_COORDS = "a8,b8,c8,d8,e8,f8,g8,h8,a7,b7,c7,d7,e7,f7,g7,h7".split(",")
+const MESHES_ORDER = "rnbqkpRNBQKP".split("")
+const NUM_ROWS = 8
+const NUM_COLS = 8
 
 function getMaterial(obj3D) {
   const mesh = obj3D.getObjectByProperty("isMesh", true)
@@ -20,11 +21,11 @@ function setMaterial(obj3D, material) {
 AFRAME.registerComponent("chess", {
   schema: {
     src: { default: "" },
-    whitePieces: { default: "" },
-    blackPieces: { default: "" },
+    meshes: { default: "" },
     boardMesh: { default: "" },
     blackColor: { type: "color", default: "" },
     whiteColor: { type: "color", default: "" },
+    FEN: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
     debug: { default: true },
   },
 
@@ -61,19 +62,20 @@ AFRAME.registerComponent("chess", {
     const data = this.data
     this.el.setAttribute("gltf-model", data.src)
 
-    function parsePieces(str, coords, debugStr) {
-      const pieces = str.split(",").map((x,i) => ({ index: i, meshName: x.trim(), piece3D: undefined, coord: coords[i] }) )
-
-      if (pieces.length < coords.length) {
-        aframeHelper.error(this, `not enough ${debugStr}, listed ${pieces.length}, expecting ${coords.length}`)
-      }
-      
-      return pieces
+    const meshes = data.meshes.split(",")
+    if (meshes.length !== MESHES_ORDER.length) {
+      aframeHelper.error(this, `missing meshes, found ${meshes.length}, expecting ${MESHES_ORDER.length}`)
+      this.meshes = []
+    } else {
+      this.meshes = Object.fromEntries( meshes.map((x,i) => {
+        x = x.trim()
+        const rotate180 = x[x.length - 1] === "'"
+        return [MESHES_ORDER[i], { name: rotate180 ? x.slice(0,-1) : x, rotate180, mesh3D: undefined }] 
+      }) )
     }
 
-    this.blackPieces = parsePieces(data.blackPieces, WHITE_COORDS, "blackPieces")
-    this.whitePieces = parsePieces(data.whitePieces, BLACK_COORDS, "whitePieces")
-    this.board = { meshName: data.boardMesh.trim(), board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0) }
+    this.board = { name: data.boardMesh.trim(), board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0), layout: [] }
+    this.board.layout = this.parseFEN(data.FEN, this.meshes)
 
     this.blackMaterial = data.blackColor ? new THREE.MeshStandardMaterial({color: data.blackColor}) : undefined
     this.whiteMaterial = data.whiteColor ? new THREE.MeshStandardMaterial({color: data.whiteColor}) : undefined
@@ -85,54 +87,94 @@ AFRAME.registerComponent("chess", {
     })
   },
 
+  parseFEN(fen) {
+    const layout = []
+    const chunks = fen.split(" ")
+    const rowChunks = chunks[0].split("/")
+    const self = this
+
+    if (rowChunks.length !== NUM_ROWS) {
+      aframeHelper.error(this, `malformed FEN, expected ${NUM_ROWS} '/' separated rows, but only found ${rowChunks.length}`)
+      return layout
+    }
+
+    function appendRow(layout, row, rowChunk) {
+      let col = 0
+      for (let i = 0; i < rowChunk.length; i++) {
+        const c = rowChunk[i]
+        if (MESHES_ORDER.includes(c)) {
+          layout.push( { code: c, coord: self.colRowToCoord(col, row), piece3D: undefined } )
+          // layout.push( { code: c, coord: "a1", piece3D: undefined } )
+          col++
+        } else if (Number(c) == c) {
+          col += Number(c)
+        } else {
+          aframeHelper.error(self, `unknown letter "${c}" in FEN row "${rowChunk}"`)
+        }
+      }
+
+      if (col !== NUM_COLS) {
+        aframeHelper.error(self, `missing column values in FEN row "${rowChunk}", found ${col}, expecting ${NUM_COLS}`)
+      }
+    }
+
+    for (let i = 0; i < rowChunks.length; i++) {
+      const rowChunk = rowChunks[i]
+      appendRow(layout, 7 - i, rowChunk) // chunks start with the 7th row (8th rank)
+    }
+
+    return layout
+  },
+
   createChessSet(chess3D) {
     const rotation180Quaternion = new THREE.Quaternion()
-    const boardSize = new THREE.Vector3()
     const self = this
 
     this.gameBounds.setFromObject(chess3D)
 
-    const board3D = chess3D.getObjectByName(this.board.meshName)
+    const board3D = chess3D.getObjectByName(this.board.name)
     if (!board3D) {
-      aframeHelper.error(this, `unable to find board mesh '${this.board.meshName}'`)
+      aframeHelper.error(this, `unable to find board mesh '${this.board.name}'`)
     } else {
       this.board.board3D = board3D
       this.board.bounds.setFromObject(board3D)
-      this.board.bounds.getSize(boardSize)
       rotation180Quaternion.setFromAxisAngle(this.board.up, Math.PI)
     }
 
-    function populatePieces(pieces, material, debugStr) {
-      for (let piece of pieces) {
-        const rotate180 = piece.meshName[piece.meshName.length - 1] === "'"
-        const meshName = rotate180 ? piece.meshName.slice(0,-1) : piece.meshName
-        const piece3D = chess3D.getObjectByName(meshName)
+    for (let code in this.meshes) {
+      const mesh = this.meshes[code]
+      const mesh3D = chess3D.getObjectByName(mesh.name)
 
-        if (!piece3D) {
-          aframeHelper.error(self, `unable to find ${debugStr} mesh '${meshName}'`)
-        } else {
-          piece3D.visible = false
-
-          const newPiece3D = piece3D.clone()
-          newPiece3D.visible = true
-          if (material) {
-            newPiece3D.material = material
-          }
-
-          if (rotate180) {
-            newPiece3D.quaternion.premultiply(rotation180Quaternion)
-          }
-
-          chess3D.add(newPiece3D)
-          piece.piece3D = newPiece3D
-
-          
-        }
+      if (!mesh3D) {
+        aframeHelper.error(self, `unable to find mesh '${mesh.name}'`)
+      } else {
+        mesh3D.visible = false
+        mesh.mesh3D = mesh3D
       }
     }
 
-    populatePieces(this.blackPieces, this.blackMaterial, "blackPieces")
-    populatePieces(this.whitePieces, this.whiteMaterial, "whitePieces")
+    for (let piece of this.board.layout) {
+      const mesh = this.meshes[piece.code]
+      const mesh3D = mesh.mesh3D
+
+      if (mesh3D) {
+        const isBlack = piece.code == piece.code.toLowerCase()
+        const piece3D = mesh3D.clone()
+        piece3D.visible = true
+        if (this.blackMaterial && isBlack) {
+          piece3D.material = this.blackMaterial
+        } else if (this.whiteMaterial && !isBlack) {
+          piece3D.material = this.whiteMaterial
+        }
+
+        if (mesh.rotate180) {
+          piece3D.quaternion.premultiply(rotation180Quaternion)
+        }
+
+        chess3D.add(piece3D)
+        piece.piece3D = piece3D
+      }
+    }
   },
 
   setupPicking() {
@@ -141,41 +183,43 @@ AFRAME.registerComponent("chess", {
 
     const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.piece3D, score: "closestforward"})
 
-    this.blackPieces.forEach(setupPiecePicking)
-    this.whitePieces.forEach(setupPiecePicking)
+    this.board.layout.forEach(setupPiecePicking)
   },
 
-  setupBoard() {
-    if (!this.board.board3D || this.blackPieces.some(piece => !piece.piece3D) || this.whitePieces.some(piece => !piece.piece3D)) {
+  setupBoard(chess3D) {
+    if ( !this.board.board3D || MESHES_ORDER.some(code => !this.meshes[code].mesh3D) ) {
       return
     }
 
     const groundY = this.board.bounds.max.y
-    for (let piece of this.blackPieces) {
-      const xz = this.xzFromCoord(this.board.bounds, piece.coord)
-      piece.piece3D.position.set(xz.x, groundY, xz.z)
-    }
+    const invParentMatrix = new THREE.Matrix4().getInverse(chess3D.matrixWorld)
 
-    for (let piece of this.whitePieces) {
+    for (let piece of this.board.layout) {
       const xz = this.xzFromCoord(this.board.bounds, piece.coord)
-      piece.piece3D.position.set(xz.x, groundY, xz.z)
+      piece.piece3D.position.set(xz.x, groundY, xz.z).applyMatrix4(invParentMatrix)
     }
   },
 
+  // a1 => bottom left
   xzFromCoord(bounds, coord) {
     const col = coord.charCodeAt(0) - 97 // a
     const row = coord.charCodeAt(1) - 49 // 1
     const w = bounds.max.x - bounds.min.x
     const h = bounds.max.z - bounds.min.z
-    return { x: bounds.min.x + (col + .5)*w/8, z: bounds.min.z + (row + .5)*h/8 }
+    return { x: bounds.min.x + (col + .5)*w/NUM_ROWS, z: bounds.max.z - (row + .5)*h/NUM_COLS }
   },
 
   coordFromXZ(bounds, x, z) {
     const w = bounds.max.x - bounds.min.x
     const h = bounds.max.z - bounds.min.z
-    const col = Math.floor( 8*( x - bounds.min.x ) / w )
-    const row = Math.floor( 8*( z - bounds.min.z ) / h )
-    return col >= 0 && col < 8 && row >= 0 && row < 8 ? String.fromCharCode(col + 97, row + 49) : undefined
+    const col = Math.floor( NUM_COLS*( x - bounds.min.x ) / w )
+    const row = Math.floor( NUM_ROWS*( bounds.max.z - z ) / h )
+    return col >= 0 && col < NUM_COLS && row >= 0 && row < NUM_ROWS ? this.colRowToCoord(col, row) : undefined
+  },
+
+  // (0,0) => a1
+  colRowToCoord(col, row) {
+    return String.fromCharCode(col + 97, row + 49)
   },
 
   snapToBoard(piece3D) {
@@ -188,9 +232,10 @@ AFRAME.registerComponent("chess", {
   },
 
   onObject3dSet(event) {
-    this.createChessSet(event.detail.object)
+    this.chess3D = event.detail.object
+    this.createChessSet(this.chess3D)
     this.setupPicking()
-    this.setupBoard()
+    this.setupBoard(this.chess3D)
   },
 
   onHoverStart(event) {
