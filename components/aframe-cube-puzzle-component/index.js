@@ -50,6 +50,154 @@ function packFrames(frames) {
   return packed / PACKED_FRAME_DIVISOR // in the range (0,1]
 }
 
+// The system is used for networking with networked-aframe
+AFRAME.registerSystem("cube-puzzle", {
+  init() {
+    this.onInstantiated = this.onInstantiated.bind(this)
+    this.components = {}
+    this.setupNetwork()
+  },
+
+  remove() {
+    this.shutdownNetwork()
+  },
+
+  register(component) {
+    if (this.isNetworked(component.el)) {
+      component.el.addEventListener("instantiated", this.onInstantiated) // from "networked" component, once it is setup
+    }
+  },
+
+  unregister(component) {
+    component.el.removeEventListener("instantiated", this.onInstantiated) // does nothing if it was never added
+
+    for (let key in this.components) {
+      if (this.components[key] === component) {
+        delete this.components[key]
+        break
+      }
+    }
+  },
+
+  takeOwnership(component) {
+    if (this.isNetworked(component.el) && !NAF.utils.isMine(component.el)) {
+      NAF.utils.takeOwnership(component.el)
+      this.sendNetwork(component)
+    }
+  },
+
+  sendNetwork(component, clientId = undefined) {
+    if (this.isNetworked(component.el)) {
+      const data = {
+        networkId: NAF.utils.getNetworkId(component.el),
+        available: component.state.name === "idle",
+        packedQuats: this.packQuaternions(component.quaternions)
+      }
+
+      if (clientId) {
+        NAF.connection.sendDataGuaranteed(clientId, 'cube-puzzle', data)
+      } else {
+        NAF.connection.broadcastData('cube-puzzle', data)
+      }
+    }
+  },
+
+  isNetworked(el) {
+    console.assert(el)
+    var curEntity = el;
+
+    if (typeof NAF === "object") {
+      while (curEntity && curEntity.components && !curEntity.components.networked) {
+        curEntity = curEntity.parentNode;
+      }
+    
+      if (curEntity && curEntity.components && curEntity.components.networked) {
+        return true
+      }
+    }
+
+    return false
+  },
+
+  setupNetwork() {
+    if (typeof NAF === "object" && NAF.connection) {
+      NAF.connection.subscribeToDataChannel('cube-puzzle', (senderId, type, data, targetId) => {
+        const component = this.components[data.networkId]
+        if (component) {
+          component.netAvailable = data.available
+          this.unpackQuaternions(component.quaternions, data.packedQuats)
+          component.instanceQuaternion.needsUpdate = true
+        }
+      })
+
+      NAF.connection.subscribeToDataChannel('cube-puzzle.request', (senderId, type, data, targetId) => {
+        const component = this.components[data.networkId]
+        if (component) {
+          this.sendNetwork(component, senderId)
+        }
+      })
+    }
+  },
+
+  shutdownNetwork() {
+    if (typeof NAF === "object" && NAF.connection) {
+      NAF.connection.unsubscribeToDataChannel('cube-puzzle')
+      NAF.connection.unsubscribeToDataChannel('cube-puzzle.request')
+    }
+  },
+
+  packQuaternions(quaternions) {
+    let packed = Array(quaternions.length)
+
+    for (let i = 0; i < quaternions.length; i++) {
+      const v = Math.trunc(quaternions[i]*10)
+      let y
+      switch (v) {
+        case 0: y = 0; break
+        case 5: y = 1; break
+        case 7: y = 2; break
+        case 10: y = 3; break
+        case -5: y = 4; break
+        case -7: y = 5; break
+        case -10: y = 6; break
+        default: console.assert(false, `unknown value ${v} from ${quaternions[i]}`)
+      }
+      packed[i] = y
+    }
+    return packed
+  },
+
+  unpackQuaternions(quaternions, packedQuats) {
+    console.assert(quaternions.length === packedQuats.length)
+    const cos45 = Math.cos(Math.PI/4)
+
+    for (let i = 0; i < packedQuats.length; i++) {
+      let y = 0
+      switch (packedQuats[i]) {
+        case 0: y = 0; break
+        case 1: y = 0.5; break
+        case 2: y = cos45; break
+        case 3: y = 1; break
+        case 4: y = -0.5; break
+        case 5: y = -cos45; break
+        case 6: y = -1; break
+      }
+      quaternions[i] = y
+    }
+  },
+
+  onInstantiated(event) {
+    const el = event.detail.el
+    const networkId = NAF.utils.getNetworkId(el)
+    this.components[networkId] = el.components["cube-puzzle"]
+
+    if (!NAF.utils.isMine(el)) {
+      const ownerId = NAF.utils.getNetworkOwner(el)
+      NAF.connection.sendDataGuaranteed(ownerId, 'cube-puzzle.request', { networkId })
+    }
+  },
+})
+
 AFRAME.registerComponent("cube-puzzle", {
   schema: {
     hands: { type: "selectorAll", default: "[hand-controls], [oculus-touch-controls], [vive-controls], [windows-motion-controls]" },
@@ -74,6 +222,7 @@ AFRAME.registerComponent("cube-puzzle", {
     }
 
     this.highlightColor = new THREE.Color()
+    this.prevHighlighted = []
 
     this.state = {
       name: "idle",
@@ -94,6 +243,18 @@ AFRAME.registerComponent("cube-puzzle", {
 
     this.cube = this.createCube()
     this.el.setObject3D("mesh", this.cube)
+
+    this.netAvailable = true
+
+    // if (!this.el.firstUpdateData) {
+    //   this.shuffleCube()
+    // }
+
+    this.system.register(this)
+  },
+
+  remove() {
+    this.system.unregister(this)
   },
 
   update(oldData) {
@@ -117,7 +278,9 @@ AFRAME.registerComponent("cube-puzzle", {
   },
 
   tick() {
-    this.actionTick[this.state.name]()
+    if (this.netAvailable) {
+      this.actionTick[this.state.name]()
+    }
   },
 
   dispatch(action) {
@@ -136,6 +299,8 @@ AFRAME.registerComponent("cube-puzzle", {
           state.name = "hold"
           state.hold.side = NO_SIDE
           threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
+
+          this.system.takeOwnership(this)
 
         } else if (state.name === "hold") {
           const holdSide = state.hold.side
@@ -167,6 +332,7 @@ AFRAME.registerComponent("cube-puzzle", {
             threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
           } else {
             state.name = "idle"
+            this.system.sendNetwork(this)
           }
   
         } else if (state.name === "turn" || state.name === "turning") {
@@ -224,6 +390,7 @@ AFRAME.registerComponent("cube-puzzle", {
   tickHold() {
     const state = this.state
     threeHelper.applyOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
+
     const hand = this.data.hands.find(hand => !state.activeHands.includes(hand) && this.isNear(hand))
     let pieces = EMPTY_ARRAY
 
@@ -298,6 +465,7 @@ AFRAME.registerComponent("cube-puzzle", {
       this.instanceQuaternion.needsUpdate = true
   
       if (inSnapAngle && !state.snapped) {
+        this.system.sendNetwork(this)
         this.dispatch( { name: "snap" } )
       } else if (state.snapped && !inSnapAngle) {
         this.dispatch( { name: "unsnap" } )
@@ -321,25 +489,21 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   })(),
 
-  highlightPieces: (function () {
-    let highlighted = []
+  highlightPieces(pieces) {
+    if ( this.prevHighlighted !== pieces && ( 
+      this.prevHighlighted.length !== pieces.length ||
+      this.prevHighlighted.some(piece => !pieces.includes(piece)) 
+    ) ) {
 
-    return function highlightPieces(pieces) {
-      if ( highlighted !== pieces && ( 
-        highlighted.length !== pieces.length ||
-        highlighted.some(piece => !pieces.includes(piece)) 
-      ) ) {
+        this.highlights.fill(0)
+        for (let piece of pieces) {
+          this.highlights[piece] = 1
+        }
 
-          this.highlights.fill(0)
-          for (let piece of pieces) {
-            this.highlights[piece] = 1
-          }
-
-          this.instanceHighlight.needsUpdate = true
-          highlighted = pieces
-      }
+        this.instanceHighlight.needsUpdate = true
+        this.prevHighlighted = pieces
     }
-  })(),
+  },
 
   createCube() {
     const size = 1/3
@@ -654,5 +818,4 @@ AFRAME.registerComponent("cube-puzzle", {
       this.dispatch( { name: "release", hand: hand } )
     }
   },
-
 })

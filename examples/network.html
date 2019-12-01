@@ -1,0 +1,101 @@
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Dev Example — naf-native-webrtc-adapter</title>
+  <meta name="description" content="Dev Example — naf-native-webrtc-adapter">
+
+  <script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script>
+
+  <script src="../network/socket.io.js"></script>
+  <script src="../network/networked-aframe.js"></script>
+  <script src="../network/naf-native-webrtc-adapter.js"></script>
+  <!--script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/networked-aframe/networked-aframe/dist/networked-aframe.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/networked-aframe/naf-native-webrtc-adapter/dist/naf-native-webrtc-adapter.js"></script-->
+
+  <script src="../dist/aframe-harlyq-components.js"></script>
+
+  <template id="avatar-template">
+    <a-entity class="avatar">
+      <a-sphere class="head" color="#5985ff" scale="0.45 0.5 0.4" random-color></a-sphere>
+      <a-sphere class="eye" color="#efefef" position="0.16 0.15 -0.35" scale="0.12 0.12 0.12">
+        <a-sphere class="pupil" color="#000" position="0 0 -1" scale="0.2 0.2 0.2"></a-sphere>
+      </a-sphere>
+      <a-sphere class="eye" color="#efefef" position="-0.16 0.15 -0.35" scale="0.12 0.12 0.12">
+        <a-sphere class="pupil" color="#000" position="0 0 -1" scale="0.2 0.2 0.2"></a-sphere>
+      </a-sphere>
+    </a-entity>
+  </template>
+
+  <template id="cube-template">
+    <a-entity class="cube" cube-puzzle>
+    </a-entity>
+  </template>
+
+  <script>
+    if (typeof NAF !== "undefined") {
+
+      // Define custom schema for syncing avatar color, set by random-color
+      NAF.schemas.add({
+        template: '#avatar-template',
+        components: [
+          'position',
+          'rotation',
+          {
+            selector: '.head',
+            component: 'material',
+            property: 'color'
+          }
+        ]
+      })
+
+      NAF.schemas.add({
+        template: '#cube-template',
+        components: [
+          'position',
+          'rotation',
+          'scale',
+        ]
+      })
+
+      // Called by Networked-Aframe when connected to server
+      function onConnect() {
+        console.log("onConnect", new Date())
+      }
+
+      document.addEventListener("keydown", (event) => {
+        if (event.keyCode == 32) { // space
+          const sceneEl = document.querySelector("a-scene")
+          const newCubeEl = document.createElement("a-entity")
+          newCubeEl.setAttribute("networked", "template: #cube-template")
+          newCubeEl.setAttribute("scale", ".3 .3 .3")
+          newCubeEl.setAttribute("position", "0 1 0")
+          newCubeEl.setAttribute("rotation", "0 0 0")
+          newCubeEl.flushToDOM()
+          sceneEl.appendChild(newCubeEl)
+          const t = NAF.connection.getServerTime()
+        }
+      })
+    }
+
+  </script>
+
+</head>
+
+<body>
+  <a-scene 
+  background="color: pink"
+  networked-scene="
+    room: example;
+    debug: true;
+    adapter: native-webrtc;
+  ">
+    <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
+    <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
+    <a-entity id="player" networked="template:#avatar-template;" position="0 1.6 1" camera wasd-controls look-controls></a-entity>
+    <a-entity id="puzzle" position="1 1 0" scale=".3 .3 .3" cube-puzzle></a-entity>
+  </a-scene>
+</body>
+
+</html>

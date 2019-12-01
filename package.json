@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "rollup --config && uglifyjs dist/aframe-harlyq-components.js --compress --mangle -o dist/aframe-harlyq-components.min.js",
-    "watch": "rollup --config --watch"
+    "watch": "rollup --config --watch",
+    "server": "node network/server.js"
   },
   "repository": {
     "type": "git",
@@ -32,7 +33,9 @@
     "aframe": "^0.9.0"
   },
   "devDependencies": {
-    "rollup-plugin-node-resolve": "^4.2.4"
+    "express": "^4.17.1",
+    "rollup-plugin-node-resolve": "^4.2.4",
+    "socket.io": "^2.3.0"
   },
   "dependencies": {
     "harlyq-helpers": "git+https://git@github.com/harlyq/harlyq-helpers.git"
