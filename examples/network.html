@@ -74,7 +74,10 @@
           newCubeEl.setAttribute("rotation", "0 0 0")
           newCubeEl.flushToDOM()
           sceneEl.appendChild(newCubeEl)
-          const t = NAF.connection.getServerTime()
+          
+          setTimeout(() => {
+            newCubeEl.components["cube-puzzle"].shuffleCube()
+          }, 2000)
         }
       })
     }

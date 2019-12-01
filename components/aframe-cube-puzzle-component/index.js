@@ -50,16 +50,57 @@ function packFrames(frames) {
   return packed / PACKED_FRAME_DIVISOR // in the range (0,1]
 }
 
+function slerpolator(quaternions, duration, postStepFn) {
+  const startQuaternions = quaternions.slice()
+  const endQuaternions = quaternions.slice()
+  const outQuaternions = quaternions // populate directly
+  let elapsed = 0
+
+  function step(dt) {
+    elapsed += dt
+    const r = THREE.Math.clamp(elapsed/duration, 0, 1)
+
+    for (let i = 0, n = startQuaternions.length; i < n; i += 4) {
+      THREE.Quaternion.slerpFlat(outQuaternions, i, startQuaternions, i, endQuaternions, i, r)
+    }
+
+    postStepFn()
+  }
+
+  function isFinished() {
+    return elapsed > duration
+  }
+
+  return {
+    endQuaternions,
+    step,
+    isFinished,
+  }
+}
+
 // The system is used for networking with networked-aframe
 AFRAME.registerSystem("cube-puzzle", {
   init() {
     this.onInstantiated = this.onInstantiated.bind(this)
     this.components = {}
+    this.slerpolators = new Map()
     this.setupNetwork()
   },
 
   remove() {
     this.shutdownNetwork()
+  },
+
+  tick(time, deltaTime) {
+    const dt = deltaTime/1000
+
+    this.slerpolators.forEach( (slerpolator, component) => {
+      if (slerpolator.isFinished()) {
+        this.slerpolators.delete(component)
+      } else {
+        slerpolator.step(dt)
+      }
+    } )
   },
 
   register(component) {
@@ -82,16 +123,18 @@ AFRAME.registerSystem("cube-puzzle", {
   takeOwnership(component) {
     if (this.isNetworked(component.el) && !NAF.utils.isMine(component.el)) {
       NAF.utils.takeOwnership(component.el)
-      this.sendNetwork(component)
+      this.sendNetwork(component, {slerp:false})
     }
   },
 
-  sendNetwork(component, clientId = undefined) {
+  sendNetwork(component, options = {}, clientId = undefined) {
     if (this.isNetworked(component.el)) {
       const data = {
         networkId: NAF.utils.getNetworkId(component.el),
         available: component.state.name === "idle",
-        packedQuats: this.packQuaternions(component.quaternions)
+        slerp: true,
+        packedQuats: this.packQuaternions(component.quaternions),
+        ...options,
       }
 
       if (clientId) {
@@ -125,15 +168,18 @@ AFRAME.registerSystem("cube-puzzle", {
         const component = this.components[data.networkId]
         if (component) {
           component.netAvailable = data.available
-          this.unpackQuaternions(component.quaternions, data.packedQuats)
-          component.instanceQuaternion.needsUpdate = true
+
+          const newSlerpolator = slerpolator( component.quaternions, data.slerp ? 0.3 : 0, () => { component.instanceQuaternion.needsUpdate = true } )
+          this.unpackQuaternions(newSlerpolator.endQuaternions, data.packedQuats)
+
+          this.slerpolators.set(component, newSlerpolator)
         }
       })
 
       NAF.connection.subscribeToDataChannel('cube-puzzle.request', (senderId, type, data, targetId) => {
         const component = this.components[data.networkId]
         if (component) {
-          this.sendNetwork(component, senderId)
+          this.sendNetwork(component, {slerp:false}, senderId)
         }
       })
     }
@@ -332,7 +378,7 @@ AFRAME.registerComponent("cube-puzzle", {
             threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
           } else {
             state.name = "idle"
-            this.system.sendNetwork(this)
+            this.system.sendNetwork(this, {slerp:false})
           }
   
         } else if (state.name === "turn" || state.name === "turning") {
@@ -629,6 +675,7 @@ AFRAME.registerComponent("cube-puzzle", {
       const moveIndex = ~~( Math.random()*moves.length )
       this.rotateCube( moves[moveIndex] )
     }
+    this.system.sendNetwork(this, {slerp:false})
   },
 
   rotateCube: (function () {
