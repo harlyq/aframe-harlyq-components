@@ -1,8 +1,12 @@
-import { aframeHelper, threeHelper } from "harlyq-helpers"
+import { aframeHelper, chessHelper, threeHelper } from "harlyq-helpers"
 
 const MESHES_ORDER = "rnbqkpRNBQKP".split("")
-const NUM_ROWS = 8
-const NUM_COLS = 8
+const NUM_RANKS = 8
+const NUM_FILES = 8
+const MOVE_REGEX_STR = "([0-9]+\\.|[0-9]+\\.\\.\\.)\\s*([a-hRNBKQO][a-hRNBKQO\\-\\+\\#1-8x]+)\\s*([a-hRNBKQO][a-hRNBKQO\\-\\+\\#1-8x]+)?\\s*(1\\-0|0\\-1|1\\/2\\-1\\/2|\\*)?"
+const MOVE_REGEX = new RegExp(MOVE_REGEX_STR)
+const PGN_REGEX = new RegExp(MOVE_REGEX_STR, 'g')
+const URL_REGEX = /url\((.*)\)/
 
 function getMaterial(obj3D) {
   const mesh = obj3D.getObjectByProperty("isMesh", true)
@@ -25,7 +29,8 @@ AFRAME.registerComponent("chess", {
     boardMesh: { default: "" },
     blackColor: { type: "color", default: "" },
     whiteColor: { type: "color", default: "" },
-    FEN: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
+    fen: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
+    pgn: { default: "" },
     debug: { default: true },
   },
 
@@ -75,7 +80,8 @@ AFRAME.registerComponent("chess", {
     }
 
     this.board = { name: data.boardMesh.trim(), board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0), layout: [] }
-    this.board.layout = this.parseFEN(data.FEN, this.meshes)
+    this.board.layout = this.parseFEN(data.fen, this.meshes)
+    this.parsePGN(data.pgn)
 
     this.blackMaterial = data.blackColor ? new THREE.MeshStandardMaterial({color: data.blackColor}) : undefined
     this.whiteMaterial = data.whiteColor ? new THREE.MeshStandardMaterial({color: data.whiteColor}) : undefined
@@ -90,40 +96,73 @@ AFRAME.registerComponent("chess", {
   parseFEN(fen) {
     const layout = []
     const chunks = fen.split(" ")
-    const rowChunks = chunks[0].split("/")
+    const rankChunks = chunks[0].split("/")
     const self = this
 
-    if (rowChunks.length !== NUM_ROWS) {
-      aframeHelper.error(this, `malformed FEN, expected ${NUM_ROWS} '/' separated rows, but only found ${rowChunks.length}`)
+    if (rankChunks.length !== NUM_RANKS) {
+      aframeHelper.error(this, `malformed fen, expected ${NUM_RANKS} '/' separated ranks, but only found ${rankChunks.length}`)
       return layout
     }
 
-    function appendRow(layout, row, rowChunk) {
-      let col = 0
-      for (let i = 0; i < rowChunk.length; i++) {
-        const c = rowChunk[i]
+    function appendRank(layout, rank, rankChunk) {
+      let file = 1
+      for (let i = 0; i < rankChunk.length; i++) {
+        const c = rankChunk[i]
         if (MESHES_ORDER.includes(c)) {
-          layout.push( { code: c, coord: self.colRowToCoord(col, row), piece3D: undefined } )
+          layout.push( { code: c, san: c.toUpperCase(), isBlack: c === c.toLowerCase(), file, rank, piece3D: undefined } )
           // layout.push( { code: c, coord: "a1", piece3D: undefined } )
-          col++
+          file++
         } else if (Number(c) == c) {
-          col += Number(c)
+          file += Number(c)
         } else {
-          aframeHelper.error(self, `unknown letter "${c}" in FEN row "${rowChunk}"`)
+          aframeHelper.error(self, `unknown letter "${c}" in fen rank "${rankChunk}"`)
         }
       }
 
-      if (col !== NUM_COLS) {
-        aframeHelper.error(self, `missing column values in FEN row "${rowChunk}", found ${col}, expecting ${NUM_COLS}`)
+      if (file - 1 !== NUM_FILES) {
+        aframeHelper.error(self, `missing fileumn values in fen rank "${rankChunk}", found ${file}, expecting ${NUM_FILES}`)
       }
     }
 
-    for (let i = 0; i < rowChunks.length; i++) {
-      const rowChunk = rowChunks[i]
-      appendRow(layout, 7 - i, rowChunk) // chunks start with the 7th row (8th rank)
+    for (let i = 0; i < rankChunks.length; i++) {
+      const rankChunk = rankChunks[i]
+      appendRank(layout, 8 - i, rankChunk) // chunks start with the 8th rank
     }
 
     return layout
+  },
+
+  parsePGN(pgn) {
+    if (!pgn) {
+      return
+    }
+
+    const url = pgn.match(URL_REGEX)
+    if (url) {
+      fetch(url[1])
+        .then(response => response.ok ? response.text() : aframeHelper.error(this, `file: "${url[1]}" ${response.statusText}`))
+        .then(text => this.parsePGN(text))
+    } else {
+      this.replay = pgn.match(PGN_REGEX)
+      this.startReplay()
+    }
+  },
+
+  startReplay() {
+    this.replayIndex = 0
+    this.replayPlayer = this.replay && this.replay[0] && this.replay[0].includes("...") ? "black" : "white"
+    this.capturedBlack = []
+    this.capturedWhite = []
+  },
+
+  replayMove() {
+    if (!this.replay || this.replayIndex >= this.replay.length) {
+      return
+    }
+    
+    const moveStr = this.replay[this.replayIndex]
+    const moveParts = moveStr.match(MOVE_REGEX)
+    const move = this.replayPlayer === "white" ? moveParts[1] : moveParts[2]
   },
 
   createChessSet(chess3D) {
@@ -158,12 +197,11 @@ AFRAME.registerComponent("chess", {
       const mesh3D = mesh.mesh3D
 
       if (mesh3D) {
-        const isBlack = piece.code == piece.code.toLowerCase()
         const piece3D = mesh3D.clone()
         piece3D.visible = true
-        if (this.blackMaterial && isBlack) {
+        if (this.blackMaterial && piece.isBlack) {
           piece3D.material = this.blackMaterial
-        } else if (this.whiteMaterial && !isBlack) {
+        } else if (this.whiteMaterial && !piece.isBlack) {
           piece3D.material = this.whiteMaterial
         }
 
@@ -195,37 +233,30 @@ AFRAME.registerComponent("chess", {
     const invParentMatrix = new THREE.Matrix4().getInverse(chess3D.matrixWorld)
 
     for (let piece of this.board.layout) {
-      const xz = this.xzFromCoord(this.board.bounds, piece.coord)
+      const xz = this.xzFromFileRank(this.board.bounds, piece.file, piece.rank)
       piece.piece3D.position.set(xz.x, groundY, xz.z).applyMatrix4(invParentMatrix)
     }
   },
 
-  // a1 => bottom left
-  xzFromCoord(bounds, coord) {
-    const col = coord.charCodeAt(0) - 97 // a
-    const row = coord.charCodeAt(1) - 49 // 1
+  // 1,1 => bottom left
+  xzFromFileRank(bounds, file, rank) {
     const w = bounds.max.x - bounds.min.x
     const h = bounds.max.z - bounds.min.z
-    return { x: bounds.min.x + (col + .5)*w/NUM_ROWS, z: bounds.max.z - (row + .5)*h/NUM_COLS }
+    return { x: bounds.min.x + (file - .5)*w/NUM_RANKS, z: bounds.max.z - (rank - .5)*h/NUM_FILES }
   },
 
-  coordFromXZ(bounds, x, z) {
+  fileRankFromXZ(bounds, x, z) {
     const w = bounds.max.x - bounds.min.x
     const h = bounds.max.z - bounds.min.z
-    const col = Math.floor( NUM_COLS*( x - bounds.min.x ) / w )
-    const row = Math.floor( NUM_ROWS*( bounds.max.z - z ) / h )
-    return col >= 0 && col < NUM_COLS && row >= 0 && row < NUM_ROWS ? this.colRowToCoord(col, row) : undefined
-  },
-
-  // (0,0) => a1
-  colRowToCoord(col, row) {
-    return String.fromCharCode(col + 97, row + 49)
+    const file = Math.floor( NUM_FILES*( x - bounds.min.x ) / w ) + 1
+    const rank = Math.floor( NUM_RANKS*( bounds.max.z - z ) / h ) + 1
+    return file >= 1 && file <= NUM_FILES && rank >= 1 && rank <= NUM_RANKS ? [file,rank] : undefined
   },
 
   snapToBoard(piece3D) {
-    const coord = this.coordFromXZ(this.board.bounds, piece3D.position.x, piece3D.position.z)
-    if (coord) {
-      const pos = this.xzFromCoord(this.board.bounds, coord)
+    const fileRank = this.fileRankFromXZ(this.board.bounds, piece3D.position.x, piece3D.position.z)
+    if (fileRank) {
+      const pos = this.xzFromFileRank(this.board.bounds, fileRank[0], fileRank[1])
       const groundY = this.board.bounds.max.y
       piece3D.position.set(pos.x, groundY, pos.z)
     }
