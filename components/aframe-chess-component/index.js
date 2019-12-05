@@ -3,9 +3,7 @@ import { aframeHelper, chessHelper, threeHelper } from "harlyq-helpers"
 const MESHES_ORDER = "rnbqkpRNBQKP".split("")
 const NUM_RANKS = 8
 const NUM_FILES = 8
-const MOVE_REGEX_STR = "([0-9]+\\.|[0-9]+\\.\\.\\.)\\s*([a-hRNBKQO][a-hRNBKQO\\-\\+\\#1-8x]+)\\s*([a-hRNBKQO][a-hRNBKQO\\-\\+\\#1-8x]+)?\\s*(1\\-0|0\\-1|1\\/2\\-1\\/2|\\*)?"
-const MOVE_REGEX = new RegExp(MOVE_REGEX_STR)
-const PGN_REGEX = new RegExp(MOVE_REGEX_STR, 'g')
+const CAPTURED_SIZE = 10
 const URL_REGEX = /url\((.*)\)/
 
 function getMaterial(obj3D) {
@@ -32,6 +30,9 @@ AFRAME.registerComponent("chess", {
     fen: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
     pgn: { default: "" },
     debug: { default: true },
+    replayMoveSpeed: { default: 4 },
+    replayTurnDuration: { default: 1 },
+    mode: { oneOf: ["physical", "replay", "static", "game"], default: "replay" },
   },
 
   init() {
@@ -53,6 +54,11 @@ AFRAME.registerComponent("chess", {
     this.blackMaterial = undefined
     this.grabMap = new Map() // grabInfo indexed by piece3D
     this.gameBounds = new THREE.Box3()
+    this.fenAST = { layout: [] }
+    this.pgnAST = undefined
+    this.board = { name: "", board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0) }
+    this.rotation180Quaternion = new THREE.Quaternion().setFromAxisAngle(this.board.up, Math.PI)
+    this.replay = { moveIndex: 0, actions: undefined, movers: [], delay: 0 }
   },
 
   remove() {
@@ -79,57 +85,29 @@ AFRAME.registerComponent("chess", {
       }) )
     }
 
-    this.board = { name: data.boardMesh.trim(), board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0), layout: [] }
-    this.board.layout = this.parseFEN(data.fen, this.meshes)
+    this.board.name = data.boardMesh.trim()
+    this.fenAST = this.parseFEN(data.fen)
     this.parsePGN(data.pgn)
 
     this.blackMaterial = data.blackColor ? new THREE.MeshStandardMaterial({color: data.blackColor}) : undefined
     this.whiteMaterial = data.whiteColor ? new THREE.MeshStandardMaterial({color: data.whiteColor}) : undefined
   },
 
-  tick() {
-    this.grabMap.forEach((grabInfo, piece3D) => {
-      threeHelper.applyOffsetMatrix(grabInfo.hand.object3D, piece3D, grabInfo.offsetMatrix)
-    })
+  tick(time, deltaTime) {
+    const data = this.data
+
+    if (data.mode === "physical") {
+      this.grabMap.forEach((grabInfo, piece3D) => {
+        threeHelper.applyOffsetMatrix(grabInfo.hand.object3D, piece3D, grabInfo.offsetMatrix)
+      })
+
+    } else if (data.mode === "replay") {
+      this.replayTick(deltaTime/1000)
+    }
   },
 
   parseFEN(fen) {
-    const layout = []
-    const chunks = fen.split(" ")
-    const rankChunks = chunks[0].split("/")
-    const self = this
-
-    if (rankChunks.length !== NUM_RANKS) {
-      aframeHelper.error(this, `malformed fen, expected ${NUM_RANKS} '/' separated ranks, but only found ${rankChunks.length}`)
-      return layout
-    }
-
-    function appendRank(layout, rank, rankChunk) {
-      let file = 1
-      for (let i = 0; i < rankChunk.length; i++) {
-        const c = rankChunk[i]
-        if (MESHES_ORDER.includes(c)) {
-          layout.push( { code: c, san: c.toUpperCase(), isBlack: c === c.toLowerCase(), file, rank, piece3D: undefined } )
-          // layout.push( { code: c, coord: "a1", piece3D: undefined } )
-          file++
-        } else if (Number(c) == c) {
-          file += Number(c)
-        } else {
-          aframeHelper.error(self, `unknown letter "${c}" in fen rank "${rankChunk}"`)
-        }
-      }
-
-      if (file - 1 !== NUM_FILES) {
-        aframeHelper.error(self, `missing fileumn values in fen rank "${rankChunk}", found ${file}, expecting ${NUM_FILES}`)
-      }
-    }
-
-    for (let i = 0; i < rankChunks.length; i++) {
-      const rankChunk = rankChunks[i]
-      appendRank(layout, 8 - i, rankChunk) // chunks start with the 8th rank
-    }
-
-    return layout
+    return chessHelper.parseFEN(fen)
   },
 
   parsePGN(pgn) {
@@ -140,44 +118,36 @@ AFRAME.registerComponent("chess", {
     const url = pgn.match(URL_REGEX)
     if (url) {
       fetch(url[1])
-        .then(response => response.ok ? response.text() : aframeHelper.error(this, `file: "${url[1]}" ${response.statusText}`))
+        .then(response => {
+          if (!response.ok) aframeHelper.error(this, `file: "${url[1]}" ${response.statusText}`)
+          return response.text()
+        })
         .then(text => this.parsePGN(text))
     } else {
-      this.replay = pgn.match(PGN_REGEX)
+      this.pgnAST = chessHelper.parsePGN(pgn)
       this.startReplay()
     }
   },
 
   startReplay() {
-    this.replayIndex = 0
-    this.replayPlayer = this.replay && this.replay[0] && this.replay[0].includes("...") ? "black" : "white"
-    this.capturedBlack = []
-    this.capturedWhite = []
-  },
-
-  replayMove() {
-    if (!this.replay || this.replayIndex >= this.replay.length) {
-      return
-    }
-    
-    const moveStr = this.replay[this.replayIndex]
-    const moveParts = moveStr.match(MOVE_REGEX)
-    const move = this.replayPlayer === "white" ? moveParts[1] : moveParts[2]
+    const replay = this.replay
+    replay.moveIndex = 0
+    replay.actions = undefined
+    replay.movers = []
+    replay.delay = 0
   },
 
   createChessSet(chess3D) {
-    const rotation180Quaternion = new THREE.Quaternion()
     const self = this
 
-    this.gameBounds.setFromObject(chess3D)
+    threeHelper.setOBBFromObject3D(this.gameBounds, chess3D)
 
     const board3D = chess3D.getObjectByName(this.board.name)
     if (!board3D) {
       aframeHelper.error(this, `unable to find board mesh '${this.board.name}'`)
     } else {
       this.board.board3D = board3D
-      this.board.bounds.setFromObject(board3D)
-      rotation180Quaternion.setFromAxisAngle(this.board.up, Math.PI)
+      threeHelper.setOBBFromObject3D(this.board.bounds, board3D)
     }
 
     for (let code in this.meshes) {
@@ -192,26 +162,34 @@ AFRAME.registerComponent("chess", {
       }
     }
 
-    for (let piece of this.board.layout) {
-      const mesh = this.meshes[piece.code]
-      const mesh3D = mesh.mesh3D
+    for (let piece of this.fenAST.layout) {
+      this.createMeshForPiece(chess3D, piece)
+    }
+  },
 
-      if (mesh3D) {
-        const piece3D = mesh3D.clone()
-        piece3D.visible = true
-        if (this.blackMaterial && piece.isBlack) {
-          piece3D.material = this.blackMaterial
-        } else if (this.whiteMaterial && !piece.isBlack) {
-          piece3D.material = this.whiteMaterial
-        }
+  createMeshForPiece(chess3D, piece) {
+    const mesh = this.meshes[piece.code]
+    const mesh3D = mesh ? mesh.mesh3D : undefined
 
-        if (mesh.rotate180) {
-          piece3D.quaternion.premultiply(rotation180Quaternion)
-        }
-
-        chess3D.add(piece3D)
-        piece.piece3D = piece3D
+    if (mesh3D) {
+      const piece3D = mesh3D.clone()
+      const isBlack = piece.code === piece.code.toLowerCase()
+      
+      piece3D.visible = true
+      if (this.blackMaterial && isBlack) {
+        piece3D.material = this.blackMaterial
+      } else if (this.whiteMaterial && !isBlack) {
+        piece3D.material = this.whiteMaterial
       }
+
+      if (mesh.rotate180) {
+        piece3D.quaternion.premultiply(this.rotation180Quaternion)
+      }
+
+      chess3D.add(piece3D)
+      piece.piece3D = piece3D
+
+      return piece3D
     }
   },
 
@@ -221,7 +199,7 @@ AFRAME.registerComponent("chess", {
 
     const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.piece3D, score: "closestforward"})
 
-    this.board.layout.forEach(setupPiecePicking)
+    this.fenAST.layout.forEach(setupPiecePicking)
   },
 
   setupBoard(chess3D) {
@@ -230,15 +208,14 @@ AFRAME.registerComponent("chess", {
     }
 
     const groundY = this.board.bounds.max.y
-    const invParentMatrix = new THREE.Matrix4().getInverse(chess3D.matrixWorld)
 
-    for (let piece of this.board.layout) {
+    for (let piece of this.fenAST.layout) {
       const xz = this.xzFromFileRank(this.board.bounds, piece.file, piece.rank)
-      piece.piece3D.position.set(xz.x, groundY, xz.z).applyMatrix4(invParentMatrix)
+      piece.piece3D.position.set(xz.x, groundY, xz.z)
     }
   },
 
-  // 1,1 => bottom left
+  // 1,1 => bottom left, supports fractional file and rank
   xzFromFileRank(bounds, file, rank) {
     const w = bounds.max.x - bounds.min.x
     const h = bounds.max.z - bounds.min.z
@@ -259,6 +236,92 @@ AFRAME.registerComponent("chess", {
       const pos = this.xzFromFileRank(this.board.bounds, fileRank[0], fileRank[1])
       const groundY = this.board.bounds.max.y
       piece3D.position.set(pos.x, groundY, pos.z)
+    }
+  },
+
+  replayTick(dt) {
+    const data = this.data
+    const replay = this.replay
+
+    if (replay.delay > 0 || replay.movers.length > 0) {
+      replay.delay -= dt
+
+      if (replay.movers.length > 0) {
+        replay.movers.forEach(mover => mover.tick(dt))
+        
+        if (replay.movers.every(mover => mover.isComplete())) {
+          replay.movers.length = 0
+          replay.actions.splice(0,1) // move to the next action
+        }
+      }
+
+    } else if (replay.actions && replay.actions.length > 0) {
+      const action = replay.actions[0]
+
+      switch (action.type) {
+        case "move": {
+          const piece = action.piece
+          const moveMover = this.createMover(this.board.bounds, piece, action.fromFile, action.fromRank, action.toFile, action.toRank, data.replayMoveSpeed)
+          replay.movers.push( moveMover )
+          break
+        } 
+        case "capture": {
+          const capturedPiece = action.capturedPiece
+          const offBoardFile = Math.floor(action.capturedIndex/CAPTURED_SIZE) + 10
+          const offBoardRank = (action.capturedIndex % CAPTURED_SIZE)/CAPTURED_SIZE*NUM_RANKS + 1
+          const captureMover = this.createMover(this.board.bounds, capturedPiece, offBoardFile, offBoardRank, offBoardFile, offBoardRank, data.replayMoveSpeed)
+          replay.movers.push(captureMover)
+          break
+        }
+        case "promote": {
+          const newPiece = action.newPiece
+          action.piece.piece3D.visible = false
+          newPiece.piece3D = this.createMeshForPiece(this.chess3D, newPiece)
+          newPiece.piece3D.visible = true
+          const promoteMover = this.createMover(this.board.bounds, newPiece, newPiece.file, newPiece.rank, newPiece.file, newPiece.rank, data.replayMoveSpeed)
+          replay.movers.push(promoteMover)
+        }
+        case "castle": {
+          const king = action.king
+          const rook = action.rook
+          const kingMover = this.createMover(this.board.bounds, king, 5, king.rank, action.kingside ? 7 : 3, king.rank, data.replayMoveSpeed)
+          const rookMover = this.createMover(this.board.bounds, rook, action.kingside ? 8 : 1, rook.rank, action.kingside ? 6 : 4, rook.rank, data.replayMoveSpeed)
+          replay.movers.push(kingMover, rookMover)
+        }
+      }
+    } else if (this.pgnAST && this.pgnAST.moves[replay.moveIndex]) {
+      replay.actions = chessHelper.applyMove(this.fenAST, this.pgnAST.moves[replay.moveIndex++]) 
+      replay.delay = replay.actions ? data.replayTurnDuration : 0
+    }
+
+  },
+
+  // speed is in tiles per second
+  // tick() returns true when teh mover is complete
+  createMover(bounds, piece, startFile, startRank, endFile, endRank, speed) {
+    let elapsed = 0
+    const totalTime = Math.hypot(endFile - startFile, endRank - startRank)/speed
+    const self = this
+
+    function tick(dt) {
+      elapsed += dt
+
+      const ratio = THREE.Math.clamp(elapsed/totalTime, 0, 1)
+      const partialFile = (endFile - startFile)*ratio + startFile
+      const partialRank = (endRank - startRank)*ratio + startRank
+      const xz = self.xzFromFileRank(bounds, partialFile, partialRank)
+      const groundY = bounds.max.y
+
+      piece.piece3D.position.set(xz.x, groundY, xz.z)
+    }
+
+    function isComplete() {
+      return elapsed > totalTime
+    }
+
+    return {
+      tick,
+      isComplete,
     }
   },
 
