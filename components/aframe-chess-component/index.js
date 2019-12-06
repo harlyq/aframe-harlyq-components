@@ -140,7 +140,11 @@ AFRAME.registerComponent("chess", {
       aframeHelper.error(this, `unable to find board mesh '${this.board.name}'`)
     } else {
       this.board.board3D = board3D
-      threeHelper.setOBBFromObject3D(this.board.bounds, board3D)
+
+      // get bounds in board3D space
+      const invParentMatrix = new THREE.Matrix4().getInverse(board3D.parent.matrixWorld)
+      this.board.bounds.setFromObject(board3D)
+      this.board.bounds.applyMatrix4(invParentMatrix)
     }
 
     let meshCounts = {}
@@ -155,6 +159,7 @@ AFRAME.registerComponent("chess", {
 
     // multiple meshInfos can use the same meshName e.g. white rook and black rook
     let cacheInstances = {}
+    const meshMatrix = new THREE.Matrix4()
 
     for (let code in this.meshInfos) {
       const meshInfo = this.meshInfos[code]
@@ -175,6 +180,11 @@ AFRAME.registerComponent("chess", {
           mesh3D.visible = false
           mesh3D.material = this.chessMaterial
           meshInfo.instancedMesh = instanced.createMesh( mesh3D, meshCounts[meshName] + EXTRA_PIECES_FOR_PROMOTION )
+
+          // scale and rotate to match the original mesh
+          meshMatrix.compose(meshInfo.instancedMesh.position, mesh3D.quaternion, mesh3D.scale)
+          meshInfo.instancedMesh.geometry.applyMatrix(meshMatrix)
+
           meshInfo.nextIndex = 0
           chess3D.add(meshInfo.instancedMesh)
 
@@ -200,7 +210,7 @@ AFRAME.registerComponent("chess", {
       if (mesh.rotate180) {
         const quaternion = new THREE.Quaternion()
         instanced.getQuaternionAt( instancedMesh, index, quaternion )
-        instanced.setQuaternionAt( instancedMesh, index, quaternion.premultiply(this.rotate180Quaternion) )
+        instanced.setQuaternionAt( instancedMesh, index, quaternion.multiply(this.rotate180Quaternion) )
       }
 
       instanced.setScaleAt(instancedMesh, index, 1, 1, 1)
