@@ -1,24 +1,11 @@
-import { aframeHelper, chessHelper, threeHelper } from "harlyq-helpers"
+import { aframeHelper, chessHelper, instanced, threeHelper } from "harlyq-helpers"
 
 const MESHES_ORDER = "rnbqkpRNBQKP".split("")
 const NUM_RANKS = 8
 const NUM_FILES = 8
 const CAPTURED_SIZE = 10
 const URL_REGEX = /url\((.*)\)/
-
-function getMaterial(obj3D) {
-  const mesh = obj3D.getObjectByProperty("isMesh", true)
-  if (mesh) {
-    return mesh.material
-  }
-}
-
-function setMaterial(obj3D, material) {
-  const mesh = obj3D.getObjectByProperty("isMesh", true)
-  if (mesh) {
-    return mesh.material = material
-  }
-}
+const EXTRA_PIECES_FOR_PROMOTION = 4
 
 AFRAME.registerComponent("chess", {
   schema: {
@@ -48,16 +35,15 @@ AFRAME.registerComponent("chess", {
     this.el.addEventListener("grabstart", this.onGrabStart)
     this.el.addEventListener("grabend", this.onGrabEnd)
 
-    this.oldMaterialMap = new Map()
-    this.hoverMaterial = new THREE.MeshStandardMaterial ( { color: 0xffff00 } )
-    this.whiteMaterial = undefined
-    this.blackMaterial = undefined
+    this.chessMaterial = new THREE.MeshStandardMaterial()
+    this.blackColor = new THREE.Color(1,0,0)
+    this.whiteColor = new THREE.Color(1,1,1)
     this.grabMap = new Map() // grabInfo indexed by piece3D
     this.gameBounds = new THREE.Box3()
     this.fenAST = { layout: [] }
     this.pgnAST = undefined
     this.board = { name: "", board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0) }
-    this.rotation180Quaternion = new THREE.Quaternion().setFromAxisAngle(this.board.up, Math.PI)
+    this.rotate180Quaternion = new THREE.Quaternion().setFromAxisAngle(this.board.up, Math.PI)
     this.replay = { moveIndex: 0, actions: undefined, movers: [], delay: 0 }
   },
 
@@ -73,36 +59,41 @@ AFRAME.registerComponent("chess", {
     const data = this.data
     this.el.setAttribute("gltf-model", data.src)
 
-    const meshes = data.meshes.split(",")
-    if (meshes.length !== MESHES_ORDER.length) {
-      aframeHelper.error(this, `missing meshes, found ${meshes.length}, expecting ${MESHES_ORDER.length}`)
-      this.meshes = []
-    } else {
-      this.meshes = Object.fromEntries( meshes.map((x,i) => {
-        x = x.trim()
-        const rotate180 = x[x.length - 1] === "'"
-        return [MESHES_ORDER[i], { name: rotate180 ? x.slice(0,-1) : x, rotate180, mesh3D: undefined }] 
-      }) )
-    }
-
+    this.meshInfos = this.parseMeshes(data.meshes)
     this.board.name = data.boardMesh.trim()
     this.fenAST = this.parseFEN(data.fen)
-    this.parsePGN(data.pgn)
+    this.pgnAST = this.parsePGN(data.pgn)
 
-    this.blackMaterial = data.blackColor ? new THREE.MeshStandardMaterial({color: data.blackColor}) : undefined
-    this.whiteMaterial = data.whiteColor ? new THREE.MeshStandardMaterial({color: data.whiteColor}) : undefined
+    if (data.blackColor) this.blackColor.set(data.blackColor)
+    if (data.whiteColor) this.whiteColor.set(data.whiteColor)
   },
 
   tick(time, deltaTime) {
     const data = this.data
 
     if (data.mode === "physical") {
-      this.grabMap.forEach((grabInfo, piece3D) => {
-        threeHelper.applyOffsetMatrix(grabInfo.hand.object3D, piece3D, grabInfo.offsetMatrix)
+      this.grabMap.forEach((grabInfo, piece) => {
+        instanced.applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix)
       })
 
     } else if (data.mode === "replay") {
       this.replayTick(deltaTime/1000)
+    }
+  },
+
+  parseMeshes(meshes) {
+    const meshesList = meshes.split(",")
+
+    if (meshesList.length !== MESHES_ORDER.length) {
+      aframeHelper.error(this, `missing meshes, found ${meshesList.length}, expecting ${MESHES_ORDER.length}`)
+      return []
+
+    } else {
+      return Object.fromEntries( meshesList.map((x,i) => {
+        x = x.trim()
+        const rotate180 = x[x.length - 1] === "'"
+        return [MESHES_ORDER[i], { name: (rotate180 ? x.slice(0,-1) : x), rotate180, instancedMesh: undefined, nextIndex: 0 }] 
+      }) )
     }
   },
 
@@ -123,9 +114,11 @@ AFRAME.registerComponent("chess", {
           return response.text()
         })
         .then(text => this.parsePGN(text))
+
     } else {
       this.pgnAST = chessHelper.parsePGN(pgn)
       this.startReplay()
+      return this.pgnAST
     }
   },
 
@@ -137,7 +130,7 @@ AFRAME.registerComponent("chess", {
     replay.delay = 0
   },
 
-  createChessSet(chess3D) {
+  createChessSet(chess3D, fenAST) {
     const self = this
 
     threeHelper.setOBBFromObject3D(this.gameBounds, chess3D)
@@ -150,46 +143,76 @@ AFRAME.registerComponent("chess", {
       threeHelper.setOBBFromObject3D(this.board.bounds, board3D)
     }
 
-    for (let code in this.meshes) {
-      const mesh = this.meshes[code]
-      const mesh3D = chess3D.getObjectByName(mesh.name)
+    let meshCounts = {}
+    let codeCounts = {}
 
-      if (!mesh3D) {
-        aframeHelper.error(self, `unable to find mesh '${mesh.name}'`)
+    for (let piece of fenAST.layout) {
+      const code = piece.code
+      const meshName = this.meshInfos[code].name
+      meshCounts[meshName] = (meshCounts[meshName] || 0) + 1
+      codeCounts[code] = (codeCounts[code] || 0) + 1
+    }
+
+    // multiple meshInfos can use the same meshName e.g. white rook and black rook
+    let cacheInstances = {}
+
+    for (let code in this.meshInfos) {
+      const meshInfo = this.meshInfos[code]
+      const meshName = meshInfo.name
+      const cache = cacheInstances[meshName]
+
+      if (cache) {
+        meshInfo.instancedMesh = cache.instancedMesh
+        meshInfo.nextIndex = cache.nextIndex
+        cache.nextIndex += codeCounts[code]
+
       } else {
-        mesh3D.visible = false
-        mesh.mesh3D = mesh3D
+        const mesh3D = chess3D.getObjectByName(meshName)
+
+        if (!mesh3D) {
+          aframeHelper.error(self, `unable to find mesh '${meshName}'`)
+        } else {
+          mesh3D.visible = false
+          mesh3D.material = this.chessMaterial
+          meshInfo.instancedMesh = instanced.createMesh( mesh3D, meshCounts[meshName] + EXTRA_PIECES_FOR_PROMOTION )
+          meshInfo.nextIndex = 0
+          chess3D.add(meshInfo.instancedMesh)
+
+          cacheInstances[meshName] = { instancedMesh: meshInfo.instancedMesh, nextIndex: codeCounts[code] }
+        }
       }
     }
 
-    for (let piece of this.fenAST.layout) {
-      this.createMeshForPiece(chess3D, piece)
+    for (let piece of fenAST.layout) {
+      const {instancedMesh, index} = this.getInstanceForPiece(piece)
+      piece.instancedMesh = instancedMesh
+      piece.index = index
     }
   },
 
-  createMeshForPiece(chess3D, piece) {
-    const mesh = this.meshes[piece.code]
-    const mesh3D = mesh ? mesh.mesh3D : undefined
+  getInstanceForPiece(piece) {
+    const mesh = this.meshInfos[piece.code]
+    const instancedMesh = mesh ? mesh.instancedMesh : undefined
 
-    if (mesh3D) {
-      const piece3D = mesh3D.clone()
-      const isBlack = piece.code === piece.code.toLowerCase()
-      
-      piece3D.visible = true
-      if (this.blackMaterial && isBlack) {
-        piece3D.material = this.blackMaterial
-      } else if (this.whiteMaterial && !isBlack) {
-        piece3D.material = this.whiteMaterial
-      }
+    if (instancedMesh) {
+      const index = mesh.nextIndex++
 
       if (mesh.rotate180) {
-        piece3D.quaternion.premultiply(this.rotation180Quaternion)
+        const quaternion = new THREE.Quaternion()
+        instanced.getQuaternionAt( instancedMesh, index, quaternion )
+        instanced.setQuaternionAt( instancedMesh, index, quaternion.premultiply(this.rotate180Quaternion) )
       }
 
-      chess3D.add(piece3D)
-      piece.piece3D = piece3D
+      instanced.setScaleAt(instancedMesh, index, 1, 1, 1)
 
-      return piece3D
+      const isBlack = piece.code === piece.code.toLowerCase()
+      if (isBlack) {
+        instanced.setColorAt(instancedMesh, index, this.blackColor)
+      } else {
+        instanced.setColorAt(instancedMesh, index, this.whiteColor)
+      }
+
+      return {index, instancedMesh}
     }
   },
 
@@ -197,13 +220,13 @@ AFRAME.registerComponent("chess", {
     const grabSystem = this.el.sceneEl.systems["grab-system"]
     const el = this.el
 
-    const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.piece3D, score: "closestforward"})
+    const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.instancedMesh, score: "closestforward", instanceIndex: piece.index})
 
     this.fenAST.layout.forEach(setupPiecePicking)
   },
 
-  setupBoard(chess3D) {
-    if ( !this.board.board3D || MESHES_ORDER.some(code => !this.meshes[code].mesh3D) ) {
+  setupBoard() {
+    if ( !this.board.board3D || MESHES_ORDER.some(code => !this.meshInfos[code].instancedMesh) ) {
       return
     }
 
@@ -211,7 +234,7 @@ AFRAME.registerComponent("chess", {
 
     for (let piece of this.fenAST.layout) {
       const xz = this.xzFromFileRank(this.board.bounds, piece.file, piece.rank)
-      piece.piece3D.position.set(xz.x, groundY, xz.z)
+      instanced.setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z)
     }
   },
 
@@ -230,12 +253,12 @@ AFRAME.registerComponent("chess", {
     return file >= 1 && file <= NUM_FILES && rank >= 1 && rank <= NUM_RANKS ? [file,rank] : undefined
   },
 
-  snapToBoard(piece3D) {
-    const fileRank = this.fileRankFromXZ(this.board.bounds, piece3D.position.x, piece3D.position.z)
+  snapToBoard(piece, piecePosition) {
+    const fileRank = this.fileRankFromXZ(this.board.bounds, piecePosition.x, piecePosition.z)
     if (fileRank) {
       const pos = this.xzFromFileRank(this.board.bounds, fileRank[0], fileRank[1])
       const groundY = this.board.bounds.max.y
-      piece3D.position.set(pos.x, groundY, pos.z)
+      instanced.setPositionAt(piece.instancedMesh, piece.index, pos.x, groundY, pos.z)
     }
   },
 
@@ -275,9 +298,11 @@ AFRAME.registerComponent("chess", {
         }
         case "promote": {
           const newPiece = action.newPiece
-          action.piece.piece3D.visible = false
-          newPiece.piece3D = this.createMeshForPiece(this.chess3D, newPiece)
-          newPiece.piece3D.visible = true
+          instanced.setScaleAt(action.piece.instancedMesh, action.piece.index, 0, 0, 0)
+
+          const {instancedMesh, index} = this.getInstanceForPiece(newPiece)
+          newPiece.instancedMesh = instancedMesh
+          newPiece.index = index
           const promoteMover = this.createMover(this.board.bounds, newPiece, newPiece.file, newPiece.rank, newPiece.file, newPiece.rank, data.replayMoveSpeed)
           replay.movers.push(promoteMover)
         }
@@ -312,7 +337,7 @@ AFRAME.registerComponent("chess", {
       const xz = self.xzFromFileRank(bounds, partialFile, partialRank)
       const groundY = bounds.max.y
 
-      piece.piece3D.position.set(xz.x, groundY, xz.z)
+      instanced.setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z)
     }
 
     function isComplete() {
@@ -327,58 +352,76 @@ AFRAME.registerComponent("chess", {
 
   onObject3dSet(event) {
     this.chess3D = event.detail.object
-    this.createChessSet(this.chess3D)
-    this.setupPicking()
-    this.setupBoard(this.chess3D)
+    this.createChessSet(this.chess3D, this.fenAST)
+
+    if (this.data.mode === "physical") {
+      this.setupPicking()
+    }
+
+    this.setupBoard()
   },
 
   onHoverStart(event) {
-    const piece3D = event.detail.obj3D
-    if (piece3D) {
-      if (!this.oldMaterialMap.has(piece3D)) {
-        this.oldMaterialMap.set(piece3D, getMaterial(piece3D))
-        setMaterial(piece3D, this.hoverMaterial)
-      }
+    const instancedMesh = event.detail.obj3D
+
+    if (Object.keys(this.meshInfos).find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+      const index = event.detail.instanceIndex
+      instanced.setColorAt(instancedMesh, index, 1, 1, 0)
     }
   },
 
   onHoverEnd(event) {
-    const piece3D = event.detail.obj3D
-    if (piece3D) {
-      if (this.oldMaterialMap.has(piece3D)) {
-        setMaterial( piece3D, this.oldMaterialMap.get(piece3D) )
-        this.oldMaterialMap.delete(piece3D)
-      }
+    const instancedMesh = event.detail.obj3D
+
+    if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+      const index = event.detail.instanceIndex
+      const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
+      const isBlack = piece.code === piece.code.toLowerCase()
+      instanced.setColorAt(instancedMesh, index, isBlack ? this.blackColor : this.whiteColor)
     }
   },
 
   onGrabStart(event) {
-    const hand = event.detail.hand
-    const piece3D = event.detail.obj3D
-    const grabInfo = this.grabMap.get(piece3D)
+    const instancedMesh = event.detail.obj3D
 
-    if (grabInfo) {
-      // we grab this from another hand, so keep the original quaternion
-      grabInfo.offsetMatrix = threeHelper.calcOffsetMatrix(hand.object3D, piece3D, grabInfo.offsetMatrix)
-      grabInfo.hand = hand
-    } else {
-      this.grabMap.set(piece3D, { hand, offsetMatrix: threeHelper.calcOffsetMatrix(hand.object3D, piece3D), startQuaternion: piece3D.quaternion.clone() })
+    if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+      const hand = event.detail.hand
+      const index = event.detail.instanceIndex
+      const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
+      const grabInfo = this.grabMap.get(piece)
+
+      if (grabInfo) {
+        // we grab this from another hand, so keep the original quaternion
+        grabInfo.offsetMatrix = instanced.calcOffsetMatrix(hand.object3D, instancedMesh, piece.index, grabInfo.offsetMatrix)
+        grabInfo.hand = hand
+      } else {
+        this.grabMap.set(piece, { 
+          hand, 
+          offsetMatrix: instanced.calcOffsetMatrix(hand.object3D, instancedMesh, piece.index), 
+          startQuaternion: instanced.getQuaternionAt(instancedMesh, piece.index) 
+        })
+      }
     }
   },
 
   onGrabEnd(event) {
-    const hand = event.detail.hand
-    const piece3D = event.detail.obj3D
-    const grabInfo = this.grabMap.get(piece3D)
+    const instancedMesh = event.detail.obj3D
 
-    if (grabInfo && grabInfo.hand === hand) { // this may be false if another hand took the piece
-      if (piece3D.position.y < this.gameBounds.max.y) {
-        this.snapToBoard(piece3D)
+    if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+      const hand = event.detail.hand
+      const index = event.detail.instanceIndex
+      const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
+      const grabInfo = this.grabMap.get(piece)
+
+      if (grabInfo && grabInfo.hand === hand) {
+        const piecePosition = instanced.getPositionAt(instancedMesh, index)
+        if (piecePosition.y < this.gameBounds.max.y) {
+          this.snapToBoard(piece, piecePosition)
+        }
+
+        instanced.setQuaternionAt( instancedMesh, index, grabInfo.startQuaternion )
+        this.grabMap.delete(piece)
       }
-  
-      piece3D.quaternion.copy( this.grabMap.get(piece3D).startQuaternion )
-  
-      this.grabMap.delete(piece3D)
     }
   },
 })

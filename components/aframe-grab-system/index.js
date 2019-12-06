@@ -1,4 +1,4 @@
-import { aframeHelper, domHelper, extent, overlap, threeHelper } from "harlyq-helpers"
+import { aframeHelper, domHelper, extent, instanced, overlap, threeHelper } from "harlyq-helpers"
 
 const IDLE = Symbol("idle")
 const HOVER = Symbol("hover")
@@ -55,8 +55,8 @@ AFRAME.registerSystem("grab-system", {
 
   registerTarget(el, customConfig = {}) {
     const data = this.data
-    const config = Object.assign( {el, obj3D: el.object3D, grabStart: data.grabStart, grabEnd: data.grabEnd }, customConfig )
-    const index = this.targets.findIndex(target => target.el === el && target.obj3D == config.obj3D)
+    const config = Object.assign( {el, obj3D: el.object3D, grabStart: data.grabStart, grabEnd: data.grabEnd, instanceIndex: -1 }, customConfig )
+    const index = this.targets.findIndex(target => target.el === el && target.obj3D === config.obj3D && target.instanceIndex === config.instanceIndex)
     if (index === -1) {
       this.targets.push( config )
 
@@ -113,58 +113,66 @@ AFRAME.registerSystem("grab-system", {
   },
 
   // find the smallest overlapping volume
-  findOverlapping(handEl, targets) {
-    const data = this.data
-    let minScore = Number.MAX_VALUE
-    let overlapping = undefined
+  findOverlapping: (function () {
+    const instancedMatrixWorld = new THREE.Matrix4()
 
-    // generate the bounding boxes of hands and targets (this is useful for debugging, even if some are missing)
-    const hand3D = handEl.object3D
-    if (!hand3D.boundingSphere || !hand3D.boundingBox || hand3D.boundingBox.isEmpty()) {
-      threeHelper.generateOrientedBoundingBox(hand3D, data.debug ? 0x00FFFF : undefined) // cyan
+    return function findOverlapping(handEl, targets) {
+      const data = this.data
+      const self = this
+  
+      let minScore = Number.MAX_VALUE
+      let overlapping = undefined
+  
+      // generate the bounding boxes of hands and targets (this is useful for debugging, even if some are missing)
+      const hand3D = handEl.object3D
+      if (!hand3D.boundingSphere || !hand3D.boundingBox || hand3D.boundingBox.isEmpty()) {
+        threeHelper.generateOrientedBoundingBox(hand3D, data.debug ? 0x00FFFF : undefined) // cyan
+      }
+  
+      for (let target of targets) {
+        const target3D = target.obj3D  
+        if (!target3D) { 
+          continue 
+        }
+  
+        if (!target3D.boundingSphere || !target3D.boundingBox || target3D.boundingBox.isEmpty()) {
+          threeHelper.generateOrientedBoundingBox(target3D, data.debug ? 0xFFFF00 : undefined) // yellow
+        }
+      }
+  
+      if (hand3D.boundingBox.isEmpty()) {
+        return undefined
+      }
+  
+      for (let target of targets) {
+        const target3D = target.obj3D  
+        if (!target3D) { 
+          continue 
+        }
+  
+        if (target3D.boundingBox.isEmpty()) { 
+          continue 
+        }
+  
+        const targetMatrixWorld = target.instanceIndex >= 0 ? instanced.calcMatrixWorld(target3D, target.instanceIndex, instancedMatrixWorld) : target3D.matrixWorld
+  
+        // Bounding box collision check
+        const isOverlapping = overlap.boxWithBox(hand3D.boundingBox.min, hand3D.boundingBox.max, hand3D.matrixWorld.elements, target3D.boundingBox.min, target3D.boundingBox.max, targetMatrixWorld.elements)
+  
+        if (isOverlapping) {
+          const score = self.getScore(hand3D, target, targetMatrixWorld)
+          if (score < minScore) {
+            minScore = score
+            overlapping = target
+          }
+        }
+  
+      }
+  
+      return overlapping
     }
+  })(),
 
-    for (let target of targets) {
-      const target3D = target.obj3D  
-      if (!target3D) { 
-        continue 
-      }
-
-      if (!target3D.boundingSphere || !target3D.boundingBox || target3D.boundingBox.isEmpty()) {
-        threeHelper.generateOrientedBoundingBox(target3D, data.debug ? 0xFFFF00 : undefined) // yellow
-      }
-    }
-
-    if (hand3D.boundingBox.isEmpty()) {
-      return
-    }
-
-    for (let target of targets) {
-      const target3D = target.obj3D  
-      if (!target3D) { 
-        continue 
-      }
-
-      if (target3D.boundingBox.isEmpty()) { 
-        continue 
-      }
-
-      // Bounding box collision check
-      const isOverlapping = overlap.boxWithBox(hand3D.boundingBox.min, hand3D.boundingBox.max, hand3D.matrixWorld.elements, target3D.boundingBox.min, target3D.boundingBox.max, target3D.matrixWorld.elements)
-
-      if (!isOverlapping) {
-        continue
-      }
-
-      const score = this.getScore(hand3D, target)
-      if (score < minScore) {
-        minScore = score
-        overlapping = target
-      }
-    }
-
-    return overlapping
-  },
 
   transition(state, action) {
     const oldState = state.name
@@ -172,7 +180,7 @@ AFRAME.registerSystem("grab-system", {
     switch (oldState) {
       case IDLE:
         if (action.name === HOVER) {
-          this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D })
+          this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D, instanceIndex: action.target.instanceIndex })
           state.name = HOVER
           state.target = action.target
         }
@@ -180,23 +188,23 @@ AFRAME.registerSystem("grab-system", {
 
       case HOVER:
         if (action.name === IDLE) {
-          this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D })
+          this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex })
           state.name = IDLE
           state.target = undefined
         } else if (action.name === GRAB) {
-          this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D })
-          this.sendEvent(state.target.el, "grabstart", { hand: state.el, obj3D: state.target.obj3D })
+          this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex })
+          this.sendEvent(state.target.el, "grabstart", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex })
           state.name = GRAB
-        } else if (action.name === HOVER && action.target !== state.target) {
-          this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D })
-          this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D })
+        } else if (action.name === HOVER && (action.target !== state.target)) {
+          this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex })
+          this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D, instanceIndex: action.target.instanceIndex })
           state.target = action.target
         }
         break
 
       case GRAB:
         if (action.name === IDLE) {
-          this.sendEvent(state.target.el, "grabend", { hand: state.el, obj3D: state.target.obj3D })
+          this.sendEvent(state.target.el, "grabend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex })
           state.name = IDLE
           state.target = undefined
         }
@@ -227,11 +235,11 @@ AFRAME.registerSystem("grab-system", {
     const handToTarget = new THREE.Vector3()
     const pointOnForward = new THREE.Vector3()
 
-    return function getScore(hand3D, target) {
+    return function getScore(hand3D, target, targetMatrixWorld) {
       switch (target.score) {
         case "closestforward":
           handPos.setFromMatrixPosition(hand3D.matrixWorld)
-          targetPos.setFromMatrixPosition(target.obj3D.matrixWorld)
+          targetPos.setFromMatrixPosition(targetMatrixWorld)
           handForward.setFromMatrixColumn(hand3D.matrixWorld, 2) // controller points in the -z direction
           handToTarget.subVectors(targetPos, handPos)
           handForward.normalize()
