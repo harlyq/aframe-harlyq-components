@@ -16,10 +16,11 @@ AFRAME.registerComponent("chess", {
     whiteColor: { type: "color", default: "" },
     fen: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
     pgn: { default: "" },
-    debug: { default: true },
-    replayMoveSpeed: { default: 4 },
-    replayTurnDuration: { default: 1 },
-    mode: { oneOf: ["physical", "replay", "static", "game"], default: "replay" },
+    debug: { default: false },
+    boardMoveSpeed: { default: 4 },
+    replayTurnDuration: { default: .5 },
+    mode: { oneOf: ["physical", "replay", "static", "ai"], default: "physical" },
+    aiDuration: { default: 1 }
   },
 
   init() {
@@ -42,9 +43,18 @@ AFRAME.registerComponent("chess", {
     this.gameBounds = new THREE.Box3()
     this.fenAST = { layout: [] }
     this.pgnAST = undefined
-    this.board = { name: "", board3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3(0,1,0) }
-    this.rotate180Quaternion = new THREE.Quaternion().setFromAxisAngle(this.board.up, Math.PI)
-    this.replay = { moveIndex: 0, actions: undefined, movers: [], delay: 0 }
+    this.rotate180Quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI)
+    this.board = {
+      name: "",
+      board3D: undefined,
+      bounds: new THREE.Box3(),
+      actions: undefined,
+      movers: [],
+      delay: 0
+    }
+    this.replay = {
+      moveIndex: 0
+    }
   },
 
   remove() {
@@ -70,6 +80,7 @@ AFRAME.registerComponent("chess", {
 
   tick(time, deltaTime) {
     const data = this.data
+    const dt = Math.min(0.1, deltaTime/1000)
 
     if (data.mode === "physical") {
       this.grabMap.forEach((grabInfo, piece) => {
@@ -77,7 +88,11 @@ AFRAME.registerComponent("chess", {
       })
 
     } else if (data.mode === "replay") {
-      this.replayTick(deltaTime/1000)
+      this.boardTick(dt)
+      this.replayTick()
+    } else if (data.mode === "ai") {
+      this.boardTick(dt)
+      this.aiTick()
     }
   },
 
@@ -147,14 +162,21 @@ AFRAME.registerComponent("chess", {
       this.board.bounds.applyMatrix4(invParentMatrix)
     }
 
-    let meshCounts = {}
-    let codeCounts = {}
+    let codeCounts = Object.fromEntries( MESHES_ORDER.map(code => [code, 0]) )
+    let meshCounts = Object.fromEntries( MESHES_ORDER.map(code => [this.meshInfos[code].name, 0]) )
 
     for (let piece of fenAST.layout) {
       const code = piece.code
       const meshName = this.meshInfos[code].name
-      meshCounts[meshName] = (meshCounts[meshName] || 0) + 1
-      codeCounts[code] = (codeCounts[code] || 0) + 1
+      meshCounts[meshName]++
+      codeCounts[code]++
+    }
+
+    // add extra counts for promotion pieces
+    for (let code of "rnbqRNBQ".split("")) {
+      const meshName = this.meshInfos[code].name
+      meshCounts[meshName] += EXTRA_PIECES_FOR_PROMOTION
+      codeCounts[code] += EXTRA_PIECES_FOR_PROMOTION
     }
 
     // multiple meshInfos can use the same meshName e.g. white rook and black rook
@@ -179,7 +201,7 @@ AFRAME.registerComponent("chess", {
         } else {
           mesh3D.visible = false
           mesh3D.material = this.chessMaterial
-          meshInfo.instancedMesh = instanced.createMesh( mesh3D, meshCounts[meshName] + EXTRA_PIECES_FOR_PROMOTION )
+          meshInfo.instancedMesh = instanced.createMesh( mesh3D, meshCounts[meshName] )
 
           // scale and rotate to match the original mesh
           meshMatrix.compose(meshInfo.instancedMesh.position, mesh3D.quaternion, mesh3D.scale)
@@ -246,6 +268,15 @@ AFRAME.registerComponent("chess", {
       const xz = this.xzFromFileRank(this.board.bounds, piece.file, piece.rank)
       instanced.setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z)
     }
+
+    if (this.fenAST.capturedPieces) {
+      for (let i = 0; i < this.fenAST.capturedPieces.length; i++) {
+        const piece = this.fenAST.capturedPieces[i]
+        const offBoard = this.fileRankFromCaptured(i)
+        const xz = this.xzFromFileRank(this.board.bounds, offBoard.file, offBoard.rank)
+        instanced.setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z)
+      }
+    }
   },
 
   // 1,1 => bottom left, supports fractional file and rank
@@ -260,75 +291,112 @@ AFRAME.registerComponent("chess", {
     const h = bounds.max.z - bounds.min.z
     const file = Math.floor( NUM_FILES*( x - bounds.min.x ) / w ) + 1
     const rank = Math.floor( NUM_RANKS*( bounds.max.z - z ) / h ) + 1
-    return file >= 1 && file <= NUM_FILES && rank >= 1 && rank <= NUM_RANKS ? [file,rank] : undefined
+    return file >= 1 && file <= NUM_FILES && rank >= 1 && rank <= NUM_RANKS ? {file,rank} : undefined
+  },
+
+  fileRankFromCaptured(capturedIndex) {
+    const offBoardFile = Math.floor(capturedIndex/CAPTURED_SIZE) + 10
+    const offBoardRank = (capturedIndex % CAPTURED_SIZE)/CAPTURED_SIZE*NUM_RANKS + 1
+    return {file: offBoardFile, rank: offBoardRank}
   },
 
   snapToBoard(piece, piecePosition) {
     const fileRank = this.fileRankFromXZ(this.board.bounds, piecePosition.x, piecePosition.z)
     if (fileRank) {
-      const pos = this.xzFromFileRank(this.board.bounds, fileRank[0], fileRank[1])
+      const pos = this.xzFromFileRank(this.board.bounds, fileRank.file, fileRank.rank)
       const groundY = this.board.bounds.max.y
       instanced.setPositionAt(piece.instancedMesh, piece.index, pos.x, groundY, pos.z)
     }
   },
 
-  replayTick(dt) {
+  boardTick(dt) {
     const data = this.data
-    const replay = this.replay
+    const board = this.board
 
-    if (replay.delay > 0 || replay.movers.length > 0) {
-      replay.delay -= dt
+    board.delay -= dt
 
-      if (replay.movers.length > 0) {
-        replay.movers.forEach(mover => mover.tick(dt))
+    if (board.movers.length > 0) {
+
+      if (board.movers.length > 0) {
+        board.movers.forEach(mover => mover.tick(dt))
         
-        if (replay.movers.every(mover => mover.isComplete())) {
-          replay.movers.length = 0
-          replay.actions.splice(0,1) // move to the next action
+        if (board.movers.every(mover => mover.isComplete())) {
+          board.movers.length = 0
+          board.actions.splice(0,1) // move to the next action
         }
       }
 
-    } else if (replay.actions && replay.actions.length > 0) {
-      const action = replay.actions[0]
+    } else if (board.actions && board.actions.length > 0) {
+      const action = board.actions[0]
+      const bounds = this.board.bounds
 
       switch (action.type) {
         case "move": {
           const piece = action.piece
-          const moveMover = this.createMover(this.board.bounds, piece, action.fromFile, action.fromRank, action.toFile, action.toRank, data.replayMoveSpeed)
-          replay.movers.push( moveMover )
+          const moveMover = this.createMover(bounds, piece, action.fromFile, action.fromRank, action.toFile, action.toRank, data.boardMoveSpeed)
+          board.movers.push( moveMover )
           break
         } 
         case "capture": {
           const capturedPiece = action.capturedPiece
-          const offBoardFile = Math.floor(action.capturedIndex/CAPTURED_SIZE) + 10
-          const offBoardRank = (action.capturedIndex % CAPTURED_SIZE)/CAPTURED_SIZE*NUM_RANKS + 1
-          const captureMover = this.createMover(this.board.bounds, capturedPiece, offBoardFile, offBoardRank, offBoardFile, offBoardRank, data.replayMoveSpeed)
-          replay.movers.push(captureMover)
+          const offBoard = this.fileRankFromCaptured(action.capturedIndex)
+          const captureMover = this.createMover(bounds, capturedPiece, offBoard.file, offBoard.rank, offBoard.file, offBoard.rank, data.boardMoveSpeed)
+          board.movers.push(captureMover)
           break
         }
         case "promote": {
           const newPiece = action.newPiece
-          instanced.setScaleAt(action.piece.instancedMesh, action.piece.index, 0, 0, 0)
 
           const {instancedMesh, index} = this.getInstanceForPiece(newPiece)
           newPiece.instancedMesh = instancedMesh
           newPiece.index = index
-          const promoteMover = this.createMover(this.board.bounds, newPiece, newPiece.file, newPiece.rank, newPiece.file, newPiece.rank, data.replayMoveSpeed)
-          replay.movers.push(promoteMover)
+
+          const offBoard = this.fileRankFromCaptured(action.capturedIndex)
+          const promoteMover = this.createMover(bounds, newPiece, newPiece.file, newPiece.rank, newPiece.file, newPiece.rank, data.boardMoveSpeed)
+          const pawnMover = this.createMover(bounds, action.piece, offBoard.file, offBoard.rank, offBoard.file, offBoard.rank, data.boardMoveSpeed)
+          board.movers.push(promoteMover, pawnMover)
+          break
         }
         case "castle": {
           const king = action.king
           const rook = action.rook
-          const kingMover = this.createMover(this.board.bounds, king, 5, king.rank, action.kingside ? 7 : 3, king.rank, data.replayMoveSpeed)
-          const rookMover = this.createMover(this.board.bounds, rook, action.kingside ? 8 : 1, rook.rank, action.kingside ? 6 : 4, rook.rank, data.replayMoveSpeed)
-          replay.movers.push(kingMover, rookMover)
+          const kingMover = this.createMover(bounds, king, 5, king.rank, action.kingside ? 7 : 3, king.rank, data.boardMoveSpeed)
+          const rookMover = this.createMover(bounds, rook, action.kingside ? 8 : 1, rook.rank, action.kingside ? 6 : 4, rook.rank, data.boardMoveSpeed)
+          board.movers.push(kingMover, rookMover)
+          break
         }
-      }
-    } else if (this.pgnAST && this.pgnAST.moves[replay.moveIndex]) {
-      replay.actions = chessHelper.applyMove(this.fenAST, this.pgnAST.moves[replay.moveIndex++]) 
-      replay.delay = replay.actions ? data.replayTurnDuration : 0
-    }
 
+        default:
+          throw Error(`unknown action of type "${action.type}"`)
+      }
+    }
+  },
+
+  replayTick() {
+    const board = this.board
+    const replay = this.replay
+
+    if (board.delay <= 0 && board.movers.length === 0 && (!board.actions || board.actions.length === 0) && this.pgnAST && this.pgnAST.moves[replay.moveIndex]) {
+      board.actions = chessHelper.applyMove(this.fenAST, this.pgnAST.moves[replay.moveIndex++]) 
+      board.delay = board.actions ? this.data.replayTurnDuration : 0
+    }
+  },
+
+  aiTick() {
+    const board = this.board
+    const data = this.data
+
+    if (board.delay <= 0 && board.movers.length === 0 && (!board.actions || board.actions.length === 0) && this.garbochess && this.nextAIMove) {
+      const move = chessHelper.decodeCoordMove(this.fenAST.layout, this.nextAIMove)
+      if (data.debug) {
+        console.log(move.code === move.code.toLowerCase() ? "black" : "white", this.nextAIMove, chessHelper.sanToString(move))
+      }
+
+      this.board.actions = chessHelper.applyMove(this.fenAST, move)  
+      this.nextAIMove = ""
+      this.garbochess.postMessage("search " + data.aiDuration)
+      board.delay = data.aiDuration
+    }
   },
 
   // speed is in tiles per second
@@ -360,15 +428,39 @@ AFRAME.registerComponent("chess", {
     }
   },
 
+  setupAI() {
+    const garbochess = new Worker("garbochess.js")
+    garbochess.onmessage = (event) => {
+      if (event.data.startsWith("pv")) {
+        //console.log(event.data)
+      } else if (event.data.startsWith("message")) {
+        console.log(event.data)
+      } else {
+        this.nextAIMove = event.data
+      }
+    }
+
+    this.isBlackTurn = false
+    garbochess.postMessage("position " + chessHelper.fenToString(this.fenAST))
+    garbochess.postMessage("search " + this.data.aiDuration*1000)
+    this.garbochess = garbochess
+  },
+
   onObject3dSet(event) {
+    const data = this.data
     this.chess3D = event.detail.object
     this.createChessSet(this.chess3D, this.fenAST)
 
-    if (this.data.mode === "physical") {
+    if (data.mode === "physical") {
       this.setupPicking()
     }
 
     this.setupBoard()
+
+    if (data.mode === "ai") {
+      this.setupAI()
+    }
+
   },
 
   onHoverStart(event) {
