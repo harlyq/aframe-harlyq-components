@@ -155,7 +155,7 @@ function GetMoveFromString(moveString) {
             return moves[i];
         }
     }
-    alert("busted! ->" + moveString + " fen:" + GetFen());
+    // alert("busted! ->" + moveString + " fen:" + GetFen());
 }
 
 function PVFromHash(move, ply) {
@@ -2509,7 +2509,16 @@ self.onmessage = function (e) {
     } else if (e.data == "analyze") {
         g_timeout = 99999999999;
         Search(null, 99, FinishPlyCallback);
+    } else if (e.data.startsWith("possible")) {
+        var moves = GenerateValidMoves();
+        postMessage("options " + moves.map(FormatMove).join(","))
     } else {
-        MakeMove(GetMoveFromString(e.data));
+        const move = GetMoveFromString(e.data)
+        if (move) {
+            MakeMove(move)
+            postMessage("valid " + e.data)
+        } else {
+            postMessage("invalid " + e.data)
+        }
     }
 }

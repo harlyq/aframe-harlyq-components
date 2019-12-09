@@ -46,7 +46,10 @@
         chess="mode:replay; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn);"
       ></a-entity>
       <a-entity scale=".01 .01 .01" position=".5 1 1.5" 
-        chess="mode:ai; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; fen: 8/6PK/8/8/8/8/8/k7 w - - 0 1"
+        chess="debug: true; mode:game; whitePlayer: ai; blackPlayer: ai; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; fen: 8/6PK/8/8/8/8/8/k7 w - - 0 1"
+      ></a-entity>
+      <a-entity scale=".01 .01 .01" position=".5 1 .5" 
+        chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: true; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee;"
       ></a-entity>
     </a-scene>
   </body>

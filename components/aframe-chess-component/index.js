@@ -6,6 +6,8 @@ const NUM_FILES = 8
 const CAPTURED_SIZE = 10
 const URL_REGEX = /url\((.*)\)/
 const EXTRA_PIECES_FOR_PROMOTION = 4
+const toLowerCase = (str) => str.toLowerCase()
+
 
 AFRAME.registerComponent("chess", {
   schema: {
@@ -19,8 +21,10 @@ AFRAME.registerComponent("chess", {
     debug: { default: false },
     boardMoveSpeed: { default: 4 },
     replayTurnDuration: { default: .5 },
-    mode: { oneOf: ["physical", "replay", "static", "ai"], default: "physical" },
-    aiDuration: { default: 1 }
+    mode: { oneOf: ["freestyle", "replay", "static", "game"], default: "freestyle", parse: toLowerCase },
+    aiDuration: { default: 1 },
+    whitePlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
+    blackPlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
   },
 
   init() {
@@ -29,32 +33,47 @@ AFRAME.registerComponent("chess", {
     this.onHoverEnd = this.onHoverEnd.bind(this)
     this.onGrabStart = this.onGrabStart.bind(this)
     this.onGrabEnd = this.onGrabEnd.bind(this)
+    this.onReset = this.onReset.bind(this)
 
     this.el.addEventListener("object3dset", this.onObject3dSet)
     this.el.addEventListener("hoverstart", this.onHoverStart)
     this.el.addEventListener("hoverend", this.onHoverEnd)
     this.el.addEventListener("grabstart", this.onGrabStart)
     this.el.addEventListener("grabend", this.onGrabEnd)
+    this.el.addEventListener("reset", this.onReset)
 
+    this.playerType = {}
     this.chessMaterial = new THREE.MeshStandardMaterial()
-    this.blackColor = new THREE.Color(1,0,0)
-    this.whiteColor = new THREE.Color(1,1,1)
-    this.grabMap = new Map() // grabInfo indexed by piece3D
+    this.blackColor = new THREE.Color(.2,.2,.2)
+    this.whiteColor = new THREE.Color(.8,.8,.8)
     this.gameBounds = new THREE.Box3()
-    this.fenAST = { layout: [] }
     this.pgnAST = undefined
     this.rotate180Quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI)
     this.board = {
       name: "",
       board3D: undefined,
       bounds: new THREE.Box3(),
+    }
+    this.garbochess = undefined
+
+    this.state = {
       actions: undefined,
+      currentPlayer: "white",
+      fenAST: { layout: [], capturedPieces: [] },
+      grabMap: new Map(),
       movers: [],
-      delay: 0
+      nextAIMove: "",
+      nextHumanMove: "",
+      pickingSide: "none",
+      delay: 0,
+      replayIndex: 0,
+      currentMode: "setup",
     }
-    this.replay = {
-      moveIndex: 0
-    }
+
+    const data = this.data
+    this.el.setAttribute("gltf-model", data.src)
+    this.meshInfos = this.parseMeshes(data.meshes)
+    this.board.name = data.boardMesh.trim()
   },
 
   remove() {
@@ -63,37 +82,71 @@ AFRAME.registerComponent("chess", {
     this.el.removeEventListener("hoverend", this.onHoverEnd)
     this.el.removeEventListener("grabstart", this.onGrabStart)
     this.el.removeEventListener("grabend", this.onGrabEnd)
+    this.el.removeEventListener("reset", this.onReset)
   },
 
-  update() {
+  update(oldData) {
     const data = this.data
-    this.el.setAttribute("gltf-model", data.src)
 
-    this.meshInfos = this.parseMeshes(data.meshes)
-    this.board.name = data.boardMesh.trim()
-    this.fenAST = this.parseFEN(data.fen)
-    this.pgnAST = this.parsePGN(data.pgn)
+    if (data.fen !== oldData.fen) {
+      this.fenAST = this.parseFEN(data.fen)
+    }
+
+    if (data.pgn !== oldData.pgn) {
+      this.pgnAST = this.parsePGN(data.pgn)
+    }
 
     if (data.blackColor) this.blackColor.set(data.blackColor)
     if (data.whiteColor) this.whiteColor.set(data.whiteColor)
+
+    this.playerType["white"] = data.whitePlayer !== "human" ? "ai" : "human"
+    this.playerType["black"] = data.blackPlayer !== "human" ? "ai" : "human"
+
+    if (data.mode !== oldData.mode) {
+      this.setupMode(data.mode)
+    }
   },
 
   tick(time, deltaTime) {
-    const data = this.data
     const dt = Math.min(0.1, deltaTime/1000)
 
-    if (data.mode === "physical") {
-      this.grabMap.forEach((grabInfo, piece) => {
-        instanced.applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix)
-      })
-
-    } else if (data.mode === "replay") {
-      this.boardTick(dt)
-      this.replayTick()
-    } else if (data.mode === "ai") {
-      this.boardTick(dt)
-      this.aiTick()
+    switch (this.state.currentMode) {
+      case "freestyle":
+        this.freestyleTick()
+        break
+      case "replay":
+        this.boardTick(dt)
+        this.replayTick()
+        break
+      case "game":
+        this.boardTick(dt)
+        if (this.playerType[this.state.currentPlayer] === "ai") {
+          this.aiTick()
+        } else {
+          this.humanTick()
+        }
+        break
     }
+  },
+
+  setCurrentPlayer(player) {
+    const state = this.state
+    const data = this.data
+    state.currentPlayer = player
+
+    if (this.playerType[player] === "ai") {
+      this.setupPicking("none")
+      state.nextAIMove = ""
+      this.garbochess.postMessage("search " + data.aiDuration*1000)
+    } else {
+      state.nextHumanMove = ""
+      this.garbochess.postMessage("possible")
+      this.setupPicking(player)
+    }
+  },
+
+  nextTurn() {
+    this.setCurrentPlayer(this.state.currentPlayer === "white" ? "black" : "white")
   },
 
   parseMeshes(meshes) {
@@ -132,17 +185,49 @@ AFRAME.registerComponent("chess", {
 
     } else {
       this.pgnAST = chessHelper.parsePGN(pgn)
-      this.startReplay()
+
+      if (this.data.mode === "replay") {
+        this.setupMode("replay")
+      }
+
       return this.pgnAST
     }
   },
 
-  startReplay() {
-    const replay = this.replay
-    replay.moveIndex = 0
-    replay.actions = undefined
-    replay.movers = []
-    replay.delay = 0
+  setupMode(mode) {
+    if (!this.chess3D) {
+      return
+    }
+
+    const state = this.state
+    const fenStr = this.pgnAST && this.pgnAST["FEN"] ? this.pgnAST["FEN"] : this.data.fen
+
+    state.actions = undefined
+    state.fenAST = this.parseFEN( fenStr || chessHelper.FEN_DEFAULT )
+    state.grabMap.clear()
+    state.movers.length = 0
+    state.nextAIMove = ""
+    state.nextHumanMove = ""
+    state.delay = 0
+    state.replayIndex = 0
+    state.currentMode = mode
+
+    this.setupBoard()
+
+    switch (mode) {
+      case "replay":
+        break
+
+      case "game":
+        this.setupGameWorker()
+        this.garbochess.postMessage("position " + chessHelper.fenToString(this.fenAST))
+        this.setCurrentPlayer(state.fenAST.player)
+        break
+
+      case "freestyle":
+        this.setupPicking("all")
+        break
+    }
   },
 
   createChessSet(chess3D, fenAST) {
@@ -216,13 +301,11 @@ AFRAME.registerComponent("chess", {
     }
 
     for (let piece of fenAST.layout) {
-      const {instancedMesh, index} = this.getInstanceForPiece(piece)
-      piece.instancedMesh = instancedMesh
-      piece.index = index
+      this.setupInstanceForPiece(piece)
     }
   },
 
-  getInstanceForPiece(piece) {
+  setupInstanceForPiece(piece) {
     const mesh = this.meshInfos[piece.code]
     const instancedMesh = mesh ? mesh.instancedMesh : undefined
 
@@ -244,17 +327,39 @@ AFRAME.registerComponent("chess", {
         instanced.setColorAt(instancedMesh, index, this.whiteColor)
       }
 
-      return {index, instancedMesh}
+      piece.index = index
+      piece.instancedMesh = instancedMesh
     }
   },
 
-  setupPicking() {
+  setupPicking(side) {
+    if (side === this.pickingSide) {
+      return
+    }
+
     const grabSystem = this.el.sceneEl.systems["grab-system"]
     const el = this.el
+    const layout = this.fenAST.layout
 
     const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.instancedMesh, score: "closestforward", instanceIndex: piece.index})
+    const shutdownPiecePicking = piece => grabSystem.unregisterTarget(el, {obj3D: piece.instancedMesh, instanceIndex: piece.index})
 
-    this.fenAST.layout.forEach(setupPiecePicking)
+    if (this.pickingSide !== "none") {
+      // Note, ok to shutdown, even if we were never setup
+      this.fenAST.capturedPieces.forEach(shutdownPiecePicking)
+      layout.forEach(shutdownPiecePicking)
+    }
+
+    if (side !== "none") {
+      layout.forEach(piece => {
+        const isBlack = piece.code === piece.code.toLowerCase()
+        if (side === "all" || (isBlack && side === "black") || (!isBlack && side === "white")) {
+          setupPiecePicking(piece)
+        }
+      })
+    }
+
+    this.pickingSide = side
   },
 
   setupBoard() {
@@ -301,60 +406,59 @@ AFRAME.registerComponent("chess", {
   },
 
   snapToBoard(piece, piecePosition) {
-    const fileRank = this.fileRankFromXZ(this.board.bounds, piecePosition.x, piecePosition.z)
-    if (fileRank) {
-      const pos = this.xzFromFileRank(this.board.bounds, fileRank.file, fileRank.rank)
+    const destination = this.fileRankFromXZ(this.board.bounds, piecePosition.x, piecePosition.z)
+    if (destination) {
+      const pos = this.xzFromFileRank(this.board.bounds, destination.file, destination.rank)
       const groundY = this.board.bounds.max.y
       instanced.setPositionAt(piece.instancedMesh, piece.index, pos.x, groundY, pos.z)
     }
+    return destination
   },
 
   boardTick(dt) {
     const data = this.data
-    const board = this.board
+    const state = this.state
 
-    board.delay -= dt
+    state.delay -= dt
 
-    if (board.movers.length > 0) {
+    if (state.movers.length > 0) {
 
-      if (board.movers.length > 0) {
-        board.movers.forEach(mover => mover.tick(dt))
+      if (state.movers.length > 0) {
+        state.movers.forEach(mover => mover.tick(dt))
         
-        if (board.movers.every(mover => mover.isComplete())) {
-          board.movers.length = 0
-          board.actions.splice(0,1) // move to the next action
+        if (state.movers.every(mover => mover.isComplete())) {
+          state.movers.length = 0
+          state.actions.splice(0,1) // move to the next action
         }
       }
 
-    } else if (board.actions && board.actions.length > 0) {
-      const action = board.actions[0]
+    } else if (state.actions && state.actions.length > 0) {
+      const action = state.actions[0]
       const bounds = this.board.bounds
 
       switch (action.type) {
         case "move": {
           const piece = action.piece
           const moveMover = this.createMover(bounds, piece, action.fromFile, action.fromRank, action.toFile, action.toRank, data.boardMoveSpeed)
-          board.movers.push( moveMover )
+          state.movers.push( moveMover )
           break
         } 
         case "capture": {
           const capturedPiece = action.capturedPiece
           const offBoard = this.fileRankFromCaptured(action.capturedIndex)
           const captureMover = this.createMover(bounds, capturedPiece, offBoard.file, offBoard.rank, offBoard.file, offBoard.rank, data.boardMoveSpeed)
-          board.movers.push(captureMover)
+          state.movers.push(captureMover)
           break
         }
         case "promote": {
           const newPiece = action.newPiece
 
-          const {instancedMesh, index} = this.getInstanceForPiece(newPiece)
-          newPiece.instancedMesh = instancedMesh
-          newPiece.index = index
+          this.setupInstanceForPiece(newPiece)
 
           const offBoard = this.fileRankFromCaptured(action.capturedIndex)
           const promoteMover = this.createMover(bounds, newPiece, newPiece.file, newPiece.rank, newPiece.file, newPiece.rank, data.boardMoveSpeed)
           const pawnMover = this.createMover(bounds, action.piece, offBoard.file, offBoard.rank, offBoard.file, offBoard.rank, data.boardMoveSpeed)
-          board.movers.push(promoteMover, pawnMover)
+          state.movers.push(promoteMover, pawnMover)
           break
         }
         case "castle": {
@@ -362,7 +466,7 @@ AFRAME.registerComponent("chess", {
           const rook = action.rook
           const kingMover = this.createMover(bounds, king, 5, king.rank, action.kingside ? 7 : 3, king.rank, data.boardMoveSpeed)
           const rookMover = this.createMover(bounds, rook, action.kingside ? 8 : 1, rook.rank, action.kingside ? 6 : 4, rook.rank, data.boardMoveSpeed)
-          board.movers.push(kingMover, rookMover)
+          state.movers.push(kingMover, rookMover)
           break
         }
 
@@ -373,29 +477,55 @@ AFRAME.registerComponent("chess", {
   },
 
   replayTick() {
-    const board = this.board
+    const state = this.state
     const replay = this.replay
 
-    if (board.delay <= 0 && board.movers.length === 0 && (!board.actions || board.actions.length === 0) && this.pgnAST && this.pgnAST.moves[replay.moveIndex]) {
-      board.actions = chessHelper.applyMove(this.fenAST, this.pgnAST.moves[replay.moveIndex++]) 
-      board.delay = board.actions ? this.data.replayTurnDuration : 0
+    if (state.delay <= 0 && state.movers.length === 0 && (!state.actions || state.actions.length === 0) && this.pgnAST && this.pgnAST.moves[state.replayIndex]) {
+      state.actions = chessHelper.applyMove(this.fenAST, this.pgnAST.moves[state.replayIndex++]) 
+      state.delay = state.actions ? this.data.replayTurnDuration : 0
     }
   },
 
   aiTick() {
-    const board = this.board
+    const state = this.state
     const data = this.data
 
-    if (board.delay <= 0 && board.movers.length === 0 && (!board.actions || board.actions.length === 0) && this.garbochess && this.nextAIMove) {
-      const move = chessHelper.decodeCoordMove(this.fenAST.layout, this.nextAIMove)
+    if (state.movers.length === 0 && (!state.actions || state.actions.length === 0) && this.garbochess && this.nextAIMove) {
+      const move = chessHelper.decodeCoordMove(this.fenAST, this.nextAIMove)
       if (data.debug) {
-        console.log(move.code === move.code.toLowerCase() ? "black" : "white", this.nextAIMove, chessHelper.sanToString(move))
+        console.log("AI", move.code === move.code.toLowerCase() ? "black" : "white", this.nextAIMove, chessHelper.sanToString(move))
       }
 
-      this.board.actions = chessHelper.applyMove(this.fenAST, move)  
+      this.state.actions = chessHelper.applyMove(this.fenAST, move)  
       this.nextAIMove = ""
-      this.garbochess.postMessage("search " + data.aiDuration)
-      board.delay = data.aiDuration
+      this.nextTurn()
+    }
+  },
+
+  freestyleTick() {
+    this.state.grabMap.forEach((grabInfo, piece) => {
+      instanced.applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix)
+    })
+  },
+
+  humanTick() {
+    const data = this.data
+
+    this.state.grabMap.forEach((grabInfo, piece) => {
+      instanced.applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix)
+    })
+
+    if (this.nextHumanMove) {
+      const move = chessHelper.decodeCoordMove(this.fenAST, this.nextHumanMove)
+      if (data.debug) {
+        console.log("HU", move.code === move.code.toLowerCase() ? "black" : "white", this.nextHumanMove, chessHelper.sanToString(move))
+      }
+
+      // this.state.actions = chessHelper.applyMove(this.fenAST, move)
+      chessHelper.applyMove(this.fenAST, move)
+      this.setupBoard() // snap pieces
+      this.nextHumanMove = ""
+      this.nextTurn()
     }
   },
 
@@ -428,39 +558,34 @@ AFRAME.registerComponent("chess", {
     }
   },
 
-  setupAI() {
-    const garbochess = new Worker("garbochess.js")
-    garbochess.onmessage = (event) => {
-      if (event.data.startsWith("pv")) {
-        //console.log(event.data)
-      } else if (event.data.startsWith("message")) {
-        console.log(event.data)
-      } else {
-        this.nextAIMove = event.data
-      }
+  setupGameWorker() {
+    if (!this.garbochess) {
+      this.garbochess = new Worker("garbochess.js")
+      this.garbochess.onmessage = (event) => {
+        if (this.data.debug) {
+          console.log(event.data)
+        }
+  
+        if (event.data.startsWith("pv")) {
+        } else if (event.data.startsWith("message")) {
+        } else if (event.data.startsWith("invalid")) {
+          this.setupBoard() // reset invalidly moved pieces
+        } else if (event.data.startsWith("valid")) {
+          const commands = event.data.split(" ")
+          this.nextHumanMove = commands[1]
+        } else if (event.data.startsWith("options")) {
+        } else {
+          this.nextAIMove = event.data
+        }
+      }  
     }
-
-    this.isBlackTurn = false
-    garbochess.postMessage("position " + chessHelper.fenToString(this.fenAST))
-    garbochess.postMessage("search " + this.data.aiDuration*1000)
-    this.garbochess = garbochess
   },
 
   onObject3dSet(event) {
     const data = this.data
     this.chess3D = event.detail.object
     this.createChessSet(this.chess3D, this.fenAST)
-
-    if (data.mode === "physical") {
-      this.setupPicking()
-    }
-
-    this.setupBoard()
-
-    if (data.mode === "ai") {
-      this.setupAI()
-    }
-
+    this.setupMode(this.data.mode)
   },
 
   onHoverStart(event) {
@@ -477,7 +602,12 @@ AFRAME.registerComponent("chess", {
 
     if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
       const index = event.detail.instanceIndex
-      const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
+
+      // the piece were were hovering over may have been captured, so check the captured list as well
+      const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index) || 
+        this.fenAST.capturedPieces.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
+
+      // Note, if a second controller is hovering over the same piece, we will lose the highlight
       const isBlack = piece.code === piece.code.toLowerCase()
       instanced.setColorAt(instancedMesh, index, isBlack ? this.blackColor : this.whiteColor)
     }
@@ -487,17 +617,18 @@ AFRAME.registerComponent("chess", {
     const instancedMesh = event.detail.obj3D
 
     if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+      const state = this.state
       const hand = event.detail.hand
       const index = event.detail.instanceIndex
       const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
-      const grabInfo = this.grabMap.get(piece)
+      const grabInfo = state.grabMap.get(piece)
 
       if (grabInfo) {
         // we grab this from another hand, so keep the original quaternion
         grabInfo.offsetMatrix = instanced.calcOffsetMatrix(hand.object3D, instancedMesh, piece.index, grabInfo.offsetMatrix)
         grabInfo.hand = hand
       } else {
-        this.grabMap.set(piece, { 
+        state.grabMap.set(piece, { 
           hand, 
           offsetMatrix: instanced.calcOffsetMatrix(hand.object3D, instancedMesh, piece.index), 
           startQuaternion: instanced.getQuaternionAt(instancedMesh, piece.index) 
@@ -510,21 +641,33 @@ AFRAME.registerComponent("chess", {
     const instancedMesh = event.detail.obj3D
 
     if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+      const state = this.state
       const hand = event.detail.hand
       const index = event.detail.instanceIndex
       const piece = this.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index)
-      const grabInfo = this.grabMap.get(piece)
+      const grabInfo = state.grabMap.get(piece)
 
+      // TODO freestyle can be placed anywhere, but game must be on the board, or be reset to it's original position
       if (grabInfo && grabInfo.hand === hand) {
         const piecePosition = instanced.getPositionAt(instancedMesh, index)
         if (piecePosition.y < this.gameBounds.max.y) {
-          this.snapToBoard(piece, piecePosition)
+          const destination = this.snapToBoard(piece, piecePosition)
+
+          // TODO handle promotion
+          if (state.currentMode === "game") {
+            const humanMove = chessHelper.fileRankToCoord(piece.file, piece.rank) + chessHelper.fileRankToCoord(destination.file, destination.rank)
+            this.garbochess.postMessage(humanMove)
+          }
         }
 
         instanced.setQuaternionAt( instancedMesh, index, grabInfo.startQuaternion )
-        this.grabMap.delete(piece)
+        state.grabMap.delete(piece)
       }
     }
   },
+
+  onReset() {
+    this.setupMode(this.data.mode)
+  }
 })
 
