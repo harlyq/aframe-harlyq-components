@@ -357,13 +357,11 @@ AFRAME.registerComponent("chess", {
       case "game":
         state.fenAST = this.parseFEN( fenStr )
         this.setupGameWorker()
-        this.garbochess.postMessage("position " + chessHelper.fenToString(this.fenAST))
-        this.setCurrentPlayer(state.fenAST.player)
+        this.garbochess.postMessage("position " + chessHelper.fenToString(state.fenAST))
         break
 
       case "freestyle":
         state.fenAST = this.parseFEN( fenStr )
-        this.setupPicking("all")
         break
 
       case "network":
@@ -372,6 +370,13 @@ AFRAME.registerComponent("chess", {
 
     this.releaseAllInstances()
     this.setupBoard(state.fenAST)
+
+    // picking must be after the setupBoard()
+    if (mode === "freestyle") {
+      this.setupPicking("all")
+    } else if (mode === "game") {
+      this.setCurrentPlayer(state.fenAST.player)
+    }
   },
 
   createChessSet(chess3D) { //}, fenAST) {
