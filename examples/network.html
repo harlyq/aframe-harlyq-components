@@ -33,6 +33,11 @@
     </a-entity>
   </template>
 
+  <template id="chess-template">
+    <a-entity class="chess" scale=".01 .01 .01" chess="mode:replay; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn);">
+    </a-entity>
+  </template>
+
   <script>
     if (typeof NAF !== "undefined") {
 
@@ -65,8 +70,9 @@
       }
 
       document.addEventListener("keydown", (event) => {
+        const sceneEl = document.querySelector("a-scene")
+
         if (event.keyCode == 32) { // space
-          const sceneEl = document.querySelector("a-scene")
           const newCubeEl = document.createElement("a-entity")
           newCubeEl.setAttribute("networked", "template: #cube-template")
           newCubeEl.setAttribute("scale", ".3 .3 .3")
@@ -78,6 +84,14 @@
           setTimeout(() => {
             newCubeEl.components["cube-puzzle"].shuffleCube()
           }, 2000)
+        }
+        else if (event.keyCode == 77) { // m
+          const newChessEl = document.createElement("a-entity")
+          newChessEl.setAttribute("networked", "template: #chess-template")
+          newChessEl.setAttribute("position", "0 1 0")
+          newChessEl.setAttribute("rotation", "0 0 0")
+          newChessEl.flushToDOM()
+          sceneEl.appendChild(newChessEl)
         }
       })
     }
@@ -94,6 +108,9 @@
     debug: true;
     adapter: native-webrtc;
   ">
+    <a-assets>
+      <a-mixin id="chessset" position="0 1 0" scale=".01 .01 .01" ></a-mixin>
+    </a-assets>
     <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
     <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
     <a-entity id="player" networked="template:#avatar-template;" position="0 1.6 1" camera wasd-controls look-controls></a-entity>
