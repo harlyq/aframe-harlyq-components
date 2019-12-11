@@ -7,6 +7,14 @@ const CAPTURED_SIZE = 10
 const URL_REGEX = /url\((.*)\)/
 const toLowerCase = (str) => str.toLowerCase()
 
+function coordToString(move) {
+  return chessHelper.fileRankToCoord(move.fromFile, move.fromRank) + chessHelper.fileRankToCoord(move.toFile, move.toRank) + move.promote
+}
+
+function getPlayerFromMove(move) {
+  return move.code === move.code.toLowerCase() ? "black" : "white"  
+}
+
 // /** @type {(componentName: string) => {
 //  *  isEntityNetworked: (el: Element) => boolean,
 //  *  registerNetworkedComponent: (component: any) => void,
@@ -37,7 +45,7 @@ function simpleNetworkSystem(componentName) {
     
       return false
     },
-      
+
     registerNetworkedComponent(component) {
       if (typeof component.receiveNetworkData !== "function") {
         throw Error(`missing receiveNetworkData(name, packet, senderId)`)
@@ -80,9 +88,13 @@ function simpleNetworkSystem(componentName) {
         }
       }
     },
+
+    isConnectedTo(clientId) {
+      return typeof NAF === "object" ? NAF.connection.isConnectedTo(clientId) : false
+    },
   
     isOwner(component) {
-      return this.isEntityNetworked(component.el) ? NAF.utils.isMine(component.el) : true
+      return typeof NAF === "object" ? NAF.utils.isMine(component.el) : true
     },
 
     takeOwnership(component) {
@@ -122,12 +134,14 @@ function simpleNetworkSystem(componentName) {
       this.networkComponents[networkId] = component
   
       if (!NAF.utils.isMine(el)) {
-        this.sendNetworkData(component, "newclient", undefined)
+        this.sendNetworkData(component, "newreplica", undefined)
       }
     },
   }
 }
 
+// Network the chess component.  The owner manages the AI, and replay, but any client can provide human moves 
+// (although move validation is always handled by the owner).
 AFRAME.registerSystem("chess", {
 
   ...simpleNetworkSystem("chess"),
@@ -178,7 +192,6 @@ AFRAME.registerComponent("chess", {
     this.el.addEventListener("grabend", this.onGrabEnd)
     this.el.addEventListener("reset", this.onReset)
 
-    this.playerType = {}
     this.chessMaterial = new THREE.MeshStandardMaterial()
     this.blackColor = new THREE.Color(.2,.2,.2)
     this.whiteColor = new THREE.Color(.8,.8,.8)
@@ -194,8 +207,7 @@ AFRAME.registerComponent("chess", {
 
     this.state = {
       actions: [],
-      currentPlayer: "white",
-      fenAST: { layout: [], capturedPieces: [] },
+      fenAST: { layout: [], capturedPieces: [], player: "white" },
       grabMap: new Map(),
       movers: [],
       nextAIMove: "",
@@ -204,6 +216,9 @@ AFRAME.registerComponent("chess", {
       delay: 0,
       replayIndex: 0,
       currentMode: "setup",
+      currentPlayer: "white",
+      pendingMove: "",
+      playerInfo: {},
     }
 
     const data = this.data
@@ -212,10 +227,13 @@ AFRAME.registerComponent("chess", {
     this.board.name = data.boardMesh.trim()
     this.pendingMode = ""
 
+    this.onClientDisconnected = this.onClientDisconnected.bind(this)
+    document.body.addEventListener("clientDisconnected", this.onClientDisconnected)
     this.system.registerNetworkedComponent(this)
   },
 
   remove() {
+    document.body.removeEventListener("clientDisconnected", this.onClientDisconnected)
     this.system.unregisterNetworkedComponent(this)
 
     this.el.removeEventListener("object3dset", this.onObject3dSet)
@@ -229,6 +247,8 @@ AFRAME.registerComponent("chess", {
   update(oldData) {
     const data = this.data
 
+    let gameChanged = data.mode !== oldData.mode
+
     if (data.pgn !== oldData.pgn) {
       this.pgnAST = this.parsePGN(data.pgn)
     }
@@ -236,10 +256,15 @@ AFRAME.registerComponent("chess", {
     if (data.blackColor) this.blackColor.set(data.blackColor)
     if (data.whiteColor) this.whiteColor.set(data.whiteColor)
 
-    this.playerType["white"] = data.whitePlayer !== "human" ? "ai" : "human"
-    this.playerType["black"] = data.blackPlayer !== "human" ? "ai" : "human"
+    if (data.whitePlayer !== oldData.whitePlayer || data.blackPlayer !== oldData.blackPlayer) {
+      const state = this.state
+      state.playerInfo["white"] = { playerType: data.whitePlayer !== "human" ? "ai" : "human", networkClientId: undefined }
+      state.playerInfo["black"] = { playerType: data.blackPlayer !== "human" ? "ai" : "human", networkClientId: undefined }
+      gameChanged = true
+    }
 
-    if (data.mode !== oldData.mode) {
+
+    if (gameChanged) {
       this.setupMode(data.mode)
     }
   },
@@ -249,9 +274,9 @@ AFRAME.registerComponent("chess", {
     const data = this.data
     const state = this.state
 
-    switch (this.state.currentMode) {
+    switch (state.currentMode) {
       case "freestyle":
-        this.freestyleTick()
+        this.grabTick()
         break
       case "replay":
         this.actionsTick(dt, data.boardMoveSpeed)
@@ -259,30 +284,40 @@ AFRAME.registerComponent("chess", {
         break
       case "game":
         this.actionsTick(dt, data.boardMoveSpeed)
-        if (this.playerType[this.state.currentPlayer] === "ai") {
+        if (state.playerInfo[state.currentPlayer].playerType === "ai") {
           this.aiTick()
         } else {
+          this.grabTick()
           this.humanTick()
         }
         break
       case "network":
         this.actionsTick(dt, state.actions.length < 4 ? data.boardMoveSpeed : data.boardMoveSpeed*4)
+        if (state.actions.length === 0) {
+          this.grabTick() // in case they can grab things
+        }
     }
   },
 
   setCurrentPlayer(player) {
     const state = this.state
     const data = this.data
-    state.currentPlayer = player
+    const playerInfo = state.playerInfo[player]
 
-    if (this.playerType[player] === "ai") {
+    state.currentPlayer = player
+    state.fenAST.player = player
+
+    if (playerInfo.playerType === "ai") {
       this.setupPicking("none")
       state.nextAIMove = ""
-      this.garbochess.postMessage("search " + data.aiDuration*1000)
+
+      if (this.system.isOwner(this)) {
+        this.garbochess.postMessage("search " + data.aiDuration*1000)
+      }
     } else {
       state.nextHumanMove = ""
-      this.garbochess.postMessage("possible")
-      this.setupPicking(player)
+      //this.garbochess.postMessage("possible")
+      this.setupHumanPicking(player)
     }
   },
 
@@ -371,15 +406,20 @@ AFRAME.registerComponent("chess", {
     this.releaseAllInstances()
     this.setupBoard(state.fenAST)
 
-    // picking must be after the setupBoard()
-    if (mode === "freestyle") {
-      this.setupPicking("all")
-    } else if (mode === "game") {
-      this.setCurrentPlayer(state.fenAST.player)
+    // picking must be after setupBoard()
+    switch (mode) {
+      case "freestyle":
+        this.setupPicking("all")
+        break
+
+      case "game":
+      case "network":
+        this.setCurrentPlayer(state.fenAST.player)
+        break
     }
   },
 
-  createChessSet(chess3D) { //}, fenAST) {
+  createChessSet(chess3D) {
     const self = this
     const data = this.data
 
@@ -478,20 +518,30 @@ AFRAME.registerComponent("chess", {
     }
   },
 
+  setupHumanPicking(side) {
+    const playerInfo = this.state.playerInfo[side]
+    if (!playerInfo.networkClientId || playerInfo.networkClientId === NAF.clientId) {
+      this.setupPicking(side)
+    } else {
+      this.setupPicking("none")
+    }
+  },
+
   setupPicking(side) {
-    if (side === this.pickingSide) {
+    const state = this.state
+
+    if (side === state.pickingSide) {
       return
     }
 
     const grabSystem = this.el.sceneEl.systems["grab-system"]
     const el = this.el
-    const state = this.state
     const layout = state.fenAST.layout
 
     const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.instancedMesh, score: "closestforward", instanceIndex: piece.index})
     const shutdownPiecePicking = piece => grabSystem.unregisterTarget(el, {obj3D: piece.instancedMesh, instanceIndex: piece.index})
 
-    if (this.pickingSide !== "none") {
+    if (state.pickingSide !== "none") {
       // Note, ok to shutdown, even if we were never setup
       state.fenAST.capturedPieces.forEach(shutdownPiecePicking)
       layout.forEach(shutdownPiecePicking)
@@ -506,7 +556,7 @@ AFRAME.registerComponent("chess", {
       })
     }
 
-    this.pickingSide = side
+    state.pickingSide = side
   },
 
   setupBoard(fenAST) {
@@ -514,7 +564,6 @@ AFRAME.registerComponent("chess", {
       return
     }
 
-    const state = this.state
     const groundY = this.board.bounds.max.y
 
     for (let piece of fenAST.layout) {
@@ -574,7 +623,6 @@ AFRAME.registerComponent("chess", {
   },
 
   actionsTick(dt, speed) {
-    const data = this.data
     const state = this.state
 
     state.delay -= dt
@@ -650,9 +698,8 @@ AFRAME.registerComponent("chess", {
         move.fromFile = 5
         move.fromRank = firstAction.king.rank
       }
-      const moveStr = chessHelper.fileRankToCoord(move.fromFile, move.fromRank) + chessHelper.fileRankToCoord(move.toFile, move.toRank) + move.promote
 
-      this.system.ownerSendNetworkData(this, "move", moveStr)
+      this.system.ownerSendNetworkData(this, "move", { player: getPlayerFromMove(move), moveStr: coordToString(move) })
 
       state.replayIndex++
     }
@@ -662,21 +709,21 @@ AFRAME.registerComponent("chess", {
     const state = this.state
     const data = this.data
 
-    if (state.movers.length === 0 && state.actions.length === 0 && this.garbochess && this.nextAIMove) {
-      const move = chessHelper.decodeCoordMove(state.fenAST, this.nextAIMove)
+    if (state.movers.length === 0 && state.actions.length === 0 && this.garbochess && state.nextAIMove) {
+      const move = chessHelper.decodeCoordMove(state.fenAST, state.nextAIMove)
       if (data.debug) {
-        console.log("AI", move.code === move.code.toLowerCase() ? "black" : "white", this.nextAIMove, chessHelper.sanToString(move))
+        console.log("AI", move.code === move.code.toLowerCase() ? "black" : "white", state.nextAIMove, chessHelper.sanToString(move))
       }
 
-      this.state.actions = chessHelper.applyMove(state.fenAST, move)  
-      this.nextAIMove = ""
+      state.actions = chessHelper.applyMove(state.fenAST, move)  
+      state.nextAIMove = ""
       this.nextTurn()
 
-      this.system.ownerSendNetworkData(this, "move", move)
+      this.system.ownerSendNetworkData(this, "move", { player: getPlayerFromMove(move), moveStr: coordToString(move) })
     }
   },
 
-  freestyleTick() {
+  grabTick() {
     this.state.grabMap.forEach((grabInfo, piece) => {
       instanced.applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix)
     })
@@ -684,25 +731,22 @@ AFRAME.registerComponent("chess", {
 
   humanTick() {
     const data = this.data
+    const state = this.state
 
-    this.state.grabMap.forEach((grabInfo, piece) => {
-      instanced.applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix)
-    })
-
-    if (this.nextHumanMove) {
-      const state = this.state
-      const move = chessHelper.decodeCoordMove(state.fenAST, this.nextHumanMove)
+    if (state.nextHumanMove) {
+      const move = chessHelper.decodeCoordMove(state.fenAST, state.nextHumanMove)
       if (data.debug) {
-        console.log("HU", move.code === move.code.toLowerCase() ? "black" : "white", this.nextHumanMove, chessHelper.sanToString(move))
+        console.log("HU", move.code === move.code.toLowerCase() ? "black" : "white", state.nextHumanMove, chessHelper.sanToString(move))
       }
 
-      // this.state.actions = chessHelper.applyMove(state.fenAST, move)
+      // state.actions = chessHelper.applyMove(state.fenAST, move)
       chessHelper.applyMove(state.fenAST, move)
       this.setupBoard(state.fenAST) // snap pieces
-      this.nextHumanMove = ""
+      state.nextHumanMove = ""
       this.nextTurn()
 
-      this.system.ownerSendNetworkData(this, "move", move)
+      this.system.ownerSendNetworkData(this, "move", { player: getPlayerFromMove(move), moveStr: coordToString(move) })
+
     }
   },
 
@@ -737,7 +781,10 @@ AFRAME.registerComponent("chess", {
 
   setupGameWorker() {
     if (!this.garbochess) {
+      const state = this.state
+
       this.garbochess = new Worker("garbochess.js")
+
       this.garbochess.onmessage = (event) => {
         if (this.data.debug) {
           console.log(event.data)
@@ -747,14 +794,18 @@ AFRAME.registerComponent("chess", {
         } else if (event.data.startsWith("message")) {
 
         } else if (event.data.startsWith("invalid")) {
+          if (state.playerInfo[state.currentPlayer].networkClientId) {
+            this.system.ownerSendNetworkData(this, "invalidMove", undefined, state.playerInfo[state.currentPlayer].networkClientId)
+          }
           this.setupBoard(this.state.fenAST) // reset invalidly moved pieces
+
         } else if (event.data.startsWith("valid")) {
           const commands = event.data.split(" ")
-          this.nextHumanMove = commands[1]
+          state.nextHumanMove = commands[1]
         } else if (event.data.startsWith("options")) {
 
         } else {
-          this.nextAIMove = event.data
+          state.nextAIMove = event.data
         }
       }  
     }
@@ -764,22 +815,54 @@ AFRAME.registerComponent("chess", {
     const state = this.state
 
     switch (name) {
-      case "newclient":
+      case "newreplica":
         this.system.ownerSendNetworkData(this, "setup", {
           fen: chessHelper.fenToString( state.fenAST ),
-          captureStr: state.fenAST.capturedPieces.map(piece => piece.code).join("")
+          captureStr: state.fenAST.capturedPieces.map(piece => piece.code).join(""),
+          playerInfo: state.playerInfo,
         }, senderId)
         break
 
       case "setup":
         state.fenAST = this.parseFEN( packet.fen )
         state.fenAST.capturedPieces = packet.captureStr.split("").map( code => ({code, file: -1, rank: -1}) )
+        state.playerInfo = packet.playerInfo
         this.setupMode("network")
         break
 
       case "move":
-        const newActions = chessHelper.applyMove( state.fenAST, chessHelper.decodeCoordMove(state.fenAST, packet) )
-        state.actions.push(...newActions)
+        const newActions = chessHelper.applyMove( state.fenAST, chessHelper.decodeCoordMove(state.fenAST, packet.moveStr) )
+
+        if (state.pendingMove === packet.moveStr) {
+          this.setupBoard(this.state.fenAST)
+        } else {
+          state.actions.push(...newActions)
+        }
+        state.pendingMove = ""
+
+        this.setCurrentPlayer( packet.player === "black" ? "white" : "black" ) // set the next player, who may be human. could just call nextTurn()???
+        break
+
+      case "possibleMove":
+        if (this.system.isOwner(this)) {
+          this.garbochess.postMessage(packet.moveStr)
+        }
+        break
+
+      case "invalidMove":
+        this.setupBoard(this.state.fenAST)
+        break
+
+      case "setHuman":
+        const playerInfo = this.state.playerInfo[packet.player]
+        playerInfo.networkClientId = packet.networkClientId
+
+        // if another client has started picking, then we should lose our
+        // ability to pick
+        // if the picking client has left, then we could start picking
+        if (state.currentPlayer === packet.player) {
+          this.setupHumanPicking(packet.player)
+        }
         break
     }
   },
@@ -838,6 +921,10 @@ AFRAME.registerComponent("chess", {
           startQuaternion: instanced.getQuaternionAt(instancedMesh, piece.index) 
         })
       }
+
+      if (this.system.isEntityNetworked(this.el)) {
+        this.system.sendNetworkData(this, "setHuman", { player: state.currentPlayer, networkClientId: NAF.clientId })
+      }
     }
   },
 
@@ -858,9 +945,16 @@ AFRAME.registerComponent("chess", {
           const destination = this.snapToBoard(piece, piecePosition)
 
           // TODO handle promotion
-          if (state.currentMode === "game") {
+          if (state.currentMode === "game" || state.currentMode === "network") {
             const humanMove = chessHelper.fileRankToCoord(piece.file, piece.rank) + chessHelper.fileRankToCoord(destination.file, destination.rank)
-            this.garbochess.postMessage(humanMove)
+
+            // Note, this move may be invalid
+            if (this.system.isOwner(this)) {
+              this.garbochess.postMessage(humanMove)
+            } else {
+              state.pendingMove = humanMove
+              this.system.sendNetworkData(this, "possibleMove", { player: state.currentPlayer, moveStr: humanMove })
+            }
           }
         }
 
@@ -871,9 +965,28 @@ AFRAME.registerComponent("chess", {
   },
 
   onReset() {
-    if (this.system.isOwner()) {
+    if (this.system.isOwner(this)) {
       this.setupMode(this.data.mode)
     }
-  }
+  },
+
+  onClientDisconnected(event) {
+    if (this.system.isOwner(this)) {
+      const state = this.state
+
+      for (let player in state.playerInfo) {
+        const networkClientId = state.playerInfo[player].networkClientId
+
+        if (networkClientId == event.detail.clientId) {
+          state.playerInfo[player].networkClientId = ""
+          if (state.currentPlayer === player) {
+            this.setupHumanPicking(player)
+          }
+            
+          this.system.sendNetworkData(this, "setHuman", { player: player, networkClientId: "" })
+        }
+      }
+    }
+  },
 })
 

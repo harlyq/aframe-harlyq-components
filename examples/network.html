@@ -5,7 +5,8 @@
   <title>Dev Example — naf-native-webrtc-adapter</title>
   <meta name="description" content="Dev Example — naf-native-webrtc-adapter">
 
-  <script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script>
+  <!--script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script-->
+  <script src="../../aframe/aframe-0.9.2.js"></script>
 
   <script src="../network/socket.io.js"></script>
   <script src="../network/networked-aframe.js"></script>
@@ -33,8 +34,13 @@
     </a-entity>
   </template>
 
-  <template id="chess-template">
-    <a-entity class="chess" scale=".01 .01 .01" chess="mode:replay; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn);">
+  <template id="chessReplay-template">
+    <a-entity scale=".01 .01 .01" chess="mode:replay; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn);">
+    </a-entity>
+  </template>
+  
+  <template id="chessAIHuman-template">
+    <a-entity scale=".01 .01 .01" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: true; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee;">
     </a-entity>
   </template>
 
@@ -87,7 +93,7 @@
         }
         else if (event.keyCode == 77) { // m
           const newChessEl = document.createElement("a-entity")
-          newChessEl.setAttribute("networked", "template: #chess-template")
+          newChessEl.setAttribute("networked", "template: #chessAIHuman-template")
           newChessEl.setAttribute("position", "0 1 0")
           newChessEl.setAttribute("rotation", "0 0 0")
           newChessEl.flushToDOM()

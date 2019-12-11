@@ -66,19 +66,20 @@ AFRAME.registerSystem("grab-system", {
       this.addHandListeners(config.grabEnd, this.onGrabEvent)
 
       if (data.debug) {
-        aframeHelper.log(this, `registered: ${domHelper.getDebugName(el)}, grabStart: ${config.grabStart}, grabEnd: ${config.grabEnd}`)
+        aframeHelper.log(this, `registered: ${domHelper.getDebugName(el)}, grabStart: ${config.grabStart}, grabEnd: ${config.grabEnd}, instanceIndex: ${config.instanceIndex}`)
       }
     }
   },
 
-  unregisterTarget(el, customObj3D) {
-    const obj3D = customObj3D || el.object3D
-    const index = this.targets.findIndex(target => target.el === el && target.obj3D === obj3D)
+  unregisterTarget(el, customConfig) {
+    const obj3D = customConfig.obj3D || el.object3D
+    const instanceIndex = typeof customConfig.instanceIndex !== "undefined" ? customConfig.instanceIndex : -1
+    const index = this.targets.findIndex(target => target.el === el && target.obj3D === obj3D && target.instanceIndex === instanceIndex)
     if (index !== -1) {
       this.targets.splice(index)
 
       if (this.data.debug) {
-        aframeHelper.log(this, `unregistered ${domHelper.getDebugName(el)}`)
+        aframeHelper.log(this, `unregistered ${domHelper.getDebugName(el)}, instanceIndex: ${instanceIndex}`)
       }
     }
   },
@@ -117,6 +118,13 @@ AFRAME.registerSystem("grab-system", {
     const instancedMatrixWorld = new THREE.Matrix4()
 
     return function findOverlapping(handEl, targets) {
+      // ignore overlapping when not in vr-mode, this prevents vr interactions in another
+      // broswer window that is in VR triggering interactions in a browser window that is not
+      // in vr
+      if (!this.el.is('vr-mode')) {
+        return undefined
+      }
+
       const data = this.data
       const self = this
   
