@@ -78,12 +78,85 @@ function slerpolator(quaternions, duration, postStepFn) {
   }
 }
 
-// The system is used for networking with networked-aframe
+function packQuaternions(quaternions) {
+  let packed = Array(quaternions.length)
+
+  for (let i = 0; i < quaternions.length; i++) {
+    const v = Math.trunc(quaternions[i]*10)
+    let y
+    switch (v) {
+      case 0: y = 0; break
+      case 5: y = 1; break
+      case 7: y = 2; break
+      case 10: y = 3; break
+      case -5: y = 4; break
+      case -7: y = 5; break
+      case -10: y = 6; break
+      default: console.assert(false, `unknown value ${v} from ${quaternions[i]}`)
+    }
+    packed[i] = y
+  }
+  return packed.join("")
+}
+
+function unpackQuaternions(quaternions, packedQuats) {
+  console.assert(quaternions.length === packedQuats.length)
+  const cos45 = Math.cos(Math.PI/4)
+
+  for (let i = 0; i < packedQuats.length; i++) {
+    let y = 0
+    switch (packedQuats[i]) {
+      case "0": y = 0; break
+      case "1": y = 0.5; break
+      case "2": y = cos45; break
+      case "3": y = 1; break
+      case "4": y = -0.5; break
+      case "5": y = -cos45; break
+      case "6": y = -1; break
+    }
+    quaternions[i] = y
+  }
+}
+
+const componentName = "cube-puzzle"
+const packet = {}
+
+function isNetworked(el) {
+  let curEntity = el;
+
+  while(curEntity && curEntity.components && !curEntity.components.networked) {
+    curEntity = curEntity.parentNode;
+  }
+
+  return curEntity && curEntity.components && curEntity.components.networked && curEntity.components.networked.data
+}
+
+function takeOwnership(el) {
+  if (typeof NAF === "object" && isNetworked(el)) {
+    NAF.utils.takeOwnership(el)
+  } 
+}
+
+function isMine(el) {
+  return typeof NAF === "object" && isNetworked(el) ? NAF.utils.isMine(el) : true
+}
+
+// window.addEventListener("load", () => {
+//   document.body.addEventListener("connected", () => {
+//     let tagEl = document.querySelector("#clientId")
+//     if (!tagEl) {
+//       tagEl = document.createElement("div")
+//       tagEl.id = "clientId"
+//       tagEl.setAttribute("style", "position: absolute; left: 0; top: 0")
+//       document.body.appendChild(tagEl)
+//     }
+//     tagEl.innerHTML = NAF.clientId.toString()
+//   })
+// })
+
 AFRAME.registerSystem("cube-puzzle", {
+
   init() {
-    this.onInstantiated = this.onInstantiated.bind(this)
-    this.components = {}
-    this.slerpolators = new Map()
     this.setupNetwork()
   },
 
@@ -91,158 +164,61 @@ AFRAME.registerSystem("cube-puzzle", {
     this.shutdownNetwork()
   },
 
-  tick(time, deltaTime) {
-    const dt = deltaTime/1000
-
-    this.slerpolators.forEach( (slerpolator, component) => {
-      if (slerpolator.isFinished()) {
-        this.slerpolators.delete(component)
-      } else {
-        slerpolator.step(dt)
-      }
-    } )
-  },
-
-  register(component) {
-    if (this.isNetworked(component.el)) {
-      component.el.addEventListener("instantiated", this.onInstantiated) // from "networked" component, once it is setup
-    }
-  },
-
-  unregister(component) {
-    component.el.removeEventListener("instantiated", this.onInstantiated) // does nothing if it was never added
-
-    for (let key in this.components) {
-      if (this.components[key] === component) {
-        delete this.components[key]
-        break
-      }
-    }
-  },
-
-  takeOwnership(component) {
-    if (this.isNetworked(component.el) && !NAF.utils.isMine(component.el)) {
-      NAF.utils.takeOwnership(component.el)
-      this.sendNetwork(component, {slerp:false})
-    }
-  },
-
-  sendNetwork(component, options = {}, clientId = undefined) {
-    if (this.isNetworked(component.el)) {
-      const data = {
-        networkId: NAF.utils.getNetworkId(component.el),
-        available: component.state.name === "idle",
-        slerp: true,
-        packedQuats: this.packQuaternions(component.quaternions),
-        ...options,
-      }
-
-      if (clientId) {
-        NAF.connection.sendDataGuaranteed(clientId, 'cube-puzzle', data)
-      } else {
-        NAF.connection.broadcastData('cube-puzzle', data)
-      }
-    }
-  },
-
-  isNetworked(el) {
-    console.assert(el)
-    var curEntity = el;
-
-    if (typeof NAF === "object") {
-      while (curEntity && curEntity.components && !curEntity.components.networked) {
-        curEntity = curEntity.parentNode;
-      }
-    
-      if (curEntity && curEntity.components && curEntity.components.networked) {
-        return true
-      }
-    }
-
-    return false
-  },
-
   setupNetwork() {
-    if (typeof NAF === "object" && NAF.connection) {
-      NAF.connection.subscribeToDataChannel('cube-puzzle', (senderId, type, data, targetId) => {
-        const component = this.components[data.networkId]
+    if (typeof NAF === "object") {
+      this.networkCache = {}
+
+      NAF.connection.subscribeToDataChannel(componentName, (senderId, type, packet, targetId) => {
+        const entity = NAF.entities.getEntity(packet.networkId)
+        const component = entity ? entity.components[componentName] : undefined
         if (component) {
-          component.netAvailable = data.available
-
-          const newSlerpolator = slerpolator( component.quaternions, data.slerp ? 0.3 : 0, () => { component.instanceQuaternion.needsUpdate = true } )
-          this.unpackQuaternions(newSlerpolator.endQuaternions, data.packedQuats)
-
-          this.slerpolators.set(component, newSlerpolator)
+          component.receiveNetworkData(packet.data, senderId)
+        } else {
+          packet.senderId = senderId
+          this.networkCache[packet.networkId] = packet
         }
       })
 
-      NAF.connection.subscribeToDataChannel('cube-puzzle.request', (senderId, type, data, targetId) => {
-        const component = this.components[data.networkId]
-        if (component) {
-          this.sendNetwork(component, {slerp:false}, senderId)
-        }
-      })
+      this.onEntityCreated = this.onEntityCreated.bind(this)
+      document.body.addEventListener("entityCreated", this.onEntityCreated)
     }
   },
 
   shutdownNetwork() {
-    if (typeof NAF === "object" && NAF.connection) {
-      NAF.connection.unsubscribeToDataChannel('cube-puzzle')
-      NAF.connection.unsubscribeToDataChannel('cube-puzzle.request')
+    if (typeof NAF === "object") {
+      document.body.removeEventListener("entityCreated", this.onEntityCreated)
+      NAF.connection.unsubscribeToDataChannel(componentName)
     }
   },
 
-  packQuaternions(quaternions) {
-    let packed = Array(quaternions.length)
-
-    for (let i = 0; i < quaternions.length; i++) {
-      const v = Math.trunc(quaternions[i]*10)
-      let y
-      switch (v) {
-        case 0: y = 0; break
-        case 5: y = 1; break
-        case 7: y = 2; break
-        case 10: y = 3; break
-        case -5: y = 4; break
-        case -7: y = 5; break
-        case -10: y = 6; break
-        default: console.assert(false, `unknown value ${v} from ${quaternions[i]}`)
+  sendNetworkData(component, data, targetId) {
+    if (typeof NAF === "object") {
+      const networkId = NAF.utils.getNetworkId(component.el)
+      if (networkId) {
+        packet.networkId = networkId
+        packet.data = data
+        if (targetId) {
+          NAF.connection.sendDataGuaranteed(targetId, componentName, packet)
+        } else {
+          NAF.connection.broadcastData(componentName, packet)
+        }
       }
-      packed[i] = y
-    }
-    return packed
-  },
-
-  unpackQuaternions(quaternions, packedQuats) {
-    console.assert(quaternions.length === packedQuats.length)
-    const cos45 = Math.cos(Math.PI/4)
-
-    for (let i = 0; i < packedQuats.length; i++) {
-      let y = 0
-      switch (packedQuats[i]) {
-        case 0: y = 0; break
-        case 1: y = 0.5; break
-        case 2: y = cos45; break
-        case 3: y = 1; break
-        case 4: y = -0.5; break
-        case 5: y = -cos45; break
-        case 6: y = -1; break
-      }
-      quaternions[i] = y
     }
   },
 
-  onInstantiated(event) {
+  onEntityCreated(event) {
     const el = event.detail.el
+    const component = el.components[componentName]
     const networkId = NAF.utils.getNetworkId(el)
-    this.components[networkId] = el.components["cube-puzzle"]
-
-    if (!NAF.utils.isMine(el)) {
-      const ownerId = NAF.utils.getNetworkOwner(el)
-      NAF.connection.sendDataGuaranteed(ownerId, 'cube-puzzle.request', { networkId })
+    const packet = networkId ? this.networkCache[networkId] : undefined
+    if (component && packet) {
+      component.receiveNetworkData(packet.data, packet.senderId)
+      delete this.networkCache[networkId]
     }
-  },
+  }
+
 })
+
 
 AFRAME.registerComponent("cube-puzzle", {
   schema: {
@@ -285,22 +261,31 @@ AFRAME.registerComponent("cube-puzzle", {
       },
       snapped: true,
       activeHands: [],
+      slerpolator: undefined,
+      snappedQuaternions: undefined,
+      holderId: undefined,
     }
 
     this.cube = this.createCube()
     this.el.setObject3D("mesh", this.cube)
 
-    this.netAvailable = true
+    this.state.snappedQuaternions = this.quaternions.slice()
 
-    // if (!this.el.firstUpdateData) {
-    //   this.shuffleCube()
-    // }
-
-    this.system.register(this)
+    this.onClientConnected = this.onClientConnected.bind(this)
+    this.onClientDisconnected = this.onClientDisconnected.bind(this)
+    this.onOwnershipGained = this.onOwnershipGained.bind(this)
+    this.onOwnershipLost = this.onOwnershipLost.bind(this)
+    document.body.addEventListener("clientConnected", this.onClientConnected)
+    document.body.addEventListener("clientDisconnected", this.onClientDisconnected)
+    document.body.addEventListener("ownership-gained", this.onOwnershipGained)
+    document.body.addEventListener("ownership-lost", this.onOwnershipLost)
   },
 
   remove() {
-    this.system.unregister(this)
+    document.body.removeEventListener("clientConnected", this.onClientConnected)
+    document.body.removeEventListener("clientDisconnected", this.onClientDisconnected)
+    document.body.removeEventListener("ownership-gained", this.onOwnershipGained)
+    document.body.removeEventListener("ownership-lost", this.onOwnershipLost)
   },
 
   update(oldData) {
@@ -323,8 +308,12 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   },
 
-  tick() {
-    if (this.netAvailable) {
+  tick(time, deltaTime) {
+    const dt = Math.min(100, deltaTime)/1000
+
+    this.tickSlerpolator(dt)
+
+    if (isMine()) {
       this.actionTick[this.state.name]()
     }
   },
@@ -346,7 +335,7 @@ AFRAME.registerComponent("cube-puzzle", {
           state.hold.side = NO_SIDE
           threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
 
-          this.system.takeOwnership(this)
+          takeOwnership(this.el)
 
         } else if (state.name === "hold") {
           const holdSide = state.hold.side
@@ -378,7 +367,7 @@ AFRAME.registerComponent("cube-puzzle", {
             threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
           } else {
             state.name = "idle"
-            this.system.sendNetwork(this, {slerp:false})
+            this.postStateToNetwork()
           }
   
         } else if (state.name === "turn" || state.name === "turning") {
@@ -408,9 +397,9 @@ AFRAME.registerComponent("cube-puzzle", {
         break
 
       case "snap":
-        if (state.name === "turning") {
-          state.snapped = true
-        }
+        state.snappedQuaternions.set(this.quaternions)
+        this.postStateToNetwork({slerp: true})
+        state.snapped = true
         break
 
       case "hover":
@@ -424,7 +413,23 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   },
 
+  tickSlerpolator(dt) {
+    const state = this.state
+    if (state.slerpolator) {
+      if (state.slerpolator.isFinished()) {
+        state.snapped = true
+        state.slerpolator = undefined
+      } else {
+        state.slerpolator.step(dt)
+      }
+    }
+  },
+
   tickIdle() {
+    if (!this.el.sceneEl.is('vr-mode')) {
+      return
+    }
+
     let hand = this.data.hands.find(hand => this.isNear(hand))
     if (hand) {
       this.highlightPieces(this.allPieces)
@@ -511,7 +516,6 @@ AFRAME.registerComponent("cube-puzzle", {
       this.instanceQuaternion.needsUpdate = true
   
       if (inSnapAngle && !state.snapped) {
-        this.system.sendNetwork(this)
         this.dispatch( { name: "snap" } )
       } else if (state.snapped && !inSnapAngle) {
         this.dispatch( { name: "unsnap" } )
@@ -670,12 +674,19 @@ AFRAME.registerComponent("cube-puzzle", {
   },
 
   shuffleCube(turns = 30) {
+    const state = this.state
     const moves = Object.keys(VALID_MOVES)
+
+    this.quaternions.set(state.snappedQuaternions)
+
     for (let i = 0; i < turns; i++) {
       const moveIndex = ~~( Math.random()*moves.length )
       this.rotateCube( moves[moveIndex] )
     }
-    this.system.sendNetwork(this, {slerp:false})
+
+    state.snappedQuaternions.set(this.quaternions)
+    this.postStateToNetwork()
+    state.snapped = true
   },
 
   rotateCube: (function () {
@@ -853,6 +864,10 @@ AFRAME.registerComponent("cube-puzzle", {
   },
 
   onGrabStart(event) {
+    if (!this.el.sceneEl.is('vr-mode')) {
+      return
+    }
+
     const hand = event.target
     if (this.state.activeHands.indexOf(hand) === -1 && this.isNear(hand)) {
       this.dispatch( { name: "grab", hand: hand } )
@@ -860,9 +875,67 @@ AFRAME.registerComponent("cube-puzzle", {
   },
 
   onGrabEnd(event) {
+    if (!this.el.sceneEl.is('vr-mode')) {
+      return
+    }
+
     const hand = event.target
     if (this.state.activeHands.indexOf(hand) !== -1 && this.isNear(hand)) {
       this.dispatch( { name: "release", hand: hand } )
     }
   },
+
+  // Networking
+  postStateToNetwork(options = {}, targetId = undefined) {
+    const state = this.state
+    if (isNetworked(this.el) && NAF.utils.isMine(this.el)) {
+      
+      const data = {
+        holderId: state.holderId,
+        slerp: false,
+        packedQuats: packQuaternions(state.snappedQuaternions),
+        ...options,
+      }
+
+      this.system.sendNetworkData(this, data, targetId)
+    }
+  },
+
+  receiveNetworkData(data, senderId) {
+    const state = this.state
+
+    console.log("received from:", senderId, "owner:", NAF.utils.getNetworkOwner(this.el))
+    if (senderId === NAF.utils.getNetworkOwner(this.el)) {
+      state.holderId = data.holderId
+
+      const newSlerpolator = slerpolator( this.quaternions, data.slerp ? 0.3 : 0, () => { this.instanceQuaternion.needsUpdate = true } )
+      unpackQuaternions(newSlerpolator.endQuaternions, data.packedQuats)
+  
+      state.snappedQuaternions.set(newSlerpolator.endQuaternions)
+      state.slerpolator = newSlerpolator
+    }
+  },
+
+  onClientConnected(event) {
+    const clientId = event.detail.clientId
+    console.log("onClientConnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el))
+    this.postStateToNetwork({}, clientId)
+  },
+
+  onClientDisconnected(event) {
+    const clientId = event.detail.clientId
+    if (this.state.holderId === clientId) {
+      this.state.holderId = undefined
+    }
+  },
+
+  onOwnershipGained(event) {
+    console.log("ownership-gained")
+    this.postStateToNetwork({})
+  },
+
+  onOwnershipLost(event) {
+    console.log("ownership-lost")
+  },
+
 })

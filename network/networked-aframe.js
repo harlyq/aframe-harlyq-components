@@ -127,7 +127,7 @@
 
 	module.exports.getCreator = function (el) {
 	  var components = el.components;
-	  if (components.hasOwnProperty('networked')) {
+	  if (components['networked'] && components['networked'].data) {
 	    return components['networked'].data.creator;
 	  }
 	  return null;
@@ -135,7 +135,7 @@
 
 	module.exports.getNetworkOwner = function (el) {
 	  var components = el.components;
-	  if (components.hasOwnProperty('networked')) {
+	  if (components['networked'] && components['networked'].data) {
 	    return components['networked'].data.owner;
 	  }
 	  return null;
@@ -143,7 +143,7 @@
 
 	module.exports.getNetworkId = function (el) {
 	  var components = el.components;
-	  if (components.hasOwnProperty('networked')) {
+	  if (components['networked'] && components['networked'].data) {
 	    return components['networked'].data.networkId;
 	  }
 	  return null;
@@ -328,7 +328,7 @@
 	  }, {
 	    key: 'templateIsCached',
 	    value: function templateIsCached(template) {
-	      return this.templateCache.hasOwnProperty(template);
+	      return !!this.templateCache[template];
 	    }
 	  }, {
 	    key: 'getComponents',
@@ -342,7 +342,7 @@
 	  }, {
 	    key: 'hasTemplate',
 	    value: function hasTemplate(template) {
-	      return this.schemaDict.hasOwnProperty(template);
+	      return !!this.schemaDict[template];
 	    }
 	  }, {
 	    key: 'templateExistsInScene',
@@ -353,7 +353,7 @@
 	  }, {
 	    key: 'validateSchema',
 	    value: function validateSchema(schema) {
-	      return schema.hasOwnProperty('template') && schema.hasOwnProperty('components');
+	      return !!(schema['template'] && schema['components']);
 	    }
 	  }, {
 	    key: 'validateTemplate',
@@ -444,7 +444,7 @@
 	  }, {
 	    key: 'initPosition',
 	    value: function initPosition(entity, componentData) {
-	      var hasPosition = componentData.hasOwnProperty('position');
+	      var hasPosition = componentData['position'];
 	      if (hasPosition) {
 	        var position = componentData.position;
 	        entity.setAttribute('position', position);
@@ -453,7 +453,7 @@
 	  }, {
 	    key: 'initRotation',
 	    value: function initRotation(entity, componentData) {
-	      var hasRotation = componentData.hasOwnProperty('rotation');
+	      var hasRotation = componentData['rotation'];
 	      if (hasRotation) {
 	        var rotation = componentData.rotation;
 	        entity.setAttribute('rotation', rotation);
@@ -559,7 +559,7 @@
 	    key: 'completeSync',
 	    value: function completeSync(targetClientId, isFirstSync) {
 	      for (var id in this.entities) {
-	        if (this.entities.hasOwnProperty(id)) {
+	        if (this.entities[id]) {
 	          this.entities[id].components.networked.syncAll(targetClientId, isFirstSync);
 	        }
 	      }
@@ -576,17 +576,21 @@
 	    value: function removeEntitiesOfClient(clientId) {
 	      var entityList = [];
 	      for (var id in this.entities) {
-	        var entityCreator = NAF.utils.getCreator(this.entities[id]);
+	        var entity = this.entities[id];
+	        var entityCreator = NAF.utils.getCreator(entity);
+	        var entityOwner = NAF.utils.getNetworkOwner(entity);
 	        if (entityCreator === clientId) {
 	          var persists = void 0;
-	          var component = this.entities[id].getAttribute('networked');
+	          var component = entity.getAttribute('networked');
 	          if (component && component.persistent) {
-	            persists = NAF.utils.takeOwnership(this.entities[id]);
+	            persists = entityOwner !== clientId || NAF.utils.takeOwnership(entity);
 	          }
 	          if (!persists) {
 	            var entity = this.removeEntity(id);
 	            entityList.push(entity);
 	          }
+	        } else if (entityOwner === clientId) {
+	          NAF.utils.takeOwnership(entity);
 	        }
 	      }
 	      return entityList;
@@ -625,7 +629,7 @@
 	  }, {
 	    key: 'getEntity',
 	    value: function getEntity(id) {
-	      if (this.entities.hasOwnProperty(id)) {
+	      if (this.entities[id]) {
 	        return this.entities[id];
 	      }
 	      return null;
@@ -633,7 +637,7 @@
 	  }, {
 	    key: 'hasEntity',
 	    value: function hasEntity(id) {
-	      return this.entities.hasOwnProperty(id);
+	      return !!this.entities[id];
 	    }
 	  }, {
 	    key: 'removeRemoteEntities',
@@ -695,7 +699,7 @@
 	  }, {
 	    key: "hasParent",
 	    value: function hasParent(parentId) {
-	      return this.dict.hasOwnProperty(parentId);
+	      return !!this.dict[parentId];
 	    }
 	  }]);
 
@@ -806,7 +810,7 @@
 	    key: 'checkForDisconnectingClients',
 	    value: function checkForDisconnectingClients(oldOccupantList, newOccupantList) {
 	      for (var id in oldOccupantList) {
-	        var clientFound = newOccupantList.hasOwnProperty(id);
+	        var clientFound = newOccupantList[id];
 	        if (!clientFound) {
 	          NAF.log.write('Closing stream to ', id);
 	          this.adapter.closeStreamConnection(id);
@@ -875,7 +879,7 @@
 	  }, {
 	    key: 'hasActiveDataChannel',
 	    value: function hasActiveDataChannel(clientId) {
-	      return this.activeDataChannels.hasOwnProperty(clientId) && this.activeDataChannels[clientId];
+	      return !!(this.activeDataChannels[clientId] && this.activeDataChannels[clientId]);
 	    }
 	  }, {
 	    key: 'broadcastData',
@@ -931,7 +935,7 @@
 	  }, {
 	    key: 'receivedData',
 	    value: function receivedData(fromClientId, dataType, data, source) {
-	      if (this.dataChannelSubs.hasOwnProperty(dataType)) {
+	      if (this.dataChannelSubs[dataType]) {
 	        this.dataChannelSubs[dataType](fromClientId, dataType, data, source);
 	      } else {
 	        NAF.log.write('NetworkConnection@receivedData: ' + dataType + ' has not been subscribed to yet. Call subscribeToDataChannel()');
@@ -1566,7 +1570,7 @@
 	      // Iterate over the keys of the easyrtc room occupants map.
 	      // getRoomOccupantsAsArray uses Object.keys which allocates memory.
 	      for (var roomOccupant in roomOccupants) {
-	        if (roomOccupants.hasOwnProperty(roomOccupant) && roomOccupant !== this.easyrtc.myEasyrtcid) {
+	        if (roomOccupants[roomOccupant] && roomOccupant !== this.easyrtc.myEasyrtcid) {
 	          // send via webrtc otherwise fallback to websockets
 	          this.easyrtc.sendData(roomOccupant, dataType, data);
 	        }
@@ -1722,7 +1726,7 @@
 	  },
 
 	  hasOnConnectFunction: function hasOnConnectFunction() {
-	    return this.data.onConnect != '' && window.hasOwnProperty(this.data.onConnect);
+	    return this.data.onConnect != '' && window[this.data.onConnect];
 	  },
 
 	  callOnConnect: function callOnConnect() {
@@ -1933,7 +1937,7 @@
 
 	  initNetworkParent: function initNetworkParent() {
 	    var parentEl = this.el.parentElement;
-	    if (parentEl.hasOwnProperty('components') && parentEl.components.hasOwnProperty('networked')) {
+	    if (parentEl['components'] && parentEl.components['networked']) {
 	      this.parent = parentEl;
 	    } else {
 	      this.parent = null;
@@ -2149,8 +2153,25 @@
 	  /* Receiving updates */
 
 	  networkUpdate: function networkUpdate(entityData) {
-	    // Avoid updating components if the entity data received did not come from the current owner.
-	    if (entityData.lastOwnerTime < this.lastOwnerTime || this.lastOwnerTime === entityData.lastOwnerTime && this.data.owner > entityData.owner) {
+	    // The networkUpdate handles 3 cases:
+	    //
+	    // i) a non-firstsync update packet from the owner. entityData.lastOwnerTime and this.lastOwnerTime
+	    // will be the same and entityData.owner will match this.data.owner, so the packet is accept
+	    //
+			// ii) firstsyncs for a new client.  All clients will send firstsync packets.  If the new client's
+			// entity was created by the network then its lastOwnerTime will be -1, and the owner will be the
+			// existing owner.  If the new client's entity used a fixed networkId then the lastOwnerTime will 
+			// be very recent, and the owner will be the new client. In both cases we want existing clients to
+			// ignore the new client's data, and the new client to accept existing client's data
+	    // 
+	    // iii) a non-firstsync when a client performs a takeOwnership(). the entityData.lastOwnerTime 
+			// will be newer than the this.lastOwnerTime so we accept the new packet and change this.data.owner
+			
+	    if (entityData.isFirstSync && entityData.lastOwnerTime > 0 && this.lastOwnerTime > 0) {
+	      if (entityData.lastOwnerTime > this.lastOwnerTime) {
+	        return;
+	      }
+	    } else if (entityData.lastOwnerTime < this.lastOwnerTime || this.lastOwnerTime === entityData.lastOwnerTime && this.data.owner > entityData.owner) {
 	      return;
 	    }
 

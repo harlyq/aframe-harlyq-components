@@ -40,7 +40,7 @@
   </template>
   
   <template id="chessAIHuman-template">
-    <a-entity scale=".01 .01 .01" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: true; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee;">
+    <a-entity scale=".01 .01 .01" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: false; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee;">
     </a-entity>
   </template>
 
@@ -120,7 +120,9 @@
     <a-entity id="leftHand" vive-controls="hand: left"></a-entity>
     <a-entity id="rightHand" vive-controls="hand: right"></a-entity>
     <a-entity id="player" networked="template:#avatar-template;" position="0 1.6 1" camera wasd-controls look-controls></a-entity>
-    <a-entity id="puzzle" position="1 1 0" scale=".3 .3 .3" cube-puzzle></a-entity>
+    <!--a-entity id="initcube" scale=".2 .2 .2" position="0 1.3 0" networked="attachTemplateToLocal: false; networkId:aaaaaaa" cube-puzzle></a-entity-->
+    <a-entity scale=".01 .01 .01" position="0 1.2 0" networked="attachTemplateToLocal:false; networkId:bbbbb" chess="mode: replay; whitePlayer: ai; blackPlayer: human; debug: false; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn)">
+
   </a-scene>
 </body>
 
