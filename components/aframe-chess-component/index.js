@@ -50,30 +50,112 @@ AFRAME.registerSystem("chess", {
     this.shutdownNetwork()
   },
 
+  registerNetworking(component, callbacks) {
+    if (typeof NAF === "object") {
+      const el = component.el
+      console.assert(!this.networkCallbacks.has(component), `component already registered`)
+      this.networkCallbacks.set(component, callbacks)
+
+      // if NAF.client is not set then requestSync() will be called from onConnected
+      // if networkId is not set then requestSync() will be called from onEntityCreated
+      if (NAF.clientId && NAF.utils.getNetworkId(el)) {
+        this.requestSync(component)
+      }
+
+      if (typeof callbacks.onOwnershipGained === "function") {
+        el.addEventListener("ownership-gained", callbacks.onOwnershipGained)
+      }
+
+      if (typeof callbacks.onOwnershipLost === "function") {
+        el.addEventListener("ownership-lost", callbacks.onOwnershipLost)
+      }
+
+      if (typeof callbacks.onOwnershipChanged === "function") {
+        el.addEventListener("ownership-changed", callbacks.onOwnershipChanged)
+      }
+    }
+  },
+
+  unregisterNetworking(component) {
+    if (typeof NAF === "object") {
+      console.assert(this.networkCallbacks.has(component), `component not registered`)
+      const el = component.el
+      const callbacks = this.networkCallbacks.get(component)
+
+      if (typeof callbacks.onOwnershipGained === "function") {
+        el.removeEventListener("onOwnershipGained", callbacks.onOwnershipGained)
+      }
+
+      if (typeof callbacks.onOwnershipLost === "function") {
+        el.removeEventListener("onOwnershipLost", callbacks.onOwnershipLost)
+      }
+
+      if (typeof callbacks.onOwnershipChanged === "function") {
+        el.removeEventListener("onOwnershipChanged", callbacks.onOwnershipChanged)
+      }
+
+      this.networkCallbacks.delete(component)
+    }
+  },
+
   setupNetwork() {
     if (typeof NAF === "object") {
       this.networkCache = {}
+      this.networkCallbacks = new Map()
 
       NAF.connection.subscribeToDataChannel(componentName, (senderId, type, packet, targetId) => {
         const entity = NAF.entities.getEntity(packet.networkId)
         const component = entity ? entity.components[componentName] : undefined
-        if (component) {
-          component.receiveNetworkData(packet.data, senderId)
+
+        if (packet.data === "NETRequestSync") {
+          if (component && NAF.clientId === NAF.utils.getNetworkOwner(entity)) {
+            const callbacks = this.networkCallbacks.get(component)
+            if (typeof callbacks.requestSync === "function") {
+              callbacks.requestSync(senderId)
+            }  
+          }
+
+        } else if (component) {
+          const callbacks = this.networkCallbacks.get(component)
+          if (typeof callbacks.receiveNetworkData === "function") {
+            callbacks.receiveNetworkData(packet.data, senderId)
+          }
+
         } else {
+          // we've received a packet for an element that does not yet exist, so cache it
+          // TODO do we need an array of packets?
           packet.senderId = senderId
           this.networkCache[packet.networkId] = packet
         }
       })
 
       this.onEntityCreated = this.onEntityCreated.bind(this)
+      this.onClientConnected = this.onClientConnected.bind(this)
+      this.onClientDisconnected = this.onClientDisconnected.bind(this)
+      this.onConnected = this.onConnected.bind(this)
+
+      if (!NAF.clientId) {
+        document.body.addEventListener("connected", this.onConnected)
+      }
+
       document.body.addEventListener("entityCreated", this.onEntityCreated)
+      document.body.addEventListener("clientConnected", this.onClientConnected)
+      document.body.addEventListener("clientDisconnected", this.onClientDisconnected)
     }
   },
 
   shutdownNetwork() {
     if (typeof NAF === "object") {
-      document.body.removeEventListener("entityCreated", this.onEntityCreated)
       NAF.connection.unsubscribeToDataChannel(componentName)
+
+      document.body.removeEventListener("connected", this.onConnected) // ok to remove even if never added
+      document.body.removeEventListener("entityCreated", this.onEntityCreated)
+      document.body.removeEventListener("clientConnected", this.onClientConnected)
+      document.body.removeEventListener("clientDisconnected", this.onClientDisconnected)
+
+      console.assert(this.networkCallbacks.length === 0, `missing calls to unregisterNetworking(). Some components are still registered`)
+      delete this.networkCallbacks
+      delete this.networkCache
     }
   },
 
@@ -96,16 +178,54 @@ AFRAME.registerSystem("chess", {
     }
   },
 
+  onConnected(event) {
+    this.networkCallbacks.forEach((_, component) => {
+      this.requestSync(component)
+    })
+    document.body.removeEventListener("connected", this.onConnected)
+  },
+
   onEntityCreated(event) {
     const el = event.detail.el
     const component = el.components[componentName]
     const networkId = NAF.utils.getNetworkId(el)
     const packet = networkId ? this.networkCache[networkId] : undefined
+
     if (component && packet) {
-      component.receiveNetworkData(packet.data, packet.senderId)
+      const callbacks = this.networkCallbacks.get(component)
+      if (typeof callbacks.receiveNetworkData === "function") {
+        callbacks.receiveNetworkData(packet.data, packet.senderId)
+      }
       delete this.networkCache[networkId]
     }
+
+    if (component && NAF.clientId) {
+      this.requestSync(component)
+    }
+  },
+
+  onClientConnected(event) {
+    const clientId = event.detail.clientId
+    this.networkCallbacks.forEach((callbacks) => {
+      if (typeof callbacks.onClientConnected === "function") {
+        callbacks.onClientConnected(event)
+      }
+    })
+  },
+
+  onClientDisconnected(event) {
+    const clientId = event.detail.clientId
+    this.networkCallbacks.forEach((callbacks) => {
+      if (typeof callbacks.onClientDisconnected === "function") {
+        callbacks.onClientDisconnected(event)
+      }
+    })
+  },
+
+  requestSync(component) {
+    this.broadcastNetworkData(component, "NETRequestSync")
   }
+
 })
 
 
@@ -182,24 +302,18 @@ AFRAME.registerComponent("chess", {
     this.board.name = data.boardMesh.trim()
     this.pendingMode = ""
 
-    this.onClientConnected = this.onClientConnected.bind(this)
-    this.onClientDisconnected = this.onClientDisconnected.bind(this)
-    this.onOwnershipGained = this.onOwnershipGained.bind(this)
-    this.onOwnershipLost = this.onOwnershipLost.bind(this)
-    this.onInstantiated = this.onInstantiated.bind(this)
-    document.body.addEventListener("clientConnected", this.onClientConnected)
-    document.body.addEventListener("clientDisconnected", this.onClientDisconnected)
-    document.body.addEventListener("ownership-gained", this.onOwnershipGained)
-    document.body.addEventListener("ownership-lost", this.onOwnershipLost)
-    this.el.addEventListener("instantiated", this.onInstantiated)
+    this.system.registerNetworking(this, { 
+      // onClientConnected: this.onClientConnected.bind(this),
+      onClientDisconnected: this.onClientDisconnected.bind(this),
+      onOwnershipGained: this.onOwnershipGained.bind(this),
+      onOwnershipLost: this.onOwnershipLost.bind(this),
+      receiveNetworkData: this.receiveNetworkData.bind(this),
+      requestSync: this.requestSync.bind(this),
+    })
   },
 
   remove() {
-    document.body.removeEventListener("clientConnected", this.onClientConnected)
-    document.body.removeEventListener("clientDisconnected", this.onClientDisconnected)
-    document.body.removeEventListener("ownership-gained", this.onOwnershipGained)
-    document.body.removeEventListener("ownership-lost", this.onOwnershipLost)
-    this.el.removeEventListener("instantiated", this.onInstantiated)
+    this.system.unregisterNetworking(this)
 
     this.el.removeEventListener("object3dset", this.onObject3dSet)
     this.el.removeEventListener("hoverstart", this.onHoverStart)
@@ -354,6 +468,10 @@ AFRAME.registerComponent("chess", {
     if (!this.chess3D) {
       this.pendingMode = mode
       return
+    }
+
+    if (this.data.debug) {
+      console.log("mode", mode)
     }
 
     const state = this.state
@@ -902,18 +1020,24 @@ AFRAME.registerComponent("chess", {
     }
   },
 
+  requestSync(senderId) {
+    this.system.sendNetworkData(this, this.getSetupPacket(), senderId)
+  },
+
   receiveNetworkData(packet, senderId) {
     const state = this.state
     const owner = NAF.utils.getNetworkOwner(this.el)
     const fromOwner = senderId === owner
 
-    switch (packet.command) {
-      case "requestSync":
-        this.system.sendNetworkData(this, this.getSetupPacket(), senderId)
-        break
+    if (this.state.waitingForSetup && packet.command !== "setup") {
+      return // ignore all non-setup packets until we are setup
+    }
 
+    switch (packet.command) {
       case "setup":
         if (fromOwner) {
+          state.waitingForSetup = false
+
           state.fenAST = this.parseFEN( packet.fen )
           state.fenAST.capturedPieces = packet.captureStr.split("").map( code => ({code, file: -1, rank: -1}) )
           state.playerInfo = packet.playerInfo
@@ -966,20 +1090,12 @@ AFRAME.registerComponent("chess", {
     }
   },
 
-  onClientConnected(event) {
-    const clientId = event.detail.clientId
-    if (this.data.debug) {
-      console.log("onClientConnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el))
-    }
-    this.system.sendNetworkData(this, this.getSetupPacket(), clientId)
-  },
-
   onClientDisconnected(event) {
     const clientId = event.detail.clientId
     const owner = NAF.utils.getNetworkOwner(this.el)
 
     if (this.data.debug) {
-      console.log("onClientDisConnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el))
+      console.log("onClientDisconnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el))
     }
 
     if (owner === NAF.clientId || owner == clientId) {
@@ -1000,25 +1116,22 @@ AFRAME.registerComponent("chess", {
     }
   },
 
-  onOwnershipGained(event) {
+  onOwnershipGained() {
     if (this.data.debug) {
       console.log("ownership-gained")
     }
+    const state = this.state
     this.system.broadcastNetworkData(this, this.getSetupPacket())
-    this.setupMode(this.state.globalMode)
+    this.setupMode(state.globalMode)
+    state.waitingForSetup = false
   },
 
-  onOwnershipLost(event) {
+  onOwnershipLost() {
     if (this.data.debug) {
       console.log("ownership-lost")
     }
     this.setupMode("network")
-  },
-
-  onInstantiated(event) {
-    if (wasCreatedByNetwork(this)) {
-      this.system.broadcastNetworkData(this, { command: "requestSync" })
-    }
+    this.state.waitingForSetup = true
   },
 })
 
