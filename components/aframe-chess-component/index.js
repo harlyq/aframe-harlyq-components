@@ -26,11 +26,12 @@ AFRAME.registerSystem("chess", {
 
 AFRAME.registerComponent("chess", {
   schema: {
-    src: { default: "" },
-    meshes: { default: "" },
-    boardMesh: { default: "" },
-    blackColor: { type: "color", default: "" },
-    whiteColor: { type: "color", default: "" },
+    model: { default: "https://cdn.jsdelivr.net/gh/harlyq/aframe-harlyq-components@master/examples/assets/chess_set/chess_set.glb" },
+    meshes: { default: "rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn" },
+    boardMesh: { default: "board" },
+    blackColor: { type: "color", default: "#444" },
+    whiteColor: { type: "color", default: "#eee" },
+    highlightColor: { type: "color", default: "#ff0" },
     fen: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
     pgn: { default: "" },
     debug: { default: false },
@@ -41,6 +42,7 @@ AFRAME.registerComponent("chess", {
     whitePlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
     blackPlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
     maxCountPerPiece: { default: 8 },
+    aiWorker: { default: "https://cdn.jsdelivr.net/gh/harlyq/aframe-harlyq-components@master/examples/garbochess.js" }
   },
 
   init() {
@@ -61,6 +63,7 @@ AFRAME.registerComponent("chess", {
     this.chessMaterial = new THREE.MeshStandardMaterial()
     this.blackColor = new THREE.Color(.2,.2,.2)
     this.whiteColor = new THREE.Color(.8,.8,.8)
+    this.highlightColor = new THREE.Color(1,1,0)
     this.gameBounds = new THREE.Box3()
     this.pgnAST = undefined
     this.rotate180Quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI)
@@ -93,7 +96,7 @@ AFRAME.registerComponent("chess", {
     }
 
     const data = this.data
-    this.el.setAttribute("gltf-model", data.src)
+    this.el.setAttribute("gltf-model", data.model)
     this.meshInfos = this.parseMeshes(data.meshes)
     this.board.name = data.boardMesh.trim()
     this.pendingMode = ""
@@ -127,6 +130,7 @@ AFRAME.registerComponent("chess", {
 
     if (data.blackColor) this.blackColor.set(data.blackColor)
     if (data.whiteColor) this.whiteColor.set(data.whiteColor)
+    this.highlightColor.set(data.highlightColor)
 
     if (nafHelper.isMine(this)) {
       const state = this.state
@@ -255,12 +259,16 @@ AFRAME.registerComponent("chess", {
     state.fenAST = this.parseFEN( fenStr )
     state.replayIndex = 0
 
+    if (mode === "game") {
+      this.setupGameWorker()
+    }
+
     this.releaseAllInstances()
     this.setupMode(mode)
   },
 
   setupMode(mode) {
-    if (!this.chess3D) {
+    if (!this.chess3D || (mode === "game" && !this.garbochess)) {
       this.pendingMode = mode
       return
     }
@@ -284,7 +292,6 @@ AFRAME.registerComponent("chess", {
         break
 
       case "game":
-        this.setupGameWorker()
         this.garbochess.postMessage("position " + chessHelper.fenToString(state.fenAST))
         break
 
@@ -673,31 +680,48 @@ AFRAME.registerComponent("chess", {
     if (!this.garbochess) {
       const state = this.state
 
-      this.garbochess = new Worker("garbochess.js")
+      // perform this fetch and blob creation to work around same-origin policy
+      // this.garbochess = new Worker(this.data.aiWorker)
+      fetch(this.data.aiWorker).then(response => {
+        if (!response.ok) {
+          throw Error(`problem with file "${this.data.aiWorker}"`)
+        }
+        return response.text()
+      }).then(text => {
+        const workerSrc = new Blob([text], {type: 'text/javascript'})
+        const workerUrl = window.URL.createObjectURL(workerSrc)
+        this.garbochess = new Worker(workerUrl)
 
-      this.garbochess.onmessage = (event) => {
-        if (this.data.debug) {
-          console.log(event.data)
+        this.garbochess.onerror = (event) => {
+          throw Error(`problem with worker "${this.data.aiWorker}"`)
         }
   
-        if (event.data.startsWith("pv")) {
-        } else if (event.data.startsWith("message")) {
-
-        } else if (event.data.startsWith("invalid")) {
-          if (state.playerInfo[state.currentPlayer].networkClientId) {
-            this.system.sendNetworkData(this, { command: "invalidMove" }, state.playerInfo[state.currentPlayer].networkClientId)
+        this.garbochess.onmessage = (event) => {
+          if (this.data.debug) {
+            console.log(event.data)
           }
-          this.setupBoard(this.state.fenAST) // reset invalidly moved pieces
-
-        } else if (event.data.startsWith("valid")) {
-          const commands = event.data.split(" ")
-          state.nextHumanMove = commands[1]
-        } else if (event.data.startsWith("options")) {
-
-        } else {
-          state.nextAIMove = event.data
+    
+          if (event.data.startsWith("pv")) {
+          } else if (event.data.startsWith("message")) {
+  
+          } else if (event.data.startsWith("invalid")) {
+            if (state.playerInfo[state.currentPlayer].networkClientId) {
+              this.system.sendNetworkData(this, { command: "invalidMove" }, state.playerInfo[state.currentPlayer].networkClientId)
+            }
+            this.setupBoard(this.state.fenAST) // reset invalidly moved pieces
+  
+          } else if (event.data.startsWith("valid")) {
+            const commands = event.data.split(" ")
+            state.nextHumanMove = commands[1]
+          } else if (event.data.startsWith("options")) {
+  
+          } else {
+            state.nextAIMove = event.data
+          }
         }
-      }  
+
+        this.setupMode(this.pendingMode)
+      })
     }
   },
 
@@ -713,7 +737,7 @@ AFRAME.registerComponent("chess", {
 
     if (Object.keys(this.meshInfos).find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
       const index = event.detail.instanceIndex
-      instanced.setColorAt(instancedMesh, index, 1, 1, 0)
+      instanced.setColorAt(instancedMesh, index, this.highlightColor)
     }
   },
 
