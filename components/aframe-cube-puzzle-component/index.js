@@ -118,11 +118,21 @@ function unpackQuaternions(quaternions, packedQuats) {
   }
 }
 
-const componentName = "cube-puzzle"
-const packet = {}
+window.addEventListener("load", () => {
+  document.body.addEventListener("connected", () => {
+    let tagEl = document.querySelector("#clientId")
+    if (!tagEl) {
+      tagEl = document.createElement("div")
+      tagEl.id = "clientId"
+      tagEl.setAttribute("style", "position: absolute; left: 0; top: 0")
+      document.body.appendChild(tagEl)
+    }
+    tagEl.innerHTML = NAF.clientId.toString()
+  })
+})
 
-function isNetworked(el) {
-  let curEntity = el;
+function isNetworked(component) {
+  let curEntity = component.el;
 
   while(curEntity && curEntity.components && !curEntity.components.networked) {
     curEntity = curEntity.parentNode;
@@ -131,28 +141,30 @@ function isNetworked(el) {
   return curEntity && curEntity.components && curEntity.components.networked && curEntity.components.networked.data
 }
 
-function takeOwnership(el) {
-  if (typeof NAF === "object" && isNetworked(el)) {
-    NAF.utils.takeOwnership(el)
+function takeOwnership(component) {
+  if (typeof NAF === "object" && isNetworked(component)) {
+    NAF.utils.takeOwnership(component.el)
   } 
 }
 
-function isMine(el) {
-  return typeof NAF === "object" && isNetworked(el) ? NAF.utils.isMine(el) : true
+function isMine(component) {
+  if (typeof NAF === "object" && isNetworked(component)) {
+    const owner = NAF.utils.getNetworkOwner(component.el)
+    return !owner || owner === NAF.clientId
+  }
+  return true
 }
 
-// window.addEventListener("load", () => {
-//   document.body.addEventListener("connected", () => {
-//     let tagEl = document.querySelector("#clientId")
-//     if (!tagEl) {
-//       tagEl = document.createElement("div")
-//       tagEl.id = "clientId"
-//       tagEl.setAttribute("style", "position: absolute; left: 0; top: 0")
-//       document.body.appendChild(tagEl)
-//     }
-//     tagEl.innerHTML = NAF.clientId.toString()
-//   })
-// })
+function getClientId() {
+  return typeof NAF === "object" ? NAF.clientId : undefined
+}
+
+function wasCreatedByNetwork(component) {
+  return !!component.el.firstUpdateData
+}
+
+const componentName = "cube-puzzle"
+const packet = {}
 
 AFRAME.registerSystem("cube-puzzle", {
 
@@ -164,31 +176,117 @@ AFRAME.registerSystem("cube-puzzle", {
     this.shutdownNetwork()
   },
 
+  registerNetworking(component, callbacks) {
+    if (typeof NAF === "object") {
+      const el = component.el
+      console.assert(!this.networkCallbacks.has(component), `component already registered`)
+      this.networkCallbacks.set(component, callbacks)
+
+      // if NAF.client is not set then requestSync() will be called from onConnected
+      // if networkId is not set then requestSync() will be called from onEntityCreated
+      if (NAF.clientId && NAF.utils.getNetworkId(el)) {
+        this.requestSync(component)
+      }
+
+      if (typeof callbacks.onOwnershipGained === "function") {
+        el.addEventListener("ownership-gained", callbacks.onOwnershipGained)
+      }
+
+      if (typeof callbacks.onOwnershipLost === "function") {
+        el.addEventListener("ownership-lost", callbacks.onOwnershipLost)
+      }
+
+      if (typeof callbacks.onOwnershipChanged === "function") {
+        el.addEventListener("ownership-changed", callbacks.onOwnershipChanged)
+      }
+    }
+  },
+
+  unregisterNetworking(component) {
+    if (typeof NAF === "object") {
+      console.assert(this.networkCallbacks.has(component), `component not registered`)
+      const el = component.el
+      const callbacks = this.networkCallbacks.get(component)
+
+      if (typeof callbacks.onOwnershipGained === "function") {
+        el.removeEventListener("onOwnershipGained", callbacks.onOwnershipGained)
+      }
+
+      if (typeof callbacks.onOwnershipLost === "function") {
+        el.removeEventListener("onOwnershipLost", callbacks.onOwnershipLost)
+      }
+
+      if (typeof callbacks.onOwnershipChanged === "function") {
+        el.removeEventListener("onOwnershipChanged", callbacks.onOwnershipChanged)
+      }
+
+      this.networkCallbacks.delete(component)
+    }
+  },
+
   setupNetwork() {
     if (typeof NAF === "object") {
       this.networkCache = {}
+      this.networkCallbacks = new Map()
 
       NAF.connection.subscribeToDataChannel(componentName, (senderId, type, packet, targetId) => {
         const entity = NAF.entities.getEntity(packet.networkId)
         const component = entity ? entity.components[componentName] : undefined
-        if (component) {
-          component.receiveNetworkData(packet.data, senderId)
+
+        if (packet.data === "NETRequestSync") {
+          if (component && NAF.clientId === NAF.utils.getNetworkOwner(entity)) {
+            const callbacks = this.networkCallbacks.get(component)
+            if (typeof callbacks.requestSync === "function") {
+              callbacks.requestSync(senderId)
+            }  
+          }
+
+        } else if (component) {
+          const callbacks = this.networkCallbacks.get(component)
+          if (typeof callbacks.receiveNetworkData === "function") {
+            callbacks.receiveNetworkData(packet.data, senderId)
+          }
+
         } else {
+          // we've received a packet for an element that does not yet exist, so cache it
+          // TODO do we need an array of packets?
           packet.senderId = senderId
           this.networkCache[packet.networkId] = packet
         }
       })
 
       this.onEntityCreated = this.onEntityCreated.bind(this)
+      this.onClientConnected = this.onClientConnected.bind(this)
+      this.onClientDisconnected = this.onClientDisconnected.bind(this)
+      this.onConnected = this.onConnected.bind(this)
+
+      if (!NAF.clientId) {
+        document.body.addEventListener("connected", this.onConnected)
+      }
+
       document.body.addEventListener("entityCreated", this.onEntityCreated)
+      document.body.addEventListener("clientConnected", this.onClientConnected)
+      document.body.addEventListener("clientDisconnected", this.onClientDisconnected)
     }
   },
 
   shutdownNetwork() {
     if (typeof NAF === "object") {
-      document.body.removeEventListener("entityCreated", this.onEntityCreated)
       NAF.connection.unsubscribeToDataChannel(componentName)
+
+      document.body.removeEventListener("connected", this.onConnected) // ok to remove even if never added
+      document.body.removeEventListener("entityCreated", this.onEntityCreated)
+      document.body.removeEventListener("clientConnected", this.onClientConnected)
+      document.body.removeEventListener("clientDisconnected", this.onClientDisconnected)
+
+      console.assert(this.networkCallbacks.length === 0, `missing calls to unregisterNetworking(). Some components are still registered`)
+      delete this.networkCallbacks
+      delete this.networkCache
     }
+  },
+
+  broadcastNetworkData(component, data) {
+    this.sendNetworkData(component, data, undefined)
   },
 
   sendNetworkData(component, data, targetId) {
@@ -206,18 +304,56 @@ AFRAME.registerSystem("cube-puzzle", {
     }
   },
 
+  onConnected(event) {
+    this.networkCallbacks.forEach((_, component) => {
+      this.requestSync(component)
+    })
+    document.body.removeEventListener("connected", this.onConnected)
+  },
+
   onEntityCreated(event) {
     const el = event.detail.el
     const component = el.components[componentName]
     const networkId = NAF.utils.getNetworkId(el)
     const packet = networkId ? this.networkCache[networkId] : undefined
+
     if (component && packet) {
-      component.receiveNetworkData(packet.data, packet.senderId)
+      const callbacks = this.networkCallbacks.get(component)
+      if (typeof callbacks.receiveNetworkData === "function") {
+        callbacks.receiveNetworkData(packet.data, packet.senderId)
+      }
       delete this.networkCache[networkId]
     }
+
+    if (component && NAF.clientId) {
+      this.requestSync(component)
+    }
+  },
+
+  onClientConnected(event) {
+    const clientId = event.detail.clientId
+    this.networkCallbacks.forEach((callbacks) => {
+      if (typeof callbacks.onClientConnected === "function") {
+        callbacks.onClientConnected(event)
+      }
+    })
+  },
+
+  onClientDisconnected(event) {
+    const clientId = event.detail.clientId
+    this.networkCallbacks.forEach((callbacks) => {
+      if (typeof callbacks.onClientDisconnected === "function") {
+        callbacks.onClientDisconnected(event)
+      }
+    })
+  },
+
+  requestSync(component) {
+    this.broadcastNetworkData(component, "NETRequestSync")
   }
 
 })
+
 
 
 AFRAME.registerComponent("cube-puzzle", {
@@ -271,21 +407,16 @@ AFRAME.registerComponent("cube-puzzle", {
 
     this.state.snappedQuaternions = this.quaternions.slice()
 
-    this.onClientConnected = this.onClientConnected.bind(this)
-    this.onClientDisconnected = this.onClientDisconnected.bind(this)
-    this.onOwnershipGained = this.onOwnershipGained.bind(this)
-    this.onOwnershipLost = this.onOwnershipLost.bind(this)
-    document.body.addEventListener("clientConnected", this.onClientConnected)
-    document.body.addEventListener("clientDisconnected", this.onClientDisconnected)
-    document.body.addEventListener("ownership-gained", this.onOwnershipGained)
-    document.body.addEventListener("ownership-lost", this.onOwnershipLost)
+    this.system.registerNetworking(this, {
+      requestSync: this.requestSync.bind(this),
+      receiveNetworkData: this.receiveNetworkData.bind(this),
+      onClientDisconnected: this.onClientDisconnected.bind(this),
+      onOwnershipGained: this.onOwnershipGained.bind(this),
+    })
   },
 
   remove() {
-    document.body.removeEventListener("clientConnected", this.onClientConnected)
-    document.body.removeEventListener("clientDisconnected", this.onClientDisconnected)
-    document.body.removeEventListener("ownership-gained", this.onOwnershipGained)
-    document.body.removeEventListener("ownership-lost", this.onOwnershipLost)
+    this.system.unregisterNetworking(this)
   },
 
   update(oldData) {
@@ -310,10 +441,11 @@ AFRAME.registerComponent("cube-puzzle", {
 
   tick(time, deltaTime) {
     const dt = Math.min(100, deltaTime)/1000
+    const state = this.state
 
     this.tickSlerpolator(dt)
 
-    if (isMine()) {
+    if (!state.holderId || state.holderId === getClientId()) {
       this.actionTick[this.state.name]()
     }
   },
@@ -333,10 +465,11 @@ AFRAME.registerComponent("cube-puzzle", {
         if (state.name === "idle") {
           state.name = "hold"
           state.hold.side = NO_SIDE
+          state.holderId = getClientId()
           threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
 
-          takeOwnership(this.el)
-
+          takeOwnership(this)
+          
         } else if (state.name === "hold") {
           const holdSide = state.hold.side
 
@@ -367,7 +500,7 @@ AFRAME.registerComponent("cube-puzzle", {
             threeHelper.calcOffsetMatrix(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix)
           } else {
             state.name = "idle"
-            this.postStateToNetwork()
+            this.broadcastState()
           }
   
         } else if (state.name === "turn" || state.name === "turning") {
@@ -398,7 +531,7 @@ AFRAME.registerComponent("cube-puzzle", {
 
       case "snap":
         state.snappedQuaternions.set(this.quaternions)
-        this.postStateToNetwork({slerp: true})
+        this.broadcastState({slerp: true})
         state.snapped = true
         break
 
@@ -685,7 +818,7 @@ AFRAME.registerComponent("cube-puzzle", {
     }
 
     state.snappedQuaternions.set(this.quaternions)
-    this.postStateToNetwork()
+    this.broadcastState()
     state.snapped = true
   },
 
@@ -886,9 +1019,13 @@ AFRAME.registerComponent("cube-puzzle", {
   },
 
   // Networking
-  postStateToNetwork(options = {}, targetId = undefined) {
+  broadcastState(options = {}) {
+    this.sendStateToClient(options)
+  },
+
+  sendStateToClient(options, targetId) {
     const state = this.state
-    if (isNetworked(this.el) && NAF.utils.isMine(this.el)) {
+    if (isMine(this)) {
       
       const data = {
         holderId: state.holderId,
@@ -904,7 +1041,10 @@ AFRAME.registerComponent("cube-puzzle", {
   receiveNetworkData(data, senderId) {
     const state = this.state
 
-    console.log("received from:", senderId, "owner:", NAF.utils.getNetworkOwner(this.el))
+    if (this.data.debug) {
+      console.log("received packet from:", senderId, "owner:", NAF.utils.getNetworkOwner(this.el))
+    }
+
     if (senderId === NAF.utils.getNetworkOwner(this.el)) {
       state.holderId = data.holderId
 
@@ -916,10 +1056,8 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   },
 
-  onClientConnected(event) {
-    const clientId = event.detail.clientId
-    console.log("onClientConnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el))
-    this.postStateToNetwork({}, clientId)
+  requestSync(clientId) {
+    this.sendStateToClient({}, clientId)
   },
 
   onClientDisconnected(event) {
@@ -929,13 +1067,11 @@ AFRAME.registerComponent("cube-puzzle", {
     }
   },
 
-  onOwnershipGained(event) {
-    console.log("ownership-gained")
-    this.postStateToNetwork({})
-  },
-
-  onOwnershipLost(event) {
-    console.log("ownership-lost")
+  onOwnershipGained() {
+    if (this.data.debug) {
+      console.log("ownership-gained")
+    }
+    this.broadcastState()
   },
 
 })

@@ -294,6 +294,7 @@ AFRAME.registerComponent("chess", {
       delay: 0,
       localMode: "setup",
       pendingLocalMove: "",
+      waitingForSetup: false,
     }
 
     const data = this.data
