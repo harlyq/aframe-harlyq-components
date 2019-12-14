@@ -1513,6 +1513,498 @@
     return getDebugName(component.el) + '[' + component.attrName + ']'
   }
 
+  const FEN_DEFAULT = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+  const FEN_CODES = "prnbqkPRNBQK";
+  const CASTLE_REGEX = /(O\-O)(\-O)?([\#|\+]?)/;
+  const SAN_REGEX = /([RNBKQ]?[a-h]?[1-8]?)(x?)([a-h][1-8])(=[RNBQ])?([\#|\+]?)/;
+  const PGN_RESULT_REGEX = /1\-0|0\-1|1\/2\-1\/2|\*/;
+  const PGN_TAG_REGEX = /\[\s*(\w+)\s*\"([^\"]*)\"\s*\]/;
+  const PGN_MOVETEXT_REGEX = /([\d\.]+)\s*([a-zA-Z][\w\=\#\+\-\/\*]*)\s+([a-zA-Z][\w\=\#\+\-\/\*]*)?\s*(\d\-\/\*)?\s*(\{[^\}*]\})?\s*/;
+
+  function decodeFile(fileStr) {
+    return fileStr.charCodeAt(0) - 96
+  }
+
+  function decodeRank(rankStr) {
+    return rankStr.charCodeAt(0) - 48
+  }
+
+  function fileToString(file) {
+    return String.fromCharCode(file + 96)
+  }
+
+  function rankToString(rank) {
+    return String.fromCharCode(rank + 48)
+  }
+
+  function moveNumberToMoveOffset(number, player) {
+    return (number - 1)*2 + (player === "white" ? 0 : 1)
+  }
+
+  // rank "a"->"h" => 1->8, file "1"->"8" -> 1->8
+  function coordToFileRank(coord) {
+    return coord.length === 2 ? [decodeFile(coord[0]), decodeRank(coord[1])] : undefined
+  }
+
+  // rank 1->8 => "a"->"h", file 1->8 -> "1"->"8"
+  function fileRankToCoord(file, rank) {
+    return String.fromCharCode(file + 96, rank + 48)
+  }
+
+  function parseFEN(fenStr) {
+    const syntax = { 
+      layout: [],
+      player: "white",
+      whiteKingCastle: false,
+      whiteQueenCastle: false,
+      blackKingCastle: false,
+      blackQueenCastle: false,
+      enPassant: undefined,
+      halfMove: 0,
+      fullMove: 1,
+      capturedPieces: []
+    };
+    const chunks = fenStr.split(" ");
+
+    if (chunks.length < 5) {
+      throw Error(`malformed fen`)
+    }
+
+    const rankChunks = chunks[0].split("/");
+
+    function appendRank(layout, rank, rankChunk) {
+      let file = 1;
+      for (let i = 0; i < rankChunk.length; i++) {
+        const c = rankChunk[i];
+        if (FEN_CODES.includes(c)) {
+          layout.push( { code: c, file, rank } );
+          file++;
+        } else if (Number(c) == c) {
+          file += Number(c);
+        } else {
+          throw Error(`unknown letter "${c}" in fen rank chunk "${rankChunk}"`)
+        }
+      }
+    }
+
+    const numRanks = rankChunks.length;
+    for (let i = 0; i < numRanks; i++) {
+      const rankChunk = rankChunks[i];
+      appendRank(syntax.layout, numRanks - i, rankChunk); // chunks start with the highest rank, all ranks numbered from 1 up
+    }
+
+    syntax.player = chunks[1] === "b" ? "black" : "white";
+
+    syntax.whiteKingCastle = chunks[2].includes("K");
+    syntax.whiteQueenCastle = chunks[2].includes("Q");
+    syntax.blackKingCastle = chunks[2].includes("k");
+    syntax.blackQueenCastle = chunks[2].includes("q");
+
+    if (chunks[3] && chunks[3] !== "-") {
+      const [file, rank] = coordToFileRank(chunks[3]);
+      syntax.enPassant = {file, rank};
+    }
+
+    syntax.halfMove = chunks[4] ? Number(chunks[4]) : 0;
+    syntax.fullMove = chunks[5] ? Number(chunks[5]) : 1;
+
+    return syntax
+  }
+
+  function fenToString(fen) {
+    if (!fen) {
+      return undefined
+    }
+
+    const sortedPieces = fen.layout.sort((a,b) => (b.rank - a.rank)*10 + a.file - b.file); // descending rank, ascending file
+
+    let rankChunks = [];
+    let chunk = "";
+    let file = 1;
+    let rank = 8;
+    let pieceIndex = 0;
+    let piece = sortedPieces[0];
+
+    while (rank >= 1) {
+      if (!piece || rank !== piece.rank) {
+        if (file <= 8) {
+          chunk += ((8 - file) + 1);
+        }
+        rankChunks.push(chunk);
+        chunk = "";
+        file = 1;
+        rank--;
+      }
+
+      while (piece && piece.rank === rank) {
+        if (piece.file > file) {
+          chunk += (piece.file - file);
+        }
+        
+        chunk += piece.code;
+        file = piece.file + 1;
+        piece = sortedPieces[++pieceIndex];
+      }
+    }
+
+    const starting = fen.player === "white" ? "w" : "b";
+    let castle = (fen.whiteKingCastle ? "K" : "") + (fen.whiteQueenCastle ? "Q" : "") + (fen.blackKingCastle ? "k" : "") + (fen.blackQueenCastle ? "q" : "");
+    castle = castle ? castle : "-";
+    const enPassant = fen.enPassant ? fileRankToCoord(fen.enPassant.file, fen.enPassant.rank) : "-";
+    return `${rankChunks.join("/")} ${starting} ${castle} ${enPassant} ${fen.halfMove} ${fen.fullMove}`
+  }
+
+  function findEnPassantPiece(fen) {
+    if (fen.enPassant) {
+      const piece = findPieceByFileRank(fen.layout, fen.enPassant.file, fen.enPassant.rank === 6 ? 5 : 4);
+      return piece && piece.code.toLowerCase() === "p" ? piece : undefined
+    }
+  }
+
+  function decodeCoordMove(fen, moveStr) {
+    const fromFile = moveStr.charCodeAt(0) - 96;
+    const fromRank = moveStr.charCodeAt(1) - 48;
+    const toFile = moveStr.charCodeAt(2) - 96;
+    const toRank = moveStr.charCodeAt(3) - 48;
+    const promotion = moveStr[4];
+
+    const movePiece = findPieceByFileRank(fen.layout, fromFile, fromRank);
+    if (!movePiece) {
+      throw Error(`unable to find piece for move ${moveStr}`)
+    }
+    const enPassantPiece = (fen.enPassant && movePiece.code.toLowerCase() === "p" && toFile === fen.enPassant.file && toRank === fen.enPassant.rank) ? findEnPassantPiece(fen) : undefined;
+    const capturedPiece = findPieceByFileRank(fen.layout, toFile, toRank) || enPassantPiece;
+
+    const isBlack = movePiece.code === movePiece.code.toLowerCase();
+    const isCastle = (movePiece.code === "k" || movePiece.code === "K") && Math.abs(fromFile - toFile) === 2;
+    const kingside = toFile > fromFile;
+    const castle = !isCastle ? "" : ( isBlack ? (kingside ? "k" : "q") : (kingside ? "K" : "Q") );
+    const promote = !promotion ? "" : ( isBlack ? promotion.toLowerCase() : promotion.toUpperCase() );
+
+    return {
+      code: movePiece.code, // k for black king, K for white king
+      fromFile,
+      fromRank,
+      capture: !!capturedPiece,
+      toFile,
+      toRank,
+      promote,
+      castle,
+      check: "", // unknown
+    }
+  }
+
+  function coordToString(move) {
+    return fileRankToCoord(move.fromFile, move.fromRank) + fileRankToCoord(move.toFile, move.toRank) + move.promote
+  }
+
+  function decodeSAN(player, sanStr) {
+    const isWhite = player === "white";
+    const castleParts = sanStr.match(CASTLE_REGEX);
+    
+    if (castleParts) {
+      const code = isWhite ? "K" : "k";
+      const castle = castleParts[2] ? (isWhite ? "Q" : "q") : (isWhite ? "K" : "k");
+      const toFile = castleParts[2] ? 3 : 7;
+      const toRank = isWhite ? 1 : 8;
+
+      return {
+        code, // k for black king, K for white king
+        fromFile: undefined,
+        fromRank: undefined,
+        capture: false,
+        toFile,
+        toRank,
+        promote: "",
+        castle, // one of kqKQ, uppercase for white, k for king side, q for queen side
+        check: castleParts[3], // + # or empty
+      }
+    }
+
+    const parts = sanStr.match(SAN_REGEX);
+    if (!parts) {
+      return undefined
+    }
+
+    const pieceStr = parts[1];
+    const c0 = pieceStr[0];
+
+    let code = undefined;
+    let fromRank = undefined;
+    let fromFile = undefined;
+    let fileRankOffset = 0;
+
+    if ("PRNBKQ".includes(c0)) {
+      code = isWhite ? c0.toUpperCase() : c0.toLowerCase();
+      fileRankOffset = 1;
+    } else {
+      code = isWhite ? "P" : "p";
+    }
+
+    if (fileRankOffset < pieceStr.length) {
+      fromFile = decodeFile(pieceStr[fileRankOffset]);
+      fromRank = decodeRank(pieceStr[pieceStr.length - 1]); // rank is always last, if used
+      fromFile = fromFile >= 1 && fromFile <= 8 ? fromFile : undefined;
+      fromRank = fromRank >= 1 && fromRank <= 8 ? fromRank : undefined;
+    }
+
+    const [toFile, toRank] = coordToFileRank(parts[3]);
+    const promote = !parts[4] ? "" : isWhite ? parts[4][1].toUpperCase() : parts[4][1].toLowerCase();
+    
+    return parts ? {
+      code: code, // one of prnbqkPRNBQK (upper case for white)
+      fromFile, // may be undefined or in the range (1,8)
+      fromRank, // may be undefined or in the range (1,8)
+      capture: parts[2] === "x", // true or false
+      toFile, // in the range (1,8)
+      toRank, // in the range (1,8)
+      promote, // one of rnbqRNBQ or empty (upper case for white)
+      castle: "",
+      check: parts[5], // + # or empty
+    } : undefined
+  }
+
+  function sanToString(san) {
+    if (san) {
+      const code = san.code.toUpperCase() !== "P" && !san.castle ? san.code.toUpperCase() : "";
+      const fromFile = san.fromFile ? fileToString(san.fromFile) : "";
+      const fromRank = san.fromRank ? rankToString(san.fromRank) : "";
+      const to = !san.castle ? fileRankToCoord(san.toFile, san.toRank) : "";
+      const promote = san.promote ? "=" + san.promote.toUpperCase() : "";
+      const capture = san.capture ? "x" : "";
+      if (san.castle) {
+        return (san.castle.toUpperCase() === "K" ? "O-O" : "O-O-O") + san.check
+      } else {
+        return code + fromFile + fromRank + capture + to + promote + san.check
+      }
+    }
+  }
+
+  function parsePGN(pgn) {
+    let game = {moves: []};
+    const text = pgn.replace(/\r\n|\n/, " ");
+
+    let i = 0;
+    let lookForTags = true;
+    let lookForMoves = true;
+
+    while (lookForTags && i < text.length) {
+      const nextText = text.slice(i);
+      const tagMatch = nextText.match(PGN_TAG_REGEX);
+      if (tagMatch) {
+        game[tagMatch[1]] = tagMatch[2];
+        i += tagMatch[0].length + tagMatch.index;
+      } else {
+        lookForTags = false;
+      }
+    }
+
+
+    while (lookForMoves && i < text.length) {
+      const nextText = text.slice(i);
+      const moveMatch = nextText.match(PGN_MOVETEXT_REGEX);
+      if (moveMatch) {
+        let player = moveMatch[1].includes("...") ? "black" : "white";
+
+        if (game.moves.length === 0) {
+          const moveNumber = Number( moveMatch[1].slice( 0, moveMatch[1].indexOf(".") ) );
+          game.moveOffset = moveNumberToMoveOffset(moveNumber, player);
+        }
+
+        game.moves.push( decodeSAN(player, moveMatch[2]) );
+    
+        if ( moveMatch[3] && player === "white" && !PGN_RESULT_REGEX.test(moveMatch[3]) ) {
+          game.moves.push( decodeSAN("black", moveMatch[3]) );
+        }
+    
+        i += moveMatch[0].length + moveMatch.index;
+      } else {
+        lookForMoves = false;
+      }
+    }
+
+    return game
+  }
+
+  // is a move feasible for this piece, given it's current location? 
+  // Note, it may include illegal moves e.g. en passant without another pawn,
+  // moving through other pieces, moving through check for castling
+  // Bote, both rank and file are numbers between 1 and 8 inclusive
+  function isMovePossible(piece, move) {
+    const fromFile = piece.file;
+    const fromRank = piece.rank;
+    const toFile = move.toFile;
+    const toRank = move.toRank;
+
+    if (fromFile === toFile && fromRank === toRank) {
+      return false
+    }
+
+    const isBlack = piece.code === piece.code.toLowerCase();
+
+    switch(piece.code) {
+      case "p":
+      case "P":
+        if (fromFile === toFile && !move.capture) {
+          if (isBlack && fromRank === 7) {
+            return toRank === 6 || toRank === 5
+          } else if (!isBlack && fromRank === 2) {
+            return toRank === 3 || toRank === 4
+          } else {
+            return toRank === fromRank + (isBlack ? -1 : 1)
+          }
+        } else if ( move.capture && (fromFile - 1 === toFile || fromFile + 1 === toFile) ) {
+          return toRank === fromRank + (isBlack ? -1 : 1)
+        }
+        return false
+
+      case "r":
+      case "R":
+        return fromFile === toFile || fromRank === toRank
+
+      case "n":
+      case "N": {
+        const colDelta = Math.abs(fromFile - toFile);
+        const rowDelta = Math.abs(fromRank - toRank);
+        return (colDelta === 2 && rowDelta === 1) || (colDelta === 1 && rowDelta === 2)
+      }
+
+      case "b":
+      case "B":
+        return Math.abs(fromFile - toFile) === Math.abs(fromRank - toRank)
+
+      case "q":
+      case "Q":
+        return Math.abs(fromFile - toFile) === Math.abs(fromRank - toRank) || fromFile === toFile || fromRank === toRank
+
+      case "k":
+      case "K":
+        return (Math.abs(fromFile - toFile) <= 1 && Math.abs(fromRank - toRank) <= 1) || // king move
+          ( !move.capture && fromFile === 5 && (fromRank === (isBlack ? 8 : 1)) && (toFile === 3 || toFile === 7) && (fromRank === toRank) ) // castle
+    }
+  }
+
+  function isMoveBlocked(layout, piece, move) {
+    if (piece.code.toUpperCase() !== "N") {
+      const fileDelta = Math.sign(move.toFile - piece.file);
+      const rankDelta = Math.sign(move.toRank - piece.rank);
+      let file = piece.file + fileDelta; // don't check (piece.file,piece.rank)
+      let rank = piece.rank + rankDelta;
+
+      while (file !== move.toFile || rank !== move.toRank) {
+        if (findPieceByFileRank(layout, file, rank)) {
+          return true
+        }
+        file += fileDelta;
+        rank += rankDelta;
+      }  
+    }
+
+    return move.capture ? false : !!findPieceByFileRank(layout, move.toFile, move.toRank) // only check (move.toFile,move.toRank) for captures
+  }
+
+  function findPieceByFileRank(layout, file, rank) {
+    return layout.find(piece => {
+      return piece.file === file && piece.rank === rank
+    })
+  }
+
+  function findPieceByMove(layout, move) {
+    return layout.find(piece => {
+      if (piece.code === move.code) {
+        if (isMovePossible(piece, move)) {
+          if (!move.fromFile && !move.fromRank) {
+            return !isMoveBlocked(layout, piece, move)
+          } else {
+            return (!move.fromFile || piece.file === move.fromFile) && (!move.fromRank || piece.rank === move.fromRank)
+          }
+        }
+      }
+    })
+  }
+
+  function applyMove(fen, move) {
+    const actions = [];
+
+    const piece = findPieceByMove(fen.layout, move);
+    if (!piece) {
+      throw Error(`unable to find piece for move`)
+    }
+
+    const isPawn = piece.code === "P" || piece.code === "p";
+    const isBlack = piece.code === piece.code.toLowerCase();
+
+    if (move.castle) {
+      const kingside = move.castle.toUpperCase() === 'K';
+      const rook = findPieceByFileRank(fen.layout, kingside ? 8 : 1, isBlack ? 8 : 1);
+      if (!rook) {
+        throw Error(`unable to find rook to castle`)
+      }
+
+      actions.push({ type: 'castle', king: piece, rook, kingside });
+
+      piece.file = kingside ? 7 : 3;
+      rook.file = kingside ? 6 : 4;
+      fen.enPassant = undefined;
+
+    } else {
+
+      actions.push({ type: 'move', piece, fromFile: piece.file, fromRank: piece.rank, toFile: move.toFile, toRank: move.toRank } );
+
+      if (move.capture) {
+        const capturedPiece = findPieceByFileRank(fen.layout, move.toFile, move.toRank) || (isPawn && findEnPassantPiece(fen));
+        if (!capturedPiece) {
+          throw Error(`unable to find piece to capture`)
+        }
+    
+        actions.push({ type: "capture", capturedPiece, capturedIndex: fen.capturedPieces.length });
+    
+        fen.capturedPieces.push(capturedPiece);  
+        fen.layout.splice( fen.layout.indexOf(capturedPiece), 1 );
+    
+      }
+
+      if (isPawn && Math.abs(piece.rank - move.toRank) == 2) {
+        fen.enPassant = { file: piece.file, rank: (piece.rank + move.toRank)/2 };
+      } else {
+        fen.enPassant = undefined;
+      }
+    
+      // must be after the capturedPiece check
+      piece.file = move.toFile;
+      piece.rank = move.toRank;
+
+      if (move.promote) {
+        const newPiece = {code: move.promote, file: move.toFile, rank: move.toRank};
+    
+        actions.push({ type: "promote", piece, newPiece, file: move.toFile, rank: move.toRank, capturedIndex: fen.capturedPieces.length });
+
+        fen.layout.splice( fen.layout.indexOf(piece), 1 );
+        fen.capturedPieces.push(piece);
+        fen.layout.push(newPiece);
+      }
+
+    }
+
+    if (!isPawn && !move.capture) {
+      fen.halfMove++;
+    } else {
+      fen.halfMove = 0;
+    }
+
+    if (isBlack) {
+      fen.blackKingCastle = fen.blackKingCastle && piece.code !== "k" && (piece.code !== "r" || piece.file !== 8);
+      fen.blackQueenCastle = fen.blackKingCastle && piece.code !== "k" && (piece.code !== "r" || piece.file !== 1);
+      fen.fullMove++;
+    } else {
+      fen.whiteKingCastle = fen.whiteKingCastle && piece.code !== "K" && (piece.code !== "R" || piece.file !== 8);
+      fen.whiteQueenCastle = fen.whiteKingCastle && piece.code !== "K" && (piece.code !== "R" || piece.file !== 1);
+    }
+
+    return actions
+  }
+
   /**
    * @typedef {{x: number, y: number, z: number}} VecXYZ
    * @typedef {{min: VecXYZ, max: VecXYZ}} Extent
@@ -1799,6 +2291,233 @@
 
   //   return indices
   // }
+
+  const calcMatrixWorld = (function() {
+    const quaternion = new THREE.Quaternion();
+    const position = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+
+    return function calcMatrixWorld(instancedMesh, index, outMatrixWorld = new THREE.Matrix4()) {
+      getQuaternionAt(instancedMesh, index, quaternion);
+      getPositionAt(instancedMesh, index, position);
+      getScaleAt(instancedMesh, index, scale);
+    
+      outMatrixWorld.compose(position, quaternion, scale);
+      outMatrixWorld.premultiply(instancedMesh.matrixWorld);
+      return outMatrixWorld
+    }
+  })();
+
+
+  const calcOffsetMatrix = (function() {
+    const instancedMatrixWorld = new THREE.Matrix4();
+
+    return function calcOffsetMatrix(base3D, instancedMesh, index, outOffsetMatrix = new THREE.Matrix4()) {
+      calcMatrixWorld(instancedMesh, index, instancedMatrixWorld);
+      outOffsetMatrix.getInverse(base3D.matrixWorld).multiply(instancedMatrixWorld);
+      return outOffsetMatrix
+    }  
+  })();
+
+
+  const applyOffsetMatrix = (function() {
+    const invParentMatrix = new THREE.Matrix4();
+    const newMatrix = new THREE.Matrix4(); 
+    const quaternion = new THREE.Quaternion();
+    const position = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    
+    return function applyOffsetMatrix(base3D, instancedMesh, index, offsetMatrix) {
+      invParentMatrix.getInverse(instancedMesh.parent.matrixWorld);  
+      newMatrix.multiplyMatrices(base3D.matrixWorld, offsetMatrix); // determine new world matrix
+      newMatrix.premultiply(invParentMatrix); // convert to a local matrix
+      newMatrix.decompose(position, quaternion, scale);
+
+      setPositionAt(instancedMesh, index, position);
+      setQuaternionAt(instancedMesh, index, quaternion);
+    }
+  })();
+
+
+  function createMesh(obj3D, count) {
+    const mesh = obj3D ? obj3D.getObjectByProperty("isMesh", true) : undefined;
+    if (!mesh || !mesh.geometry || !mesh.material) {
+      return undefined
+    }
+
+    function onBeforeCompile(oldFunction) {
+      return function onBeforeCompile(shader) {
+        if (oldFunction) {
+          oldFunction(shader);
+        }
+
+        let vertexShader = shader.vertexShader;
+        let fragmentShader = shader.fragmentShader;
+    
+        vertexShader = vertexShader.replace('void main()', `
+      attribute vec3 instancePosition;
+      attribute vec4 instanceQuaternion;
+      attribute vec4 instanceColor;
+      attribute float instanceScale;
+  
+      varying vec4 vInstanceColor;
+  
+      vec3 applyQuaternion( const vec3 v, const vec4 q ) 
+      {
+        return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
+      }
+  
+      void main()`);
+    
+        vertexShader = vertexShader.replace('#include <color_vertex>', `
+      #include <color_vertex>
+      vInstanceColor = instanceColor;`);
+    
+        vertexShader = vertexShader.replace('#include <begin_vertex>', `
+      vec3 transformed = applyQuaternion( position*instanceScale, instanceQuaternion ) + instancePosition;`);
+    
+        vertexShader = vertexShader.replace('#include <defaultnormal_vertex>', `
+      vec3 transformedNormal = normalMatrix * applyQuaternion( objectNormal/instanceScale, -instanceQuaternion );
+      
+      #ifdef FLIP_SIDED
+        transformedNormal = - transformedNormal;
+      #endif
+  
+      #ifdef USE_TANGENT
+        vec3 transformedTangent = normalMatrix * applyQuaternion( objectTangent/instanceScale, -instanceQuaternion );
+        #ifdef FLIP_SIDED
+          transformedTangent = - transformedTangent;
+        #endif
+      #endif`);
+    
+        fragmentShader = fragmentShader.replace('#include <color_pars_fragment>', `
+      #include <color_pars_fragment>
+      varying vec4 vInstanceColor;`);
+    
+        fragmentShader = fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      diffuseColor *= vInstanceColor;`);
+    
+        shader.vertexShader = vertexShader;
+        shader.fragmentShader = fragmentShader;
+      }
+    }
+
+    const FLOATS_PER_QUATERNION = 4;
+    const FLOATS_PER_POSITION = 3;
+    const FLOATS_PER_COLOR = 3;
+    const FLOATS_PER_SCALE = 3;
+
+    const quaternions = new Float32Array(count*FLOATS_PER_QUATERNION);
+    const positions = new Float32Array(count*FLOATS_PER_POSITION);
+    const scales = new Float32Array(count*FLOATS_PER_SCALE);
+    const colors = new Float32Array(count*FLOATS_PER_COLOR).fill(1);
+
+    for (let i = 0; i < count; i++) {
+      quaternions[i*FLOATS_PER_QUATERNION + 3] = 1;
+    }
+
+    const instancePosition = new THREE.InstancedBufferAttribute(positions, FLOATS_PER_POSITION);
+    const instanceQuaternion = new THREE.InstancedBufferAttribute(quaternions, FLOATS_PER_QUATERNION);
+    const instanceScale = new THREE.InstancedBufferAttribute(scales, FLOATS_PER_SCALE);
+    const instanceColor = new THREE.InstancedBufferAttribute(colors, FLOATS_PER_COLOR);
+
+    const instancedGeometry = new THREE.InstancedBufferGeometry().copy(mesh.geometry);
+    instancedGeometry.maxInstancedCount = count;
+
+    instancedGeometry.addAttribute("instancePosition", instancePosition);
+    instancedGeometry.addAttribute("instanceQuaternion", instanceQuaternion);
+    instancedGeometry.addAttribute("instanceScale", instanceScale);
+    instancedGeometry.addAttribute("instanceColor", instanceColor);
+
+    let instancedMaterial = mesh.material;
+
+    // patch shaders
+    if (Array.isArray(mesh.material)) {
+      instancedMaterial = mesh.material.map(x => x.clone());
+      instancedMaterial.forEach(x => x.onBeforeCompile = onBeforeCompile(x.onBeforeCompile));
+    } else {
+      instancedMaterial = mesh.material.clone();
+      instancedMaterial.onBeforeCompile = onBeforeCompile(instancedMaterial.onBeforeCompile);
+    }
+
+    const instancedMesh = new THREE.Mesh(instancedGeometry, instancedMaterial);
+    instancedMesh.frustumCulled = false;
+
+    return instancedMesh
+  }
+
+
+  function setPositionAt(instancedMesh, index, xOrVec3, y, z) {
+    const position = instancedMesh.geometry.getAttribute("instancePosition");
+    if (typeof xOrVec3 === "object") {
+      position.setXYZ(index, xOrVec3.x, xOrVec3.y, xOrVec3.z);
+    } else {
+      position.setXYZ(index, xOrVec3, y, z);
+    }
+    position.needsUpdate = true;
+  }
+
+
+  function getPositionAt(instancedMesh, index, outPosition = new THREE.Vector3()) {
+    const position = instancedMesh.geometry.getAttribute("instancePosition");
+    outPosition.x = position.getX(index);
+    outPosition.y = position.getY(index);
+    outPosition.z = position.getZ(index);
+    return outPosition
+  }
+
+
+  function setQuaternionAt(instancedMesh, index, xOrQuaternion, y, z, w) {
+    const quaternion = instancedMesh.geometry.getAttribute("instanceQuaternion");
+    if (typeof xOrQuaternion === "object") {
+      quaternion.setXYZW(index, xOrQuaternion.x, xOrQuaternion.y, xOrQuaternion.z, xOrQuaternion.w);
+    } else {
+      quaternion.setXYZW(index, xOrQuaternion, y, z, w);
+    }
+    quaternion.needsUpdate = true;
+  }
+
+
+  function getQuaternionAt(instancedMesh, index, outQuaternion = new THREE.Quaternion()) {
+    const quaternion = instancedMesh.geometry.getAttribute("instanceQuaternion");
+    outQuaternion.x = quaternion.getX(index);
+    outQuaternion.y = quaternion.getY(index);
+    outQuaternion.z = quaternion.getZ(index);
+    outQuaternion.w = quaternion.getW(index);
+    return outQuaternion
+  }
+
+
+  function setColorAt(instancedMesh, index, rOrColor, g, b) {
+    const color = instancedMesh.geometry.getAttribute("instanceColor");
+    if (typeof rOrColor === "object") {
+      color.setXYZ(index, rOrColor.r, rOrColor.g, rOrColor.b);
+    } else {
+      color.setXYZ(index, rOrColor, g, b);
+    }
+    color.needsUpdate = true;
+  }
+
+
+  function setScaleAt(instancedMesh, index, xOrVec3, y, z) {
+    const scale = instancedMesh.geometry.getAttribute("instanceScale");
+    if (typeof xOrVec3 === "object") {
+      scale.setXYZ(index, xOrVec3.x, xOrVec3.y, xOrVec3.z);
+    } else {
+      scale.setXYZ(index, xOrVec3, y, z);
+    }
+    scale.needsUpdate = true;
+  }
+
+
+  function getScaleAt(instancedMesh, index, outScale = new THREE.Vector3()) {
+    const scale = instancedMesh.geometry.getAttribute("instanceScale");
+    outScale.x = scale.getX(index);
+    outScale.y = scale.getY(index);
+    outScale.z = scale.getZ(index);
+    return outScale
+  }
 
   /** @type {(a: number, b: number, t: number) => number} */
   function lerp(a, b, t) {
@@ -2136,6 +2855,217 @@
     }
     
   })();
+
+  function isNetworked(component) {
+    let curEntity = component.el;
+
+    while(curEntity && curEntity.components && !curEntity.components.networked) {
+      curEntity = curEntity.parentNode;
+    }
+
+    return curEntity && curEntity.components && curEntity.components.networked && curEntity.components.networked.data
+  }
+
+  function takeOwnership(component) {
+    if (typeof NAF === "object" && isNetworked(component)) {
+      NAF.utils.takeOwnership(component.el);
+    } 
+  }
+
+  function isMine(component) {
+    if (typeof NAF === "object" && isNetworked(component)) {
+      const owner = NAF.utils.getNetworkOwner(component.el);
+      return !owner || owner === NAF.clientId
+    }
+    return true
+  }
+
+  function getClientId() {
+    return typeof NAF === "object" ? NAF.clientId : undefined
+  }
+
+  function networkSystem(componentName) {
+
+    return {
+      registerNetworking(component, callbacks) {
+        if (typeof NAF === "object") {
+          const el = component.el;
+          console.assert(!this.networkCallbacks.has(component), `component already registered`);
+          this.networkCallbacks.set(component, callbacks);
+    
+          // if NAF.client is not set then requestSync() will be called from onConnected
+          // if networkId is not set then requestSync() will be called from onEntityCreated
+          if (NAF.clientId && NAF.utils.getNetworkId(el)) {
+            this.requestSync(component);
+          }
+    
+          if (typeof callbacks.onOwnershipGained === "function") {
+            el.addEventListener("ownership-gained", callbacks.onOwnershipGained);
+          }
+    
+          if (typeof callbacks.onOwnershipLost === "function") {
+            el.addEventListener("ownership-lost", callbacks.onOwnershipLost);
+          }
+    
+          if (typeof callbacks.onOwnershipChanged === "function") {
+            el.addEventListener("ownership-changed", callbacks.onOwnershipChanged);
+          }
+        }
+      },
+    
+      unregisterNetworking(component) {
+        if (typeof NAF === "object") {
+          console.assert(this.networkCallbacks.has(component), `component not registered`);
+          const el = component.el;
+          const callbacks = this.networkCallbacks.get(component);
+    
+          if (typeof callbacks.onOwnershipGained === "function") {
+            el.removeEventListener("onOwnershipGained", callbacks.onOwnershipGained);
+          }
+    
+          if (typeof callbacks.onOwnershipLost === "function") {
+            el.removeEventListener("onOwnershipLost", callbacks.onOwnershipLost);
+          }
+    
+          if (typeof callbacks.onOwnershipChanged === "function") {
+            el.removeEventListener("onOwnershipChanged", callbacks.onOwnershipChanged);
+          }
+    
+          this.networkCallbacks.delete(component);
+        }
+      },
+    
+      setupNetwork() {
+        if (typeof NAF === "object") {
+          this.networkCache = {};
+          this.networkCallbacks = new Map();
+          this.networkPacket = {};
+    
+          NAF.connection.subscribeToDataChannel(componentName, (senderId, type, packet, targetId) => {
+            const entity = NAF.entities.getEntity(packet.networkId);
+            const component = entity ? entity.components[componentName] : undefined;
+    
+            if (packet.data === "NETRequestSync") {
+              if (component && NAF.clientId === NAF.utils.getNetworkOwner(entity)) {
+                const callbacks = this.networkCallbacks.get(component);
+                if (typeof callbacks.requestSync === "function") {
+                  callbacks.requestSync(senderId);
+                }  
+              }
+    
+            } else if (component) {
+              const callbacks = this.networkCallbacks.get(component);
+              if (typeof callbacks.receiveNetworkData === "function") {
+                callbacks.receiveNetworkData(packet.data, senderId);
+              }
+    
+            } else {
+              // we've received a packet for an element that does not yet exist, so cache it
+              // TODO do we need an array of packets?
+              packet.senderId = senderId;
+              this.networkCache[packet.networkId] = packet;
+            }
+          });
+    
+          this.onEntityCreated = this.onEntityCreated.bind(this);
+          this.onClientConnected = this.onClientConnected.bind(this);
+          this.onClientDisconnected = this.onClientDisconnected.bind(this);
+          this.onConnected = this.onConnected.bind(this);
+    
+          if (!NAF.clientId) {
+            document.body.addEventListener("connected", this.onConnected);
+          }
+    
+          document.body.addEventListener("entityCreated", this.onEntityCreated);
+          document.body.addEventListener("clientConnected", this.onClientConnected);
+          document.body.addEventListener("clientDisconnected", this.onClientDisconnected);
+        }
+      },
+    
+      shutdownNetwork() {
+        if (typeof NAF === "object") {
+          NAF.connection.unsubscribeToDataChannel(componentName);
+    
+          document.body.removeEventListener("connected", this.onConnected); // ok to remove even if never added
+          document.body.removeEventListener("entityCreated", this.onEntityCreated);
+          document.body.removeEventListener("clientConnected", this.onClientConnected);
+          document.body.removeEventListener("clientDisconnected", this.onClientDisconnected);
+    
+          console.assert(this.networkCallbacks.length === 0, `missing calls to unregisterNetworking(). Some components are still registered`);
+          delete this.networkCallbacks;
+          delete this.networkCache;
+        }
+      },
+    
+      broadcastNetworkData(component, data) {
+        this.sendNetworkData(component, data, undefined);
+      },
+    
+      sendNetworkData(component, data, targetId) {
+        if (typeof NAF === "object") {
+          const networkId = NAF.utils.getNetworkId(component.el);
+          if (networkId) {
+            this.networkPacket.networkId = networkId;
+            this.networkPacket.data = data;
+            if (targetId) {
+              NAF.connection.sendDataGuaranteed(targetId, componentName, this.networkPacket);
+            } else {
+              NAF.connection.broadcastData(componentName, this.networkPacket);
+            }
+          }
+        }
+      },
+    
+      onConnected(event) {
+        this.networkCallbacks.forEach((_, component) => {
+          this.requestSync(component);
+        });
+        document.body.removeEventListener("connected", this.onConnected);
+      },
+    
+      onEntityCreated(event) {
+        const el = event.detail.el;
+        const component = el.components[componentName];
+        const networkId = NAF.utils.getNetworkId(el);
+        const packet = networkId ? this.networkCache[networkId] : undefined;
+    
+        if (component && packet) {
+          const callbacks = this.networkCallbacks.get(component);
+          if (typeof callbacks.receiveNetworkData === "function") {
+            callbacks.receiveNetworkData(packet.data, packet.senderId);
+          }
+          delete this.networkCache[networkId];
+        }
+    
+        if (component && NAF.clientId) {
+          this.requestSync(component);
+        }
+      },
+    
+      onClientConnected(event) {
+        const clientId = event.detail.clientId;
+        this.networkCallbacks.forEach((callbacks) => {
+          if (typeof callbacks.onClientConnected === "function") {
+            callbacks.onClientConnected(event);
+          }
+        });
+      },
+    
+      onClientDisconnected(event) {
+        const clientId = event.detail.clientId;
+        this.networkCallbacks.forEach((callbacks) => {
+          if (typeof callbacks.onClientDisconnected === "function") {
+            callbacks.onClientDisconnected(event);
+          }
+        });
+      },
+    
+      requestSync(component) {
+        this.broadcastNetworkData(component, "NETRequestSync");
+      },
+    
+    }
+  }
 
   /** @type {<AN extends VecXYZ, AX extends VecXYZ, BN extends VecXYZ, BX extends VecXYZ>(boxAMin: AN, boxAMax: AX, affineA: Affine4, boxBMin: BN, boxBMax: BX, affineB: Affine4) => boolean} */
   function boxWithBox(boxAMin, boxAMax, affineA, boxBMin, boxBMax, affineB) {
@@ -2625,6 +3555,23 @@
     pos.fromArray(vertices, index);
   }
 
+  function calcOffsetMatrix$1(base3D, offset3D, outOffsetMatrix = new THREE.Matrix4()) {
+    outOffsetMatrix.getInverse(base3D.matrixWorld).multiply(offset3D.matrixWorld);
+    return outOffsetMatrix
+  }
+
+  const applyOffsetMatrix$1 = (function() {
+    const invParentMatrix = new THREE.Matrix4();
+    const newMatrix = new THREE.Matrix4(); 
+    
+    return function applyOffsetMatrix(base3D, offset3D, offsetMatrix) {
+      invParentMatrix.getInverse(offset3D.parent.matrixWorld);  
+      newMatrix.multiplyMatrices(base3D.matrixWorld, offsetMatrix); // determine new world matrix
+      newMatrix.premultiply(invParentMatrix); // convert to a local matrix
+      newMatrix.decompose(offset3D.position, offset3D.quaternion, offset3D.scale);
+    }
+  })();
+
   AFRAME.registerComponent("chalk", {
     dependencies: ["raycaster"],
 
@@ -2793,35 +3740,49 @@
     } )(),
   });
 
-  const WHITE_POSITIONS = "a1,b1,c1,d1,e1,f1,g1,h1,a2,b2,c2,d2,e2,f2,g2,h2".split(",");
-  const BLACK_POSITIONS = "a8,b8,c8,d8,e8,f8,g8,h8,a7,b7,c7,d7,e7,f7,g7,h7".split(",");
-  const X_AXIS = {x:1, y:0, z:0};
-  const Y_AXIS = {x:0, y:1, z:0};
-  const Z_AXIS = {x:0, y:0, z:1};
+  const MESHES_ORDER = "rnbqkpRNBQKP".split("");
+  const NUM_RANKS = 8;
+  const NUM_FILES = 8;
+  const CAPTURED_SIZE = 10;
+  const URL_REGEX = /url\((.*)\)/;
+  const toLowerCase = (str) => str.toLowerCase();
 
-  function getMaterial(obj3D) {
-    const mesh = obj3D.getObjectByProperty("isMesh", true);
-    if (mesh) {
-      return mesh.material
-    }
-  }
+  // Network the chess component.  The owner manages the AI, and replay, but any client can provide human moves 
+  // (although move validation is always handled by the owner).
+  AFRAME.registerSystem("chess", {
 
-  function setMaterial(obj3D, material) {
-    const mesh = obj3D.getObjectByProperty("isMesh", true);
-    if (mesh) {
-      return mesh.material = material
-    }
-  }
+    ...networkSystem("chess"),
+
+    init() {
+      this.setupNetwork();
+    },
+
+    remove() {
+      this.shutdownNetwork();
+    },
+
+  });
+
 
   AFRAME.registerComponent("chess", {
     schema: {
-      src: { default: "" },
-      whitePieces: { default: "" },
-      blackPieces: { default: "" },
-      boardMesh: { default: "" },
-      blackColor: { type: "color", default: "" },
-      whiteColor: { type: "color", default: "" },
-      debug: { default: true },
+      model: { default: "https://cdn.jsdelivr.net/gh/harlyq/aframe-harlyq-components@master/examples/assets/chess_set/chess_set.glb" },
+      meshes: { default: "rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn" },
+      boardMesh: { default: "board" },
+      blackColor: { type: "color", default: "#444" },
+      whiteColor: { type: "color", default: "#eee" },
+      highlightColor: { type: "color", default: "#ff0" },
+      fen: { default: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" },
+      pgn: { default: "" },
+      debug: { default: false },
+      boardMoveSpeed: { default: 4 },
+      replayTurnDuration: { default: .5 },
+      mode: { oneOf: ["freestyle", "replay", "static", "game"], default: "freestyle", parse: toLowerCase },
+      aiDuration: { default: 1 },
+      whitePlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
+      blackPlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
+      maxCountPerPiece: { default: 8 },
+      aiWorker: { default: "https://cdn.jsdelivr.net/gh/harlyq/aframe-harlyq-components@master/examples/garbochess.js" }
     },
 
     init() {
@@ -2830,168 +3791,896 @@
       this.onHoverEnd = this.onHoverEnd.bind(this);
       this.onGrabStart = this.onGrabStart.bind(this);
       this.onGrabEnd = this.onGrabEnd.bind(this);
+      this.onReset = this.onReset.bind(this);
 
       this.el.addEventListener("object3dset", this.onObject3dSet);
       this.el.addEventListener("hoverstart", this.onHoverStart);
       this.el.addEventListener("hoverend", this.onHoverEnd);
       this.el.addEventListener("grabstart", this.onGrabStart);
-      this.el.addEventListener("grabrend", this.onGrabEnd);
+      this.el.addEventListener("grabend", this.onGrabEnd);
+      this.el.addEventListener("reset", this.onReset);
 
-      this.oldMaterialMap = new Map();
-      this.hoverMaterial = new THREE.MeshStandardMaterial ( { color: 0xffff00 } );
-      this.whiteMaterial = undefined;
-      this.blackMaterial = undefined;
+      this.chessMaterial = new THREE.MeshStandardMaterial();
+      this.blackColor = new THREE.Color(.2,.2,.2);
+      this.whiteColor = new THREE.Color(.8,.8,.8);
+      this.highlightColor = new THREE.Color(1,1,0);
+      this.gameBounds = new THREE.Box3();
+      this.pgnAST = undefined;
+      this.rotate180Quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI);
+      this.board = {
+        name: "",
+        board3D: undefined,
+        bounds: new THREE.Box3(),
+      };
+      this.garbochess = undefined;
+
+      this.state = {
+        // global state
+        fenAST: { layout: [], capturedPieces: [], player: "white" },
+        replayIndex: 0,
+        currentPlayer: "white",
+        globalMode: "",
+        playerInfo: {},
+
+        // local state
+        actions: [],
+        grabMap: new Map(),
+        movers: [],
+        nextAIMove: "",
+        nextHumanMove: "",
+        pickingSide: "none",
+        delay: 0,
+        localMode: "setup",
+        pendingLocalMove: "",
+        waitingForSetup: false,
+      };
+
+      const data = this.data;
+      this.el.setAttribute("gltf-model", data.model);
+      this.meshInfos = this.parseMeshes(data.meshes);
+      this.board.name = data.boardMesh.trim();
+      this.pendingMode = "";
+
+      this.system.registerNetworking(this, { 
+        onClientDisconnected: this.onClientDisconnected.bind(this),
+        onOwnershipGained: this.onOwnershipGained.bind(this),
+        onOwnershipLost: this.onOwnershipLost.bind(this),
+        receiveNetworkData: this.receiveNetworkData.bind(this),
+        requestSync: this.requestSync.bind(this),
+      });
     },
 
     remove() {
+      this.system.unregisterNetworking(this);
+
       this.el.removeEventListener("object3dset", this.onObject3dSet);
       this.el.removeEventListener("hoverstart", this.onHoverStart);
       this.el.removeEventListener("hoverend", this.onHoverEnd);
       this.el.removeEventListener("grabstart", this.onGrabStart);
-      this.el.removeEventListener("grabrend", this.onGrabEnd);
+      this.el.removeEventListener("grabend", this.onGrabEnd);
+      this.el.removeEventListener("reset", this.onReset);
     },
 
-    update() {
+    update(oldData) {
       const data = this.data;
-      this.el.setAttribute("gltf-model", data.src);
 
-      function parsePieces(str, positions, debugStr) {
-        const pieces = str.split(",").map((x,i) => ({ index: i, meshName: x.trim(), obj3D: undefined, position: positions[i] }) );
-
-        if (pieces.length < positions.length) {
-          error(this, `not enough ${debugStr}, listed ${pieces.length}, expecting ${positions.length}`);
-        }
-        
-        return pieces
+      if (data.pgn !== oldData.pgn) {
+        this.pgnAST = this.parsePGN(data.pgn);
       }
 
-      this.blackPieces = parsePieces(data.blackPieces, WHITE_POSITIONS, "blackPieces");
-      this.whitePieces = parsePieces(data.whitePieces, BLACK_POSITIONS, "whitePieces");
-      this.board = { meshName: data.boardMesh.trim(), obj3D: undefined, bounds: new THREE.Box3(), up: new THREE.Vector3() };
+      if (data.blackColor) this.blackColor.set(data.blackColor);
+      if (data.whiteColor) this.whiteColor.set(data.whiteColor);
+      this.highlightColor.set(data.highlightColor);
 
-      this.blackMaterial = data.blackColor ? new THREE.MeshStandardMaterial({color: data.blackColor}) : undefined;
-      this.whiteMaterial = data.whiteColor ? new THREE.MeshStandardMaterial({color: data.whiteColor}) : undefined;
+      if (isMine(this)) {
+        const state = this.state;
+        let gameChanged = false;
+
+        if (data.mode !== oldData.mode) {
+          state.globalMode = data.mode;
+          gameChanged = true;
+        }
+    
+        if (data.whitePlayer !== oldData.whitePlayer || data.blackPlayer !== oldData.blackPlayer) {
+          state.playerInfo["white"] = { playerType: data.whitePlayer !== "human" ? "ai" : "human", networkClientId: undefined };
+          state.playerInfo["black"] = { playerType: data.blackPlayer !== "human" ? "ai" : "human", networkClientId: undefined };
+          gameChanged = true;
+        }
+      
+        if (gameChanged) {
+          this.resetGame(state.globalMode);
+        }
+      }
+    },
+
+    tick(time, deltaTime) {
+      const dt = Math.min(0.1, deltaTime/1000);
+      const data = this.data;
+      const state = this.state;
+
+      switch (state.localMode) {
+        case "freestyle":
+          this.grabTick();
+          break
+        case "replay":
+          this.actionsTick(dt, data.boardMoveSpeed);
+          this.replayTick();
+          break
+        case "game":
+          this.actionsTick(dt, data.boardMoveSpeed);
+          if (state.playerInfo[state.currentPlayer].playerType === "ai") {
+            this.aiTick();
+          } else {
+            this.grabTick();
+            this.humanTick();
+          }
+          break
+        case "network":
+          this.actionsTick(dt, state.actions.length < 4 ? data.boardMoveSpeed : data.boardMoveSpeed*4);
+          if (state.actions.length === 0) {
+            this.grabTick(); // in case they can grab things
+          }
+      }
+    },
+
+    setCurrentPlayer(player) {
+      const state = this.state;
+      const data = this.data;
+      const playerInfo = state.playerInfo[player];
+
+      state.currentPlayer = player;
+      state.fenAST.player = player;
+
+      if (playerInfo.playerType === "ai") {
+        this.setupPicking("none");
+        state.nextAIMove = "";
+
+        if (isMine(this)) {
+          this.garbochess.postMessage("search " + data.aiDuration*1000);
+        }
+      } else {
+        state.nextHumanMove = "";
+        //this.garbochess.postMessage("possible")
+        this.setupHumanPicking(player);
+      }
+    },
+
+    nextTurn() {
+      this.setCurrentPlayer(this.state.currentPlayer === "white" ? "black" : "white");
+    },
+
+    parseMeshes(meshes) {
+      const meshesList = meshes.split(",");
+
+      if (meshesList.length !== MESHES_ORDER.length) {
+        error(this, `missing meshes, found ${meshesList.length}, expecting ${MESHES_ORDER.length}`);
+        return []
+
+      } else {
+        return Object.fromEntries( meshesList.map((x,i) => {
+          x = x.trim();
+          const rotate180 = x[x.length - 1] === "'";
+          return [MESHES_ORDER[i], { name: (rotate180 ? x.slice(0,-1) : x), rotate180, instancedMesh: undefined, nextIndex: 0 }] 
+        }) )
+      }
+    },
+
+    parseFEN(fen) {
+      return parseFEN(fen)
+    },
+
+    parsePGN(pgn) {
+      if (!pgn) {
+        return
+      }
+
+      const url = pgn.match(URL_REGEX);
+      if (url) {
+        fetch(url[1])
+          .then(response => {
+            if (!response.ok) error(this, `file: "${url[1]}" ${response.statusText}`);
+            return response.text()
+          })
+          .then(text => this.parsePGN(text));
+
+      } else {
+        this.pgnAST = parsePGN(pgn);
+        return this.pgnAST
+      }
+    },
+
+    resetGame(mode) {
+      console.assert(mode !== "network");
+      const state = this.state;
+
+      let fenStr = this.pgnAST && this.pgnAST["FEN"] ? this.pgnAST["FEN"] : this.data.fen;
+      fenStr = fenStr || FEN_DEFAULT;
+
+      state.fenAST = this.parseFEN( fenStr );
+      state.replayIndex = 0;
+
+      if (mode === "game") {
+        this.setupGameWorker();
+      }
+
+      this.releaseAllInstances();
+      this.setupMode(mode);
+    },
+
+    setupMode(mode) {
+      if (!this.chess3D || (mode === "game" && !this.garbochess)) {
+        this.pendingMode = mode;
+        return
+      }
+
+      if (this.data.debug) {
+        console.log("mode", mode);
+      }
+
+      const state = this.state;
+
+      state.actions.length = 0;
+      state.grabMap.clear();
+      state.movers.length = 0;
+      state.nextAIMove = "";
+      state.nextHumanMove = "";
+      state.delay = 0;
+      state.localMode = mode;
+
+      switch (mode) {
+        case "replay":
+          break
+
+        case "game":
+          this.garbochess.postMessage("position " + fenToString(state.fenAST));
+          break
+      }
+
+      this.setupBoard(state.fenAST);
+
+      // picking must be after setupBoard()
+      switch (mode) {
+        case "freestyle":
+          this.setupPicking("all");
+          break
+
+        case "game":
+        case "network":
+          this.setCurrentPlayer(state.fenAST.player);
+          break
+      }
     },
 
     createChessSet(chess3D) {
-      const grabSystem = this.el.sceneEl.systems["grab-system"];
-      const el = this.el;
-      const rotation180Quaternion = new THREE.Quaternion();
-      const boardSize = new THREE.Vector3();
       const self = this;
+      const data = this.data;
 
-      const obj3D = chess3D.getObjectByName(this.board.meshName);
-      if (!obj3D) {
-        error(this, `unable to find board mesh '${this.board.meshName}'`);
+      setOBBFromObject3D(this.gameBounds, chess3D);
+
+      const board3D = chess3D.getObjectByName(this.board.name);
+      if (!board3D) {
+        error(this, `unable to find board mesh '${this.board.name}'`);
       } else {
-        this.board.obj3D = obj3D;
-        this.board.bounds.setFromObject(obj3D);
-        this.board.bounds.getSize(boardSize);
-        this.board.up.copy(
-          boardSize.x < Math.min(boardSize.y, boardSize.z) ? X_AXIS :
-          boardSize.y < Math.min(boardSize.x, boardSize.z) ? Y_AXIS : Z_AXIS
-        );
-        rotation180Quaternion.setFromAxisAngle(this.board.up, Math.PI);
+        this.board.board3D = board3D;
+
+        // get bounds in board3D space
+        const invParentMatrix = new THREE.Matrix4().getInverse(board3D.parent.matrixWorld);
+        this.board.bounds.setFromObject(board3D);
+        this.board.bounds.applyMatrix4(invParentMatrix);
       }
 
-      function populatePieces(pieces, material, debugStr) {
-        for (let piece of pieces) {
-          const rotate180 = piece.meshName[piece.meshName.length - 1] === "'";
-          const meshName = rotate180 ? piece.meshName.slice(0,-1) : piece.meshName;
-          const obj3D = chess3D.getObjectByName(meshName);
+      let meshCounts = Object.fromEntries( MESHES_ORDER.map(code => [this.meshInfos[code].name, 0]) );
 
-          if (!obj3D) {
-            error(self, `unable to find ${debugStr} mesh '${meshName}'`);
+      // multiple meshInfos can use the same meshName e.g. white rook and black rook
+      for (let code of MESHES_ORDER) {
+        const meshName = this.meshInfos[code].name;
+        meshCounts[meshName] += data.maxCountPerPiece;
+      }
+
+      let cacheInstances = {};
+      const meshMatrix = new THREE.Matrix4();
+
+      for (let code in this.meshInfos) {
+        const meshInfo = this.meshInfos[code];
+        const meshName = meshInfo.name;
+        const cache = cacheInstances[meshName];
+
+        if (cache) {
+          meshInfo.instancedMesh = cache.instancedMesh;
+          meshInfo.startIndex = meshInfo.nextIndex = cache.nextIndex;
+          cache.nextIndex += data.maxCountPerPiece;
+
+        } else {
+          const mesh3D = chess3D.getObjectByName(meshName);
+
+          if (!mesh3D) {
+            error(self, `unable to find mesh '${meshName}'`);
           } else {
-            obj3D.visible = false;
+            mesh3D.visible = false;
+            mesh3D.material = this.chessMaterial;
+            meshInfo.instancedMesh = createMesh( mesh3D, meshCounts[meshName] );
 
-            const newObj3D = obj3D.clone();
-            newObj3D.visible = true;
-            if (material) {
-              newObj3D.material = material;
-            }
+            // scale and rotate to match the original mesh
+            meshMatrix.compose(meshInfo.instancedMesh.position, mesh3D.quaternion, mesh3D.scale);
+            meshInfo.instancedMesh.geometry.applyMatrix(meshMatrix);
 
-            if (rotate180) {
-              newObj3D.quaternion.premultiply(rotation180Quaternion);
-            }
+            meshInfo.nextIndex = meshInfo.startIndex = 0;
+            chess3D.add(meshInfo.instancedMesh);
 
-            chess3D.add(newObj3D);
-            piece.obj3D = newObj3D;
-
-            grabSystem.registerTarget(el, {obj3D:newObj3D, score: "horizontalnearest"});
+            cacheInstances[meshName] = { instancedMesh: meshInfo.instancedMesh, nextIndex: data.maxCountPerPiece };
           }
         }
       }
-
-      populatePieces(this.blackPieces, this.blackMaterial, "blackPieces");
-      populatePieces(this.whitePieces, this.whiteMaterial, "whitePieces");
-
     },
 
-    setupBoard() {
-      if (!this.board.obj3D || this.blackPieces.some(piece => !piece.obj3D) || this.whitePieces.some(piece => !piece.obj3D)) {
+    setupInstanceForPiece(piece) {
+      const meshInfo = this.meshInfos[piece.code];
+      const instancedMesh = meshInfo ? meshInfo.instancedMesh : undefined;
+
+      if (instancedMesh) {
+        const index = meshInfo.nextIndex++;
+
+        if (meshInfo.rotate180) {
+          const quaternion = new THREE.Quaternion();
+          getQuaternionAt( instancedMesh, index, quaternion );
+          setQuaternionAt( instancedMesh, index, quaternion.multiply(this.rotate180Quaternion) );
+        }
+
+        setScaleAt(instancedMesh, index, 1, 1, 1);
+
+        const isBlack = piece.code === piece.code.toLowerCase();
+        if (isBlack) {
+          setColorAt(instancedMesh, index, this.blackColor);
+        } else {
+          setColorAt(instancedMesh, index, this.whiteColor);
+        }
+
+        piece.index = index;
+        piece.instancedMesh = instancedMesh;
+      }
+    },
+
+    releaseAllInstances() {
+      for (let code of MESHES_ORDER) {
+        const meshInfo = this.meshInfos[code];
+        for (let i = meshInfo.startIndex; i < meshInfo.nextIndex; i++) {
+          setScaleAt(meshInfo.instancedMesh, i, 0, 0, 0);
+        }
+        meshInfo.nextIndex = meshInfo.startIndex;
+      }
+    },
+
+    setupHumanPicking(side) {
+      const playerInfo = this.state.playerInfo[side];
+      if (!playerInfo.networkClientId || playerInfo.networkClientId === getClientId()) {
+        this.setupPicking(side);
+      } else {
+        this.setupPicking("none");
+      }
+    },
+
+    setupPicking(side) {
+      const state = this.state;
+
+      if (side === state.pickingSide) {
+        return
+      }
+
+      const grabSystem = this.el.sceneEl.systems["grab-system"];
+      const el = this.el;
+      const layout = state.fenAST.layout;
+
+      const setupPiecePicking = piece => grabSystem.registerTarget(el, {obj3D: piece.instancedMesh, score: "closestforward", instanceIndex: piece.index});
+      const shutdownPiecePicking = piece => grabSystem.unregisterTarget(el, {obj3D: piece.instancedMesh, instanceIndex: piece.index});
+
+      if (state.pickingSide !== "none") {
+        // Note, ok to shutdown, even if we were never setup
+        state.fenAST.capturedPieces.forEach(shutdownPiecePicking);
+        layout.forEach(shutdownPiecePicking);
+      }
+
+      if (side !== "none") {
+        layout.forEach(piece => {
+          const isBlack = piece.code === piece.code.toLowerCase();
+          if (side === "all" || (isBlack && side === "black") || (!isBlack && side === "white")) {
+            setupPiecePicking(piece);
+          }
+        });
+      }
+
+      state.pickingSide = side;
+    },
+
+    setupBoard(fenAST) {
+      if ( !this.board.board3D || MESHES_ORDER.some(code => !this.meshInfos[code].instancedMesh) ) {
         return
       }
 
       const groundY = this.board.bounds.max.y;
-      for (let piece of this.blackPieces) {
-        const xz = this.xzFromPosition(this.board.bounds, piece.position);
-        piece.obj3D.position.set(xz.x, groundY, xz.z);
+
+      for (let piece of fenAST.layout) {
+        const xz = this.xzFromFileRank(this.board.bounds, piece.file, piece.rank);
+
+        if (!piece.instancedMesh) {
+          this.setupInstanceForPiece(piece);
+        }
+
+        setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z);
       }
 
-      for (let piece of this.whitePieces) {
-        const xz = this.xzFromPosition(this.board.bounds, piece.position);
-        piece.obj3D.position.set(xz.x, groundY, xz.z);
+      if (fenAST.capturedPieces) {
+        for (let i = 0; i < fenAST.capturedPieces.length; i++) {
+          const piece = fenAST.capturedPieces[i];
+          const offBoard = this.fileRankFromCaptured(i);
+          const xz = this.xzFromFileRank(this.board.bounds, offBoard.file, offBoard.rank);
+
+          if (!piece.instancedMesh) {
+            this.setupInstanceForPiece(piece);
+          }
+
+          setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z);
+        }
       }
     },
 
-    xzFromPosition(bounds, position) {
-      const col = position.charCodeAt(0) - 97; // a
-      const row = position.charCodeAt(1) - 49; // 1
+    // 1,1 => bottom left, supports fractional file and rank
+    xzFromFileRank(bounds, file, rank) {
       const w = bounds.max.x - bounds.min.x;
       const h = bounds.max.z - bounds.min.z;
-      return { x: bounds.min.x + (col + .5)*w/8, z: bounds.min.z + (row + .5)*h/8 }
+      return { x: bounds.min.x + (file - .5)*w/NUM_RANKS, z: bounds.max.z - (rank - .5)*h/NUM_FILES }
     },
 
-    positionFromXZ(bounds, x, z) {
+    fileRankFromXZ(bounds, x, z) {
       const w = bounds.max.x - bounds.min.x;
       const h = bounds.max.z - bounds.min.z;
-      const col = Math.trunc( 8*( x - bounds.min.x ) / w );
-      const row = Math.trunc( 8*( z - bounds.min.z ) / h );
-      return String.fromCharCode(col + 97, row + 49)
+      const file = Math.floor( NUM_FILES*( x - bounds.min.x ) / w ) + 1;
+      const rank = Math.floor( NUM_RANKS*( bounds.max.z - z ) / h ) + 1;
+      return file >= 1 && file <= NUM_FILES && rank >= 1 && rank <= NUM_RANKS ? {file,rank} : undefined
+    },
+
+    fileRankFromCaptured(capturedIndex) {
+      const offBoardFile = Math.floor(capturedIndex/CAPTURED_SIZE) + 10;
+      const offBoardRank = (capturedIndex % CAPTURED_SIZE)/CAPTURED_SIZE*NUM_RANKS + 1;
+      return {file: offBoardFile, rank: offBoardRank}
+    },
+
+    snapToBoard(piece, piecePosition) {
+      const destination = this.fileRankFromXZ(this.board.bounds, piecePosition.x, piecePosition.z);
+      if (destination) {
+        const pos = this.xzFromFileRank(this.board.bounds, destination.file, destination.rank);
+        const groundY = this.board.bounds.max.y;
+        setPositionAt(piece.instancedMesh, piece.index, pos.x, groundY, pos.z);
+      }
+      return destination
+    },
+
+    actionsTick(dt, speed) {
+      const state = this.state;
+
+      state.delay -= dt;
+
+      if (state.movers.length > 0) {
+
+        if (state.movers.length > 0) {
+          state.movers.forEach(mover => mover.tick(dt));
+          
+          if (state.movers.every(mover => mover.isComplete())) {
+            state.movers.length = 0;
+            state.actions.splice(0,1); // move to the next action
+          }
+        }
+
+      } else if (state.actions.length > 0) {
+        const action = state.actions[0];
+        const bounds = this.board.bounds;
+
+        switch (action.type) {
+          case "move": {
+            const piece = action.piece;
+            const moveMover = this.createMover(bounds, piece, action.fromFile, action.fromRank, action.toFile, action.toRank, speed);
+            state.movers.push( moveMover );
+            break
+          } 
+          case "capture": {
+            const capturedPiece = action.capturedPiece;
+            const offBoard = this.fileRankFromCaptured(action.capturedIndex);
+            const captureMover = this.createMover(bounds, capturedPiece, offBoard.file, offBoard.rank, offBoard.file, offBoard.rank, speed);
+            state.movers.push(captureMover);
+            break
+          }
+          case "promote": {
+            const newPiece = action.newPiece;
+
+            this.setupInstanceForPiece(newPiece);
+
+            const offBoard = this.fileRankFromCaptured(action.capturedIndex);
+            const promoteMover = this.createMover(bounds, newPiece, newPiece.file, newPiece.rank, newPiece.file, newPiece.rank, speed);
+            const pawnMover = this.createMover(bounds, action.piece, offBoard.file, offBoard.rank, offBoard.file, offBoard.rank, speed);
+            state.movers.push(promoteMover, pawnMover);
+            break
+          }
+          case "castle": {
+            const king = action.king;
+            const rook = action.rook;
+            const kingMover = this.createMover(bounds, king, 5, king.rank, action.kingside ? 7 : 3, king.rank, speed);
+            const rookMover = this.createMover(bounds, rook, action.kingside ? 8 : 1, rook.rank, action.kingside ? 6 : 4, rook.rank, speed);
+            state.movers.push(kingMover, rookMover);
+            break
+          }
+
+          default:
+            throw Error(`unknown action of type "${action.type}"`)
+        }
+      }
+    },
+
+    replayTick() {
+      const state = this.state;
+
+      if (state.delay <= 0 && state.movers.length === 0 && state.actions.length === 0 && this.pgnAST && this.pgnAST.moves[state.replayIndex]) {
+        state.actions = applyMove(state.fenAST, this.pgnAST.moves[state.replayIndex]); 
+        state.delay = state.actions ? this.data.replayTurnDuration : 0;
+
+        const move = this.pgnAST.moves[state.replayIndex];
+        const firstAction = state.actions[0];
+        if (firstAction.type === "move") { 
+          move.fromFile = firstAction.fromFile;
+          move.fromRank = firstAction.fromRank;
+        } else if (firstAction.type === "castle") {
+          move.fromFile = 5;
+          move.fromRank = firstAction.king.rank;
+        }
+        state.replayIndex++;
+
+        this.system.broadcastNetworkData(this, { command: "move", nextPlayer: state.currentPlayer, moveStr: coordToString(move), nextReplayIndex: state.replayIndex });
+      }
+    },
+
+    aiTick() {
+      const state = this.state;
+      const data = this.data;
+
+      if (state.movers.length === 0 && state.actions.length === 0 && this.garbochess && state.nextAIMove) {
+        const move = decodeCoordMove(state.fenAST, state.nextAIMove);
+        if (data.debug) {
+          console.log("AI", move.code === move.code.toLowerCase() ? "black" : "white", state.nextAIMove, sanToString(move));
+        }
+
+        state.actions = applyMove(state.fenAST, move);  
+        state.nextAIMove = "";
+        this.nextTurn();
+
+        this.system.broadcastNetworkData(this, { command: "move", nextPlayer: state.currentPlayer, moveStr: coordToString(move), nextReplayIndex: 0 });
+      }
+    },
+
+    grabTick() {
+      this.state.grabMap.forEach((grabInfo, piece) => {
+        applyOffsetMatrix(grabInfo.hand.object3D, piece.instancedMesh, piece.index, grabInfo.offsetMatrix);
+      });
+    },
+
+    humanTick() {
+      const data = this.data;
+      const state = this.state;
+
+      if (state.nextHumanMove) {
+        const move = decodeCoordMove(state.fenAST, state.nextHumanMove);
+        if (data.debug) {
+          console.log("HU", move.code === move.code.toLowerCase() ? "black" : "white", state.nextHumanMove, sanToString(move));
+        }
+
+        // state.actions = chessHelper.applyMove(state.fenAST, move)
+        applyMove(state.fenAST, move);
+        this.setupBoard(state.fenAST); // snap pieces
+        state.nextHumanMove = "";
+        this.nextTurn();
+
+        this.system.broadcastNetworkData(this, { command: "move", nextPlayer: state.currentPlayer, moveStr: coordToString(move), nextReplayIndex: 0 });
+
+      }
+    },
+
+    // speed is in tiles per second
+    // tick() returns true when the mover is complete
+    createMover(bounds, piece, startFile, startRank, endFile, endRank, speed) {
+      let elapsed = 0;
+      const totalTime = Math.hypot(endFile - startFile, endRank - startRank)/speed;
+      const self = this;
+
+      function tick(dt) {
+        elapsed += dt;
+
+        const ratio = THREE.Math.clamp(elapsed/totalTime, 0, 1);
+        const partialFile = (endFile - startFile)*ratio + startFile;
+        const partialRank = (endRank - startRank)*ratio + startRank;
+        const xz = self.xzFromFileRank(bounds, partialFile, partialRank);
+        const groundY = bounds.max.y;
+
+        setPositionAt(piece.instancedMesh, piece.index, xz.x, groundY, xz.z);
+      }
+
+      function isComplete() {
+        return elapsed > totalTime
+      }
+
+      return {
+        tick,
+        isComplete,
+      }
+    },
+
+    setupGameWorker() {
+      if (!this.garbochess) {
+        const state = this.state;
+
+        // perform this fetch and blob creation to work around same-origin policy
+        // this.garbochess = new Worker(this.data.aiWorker)
+        fetch(this.data.aiWorker).then(response => {
+          if (!response.ok) {
+            throw Error(`problem with file "${this.data.aiWorker}"`)
+          }
+          return response.text()
+        }).then(text => {
+          const workerSrc = new Blob([text], {type: 'text/javascript'});
+          const workerUrl = window.URL.createObjectURL(workerSrc);
+          this.garbochess = new Worker(workerUrl);
+
+          this.garbochess.onerror = (event) => {
+            throw Error(`problem with worker "${this.data.aiWorker}"`)
+          };
+    
+          this.garbochess.onmessage = (event) => {
+            if (this.data.debug) {
+              console.log(event.data);
+            }
+      
+            if (event.data.startsWith("pv")) ; else if (event.data.startsWith("message")) ; else if (event.data.startsWith("invalid")) {
+              if (state.playerInfo[state.currentPlayer].networkClientId) {
+                this.system.sendNetworkData(this, { command: "invalidMove" }, state.playerInfo[state.currentPlayer].networkClientId);
+              }
+              this.setupBoard(this.state.fenAST); // reset invalidly moved pieces
+    
+            } else if (event.data.startsWith("valid")) {
+              const commands = event.data.split(" ");
+              state.nextHumanMove = commands[1];
+            } else if (event.data.startsWith("options")) ; else {
+              state.nextAIMove = event.data;
+            }
+          };
+
+          this.setupMode(this.pendingMode);
+        });
+      }
     },
 
     onObject3dSet(event) {
-      this.createChessSet(event.detail.object);
-      this.setupBoard();
+      const data = this.data;
+      this.chess3D = event.detail.object;
+      this.createChessSet(this.chess3D);
+      this.setupMode(this.pendingMode);
     },
 
     onHoverStart(event) {
-      const obj3D = event.detail.obj3D;
-      if (obj3D) {
-        if (!this.oldMaterialMap.has(obj3D)) {
-          this.oldMaterialMap.set(obj3D, getMaterial(obj3D));
-          setMaterial(obj3D, this.hoverMaterial);
-        }
+      const instancedMesh = event.detail.obj3D;
+
+      if (Object.keys(this.meshInfos).find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+        const index = event.detail.instanceIndex;
+        setColorAt(instancedMesh, index, this.highlightColor);
       }
     },
 
     onHoverEnd(event) {
-      const obj3D = event.detail.obj3D;
-      if (obj3D) {
-        if (this.oldMaterialMap.has(obj3D)) {
-          setMaterial( obj3D, this.oldMaterialMap.get(obj3D) );
-          this.oldMaterialMap.delete(obj3D);
-        }
+      const instancedMesh = event.detail.obj3D;
+
+      if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+        const state = this.state;
+        const index = event.detail.instanceIndex;
+
+        // the piece were were hovering over may have been captured, so check the captured list as well
+        const piece = state.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index) || 
+          state.fenAST.capturedPieces.find(piece => piece.instancedMesh === instancedMesh && piece.index === index);
+
+        // Note, if a second controller is hovering over the same piece, we will lose the highlight
+        const isBlack = piece.code === piece.code.toLowerCase();
+        setColorAt(instancedMesh, index, isBlack ? this.blackColor : this.whiteColor);
       }
     },
 
     onGrabStart(event) {
+      const instancedMesh = event.detail.obj3D;
 
+      if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+        const state = this.state;
+        const hand = event.detail.hand;
+        const index = event.detail.instanceIndex;
+        const piece = state.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index);
+        const grabInfo = state.grabMap.get(piece);
+
+        if (grabInfo) {
+          // we grab this from another hand, so keep the original quaternion
+          grabInfo.offsetMatrix = calcOffsetMatrix(hand.object3D, instancedMesh, piece.index, grabInfo.offsetMatrix);
+          grabInfo.hand = hand;
+        } else {
+          state.grabMap.set(piece, { 
+            hand, 
+            offsetMatrix: calcOffsetMatrix(hand.object3D, instancedMesh, piece.index), 
+            startQuaternion: getQuaternionAt(instancedMesh, piece.index) 
+          });
+        }
+
+        this.system.broadcastNetworkData(this, { command: "setHuman", player: state.currentPlayer, networkClientId: getClientId() });
+      }
     },
 
     onGrabEnd(event) {
+      const instancedMesh = event.detail.obj3D;
 
+      if (MESHES_ORDER.find(code => this.meshInfos[code].instancedMesh === instancedMesh)) {
+        const state = this.state;
+        const hand = event.detail.hand;
+        const index = event.detail.instanceIndex;
+        const piece = state.fenAST.layout.find(piece => piece.instancedMesh === instancedMesh && piece.index === index);
+        const grabInfo = state.grabMap.get(piece);
+
+        // TODO freestyle can be placed anywhere, but game must be on the board, or be reset to it's original position
+        if (grabInfo && grabInfo.hand === hand) {
+          const piecePosition = getPositionAt(instancedMesh, index);
+          if (piecePosition.y < this.gameBounds.max.y) {
+            const destination = this.snapToBoard(piece, piecePosition);
+
+            // TODO handle promotion
+            if (state.localMode === "game" || state.localMode === "network") {
+              const humanMove = fileRankToCoord(piece.file, piece.rank) + fileRankToCoord(destination.file, destination.rank);
+
+              // Note, this move may be invalid
+              if (isMine(this)) {
+                this.garbochess.postMessage(humanMove);
+              } else {
+                state.pendingLocalMove = humanMove;
+                this.system.broadcastNetworkData(this, { command: "possibleMove", player: state.currentPlayer, moveStr: humanMove });
+              }
+            }
+          }
+
+          setQuaternionAt( instancedMesh, index, grabInfo.startQuaternion );
+          state.grabMap.delete(piece);
+        }
+      }
+    },
+
+    onReset() {
+      if (isMine(this)) {
+        this.resetGame(this.state.globalMode);
+      }
+    },
+
+    // Networking
+    getSetupPacket() {
+      const state = this.state;
+      return {
+        command: "setup",
+        fen: fenToString( state.fenAST ),
+        captureStr: state.fenAST.capturedPieces.map(piece => piece.code).join(""),
+        playerInfo: state.playerInfo,
+        globalMode: state.globalMode,
+        replayIndex: state.replayIndex,
+      }
+    },
+
+    requestSync(senderId) {
+      this.system.sendNetworkData(this, this.getSetupPacket(), senderId);
+    },
+
+    receiveNetworkData(packet, senderId) {
+      const state = this.state;
+      const owner = NAF.utils.getNetworkOwner(this.el);
+      const fromOwner = senderId === owner;
+
+      if (this.state.waitingForSetup && packet.command !== "setup") {
+        return // ignore all non-setup packets until we are setup
+      }
+
+      switch (packet.command) {
+        case "setup":
+          if (fromOwner) {
+            state.waitingForSetup = false;
+
+            state.fenAST = this.parseFEN( packet.fen );
+            state.fenAST.capturedPieces = packet.captureStr.split("").map( code => ({code, file: -1, rank: -1}) );
+            state.playerInfo = packet.playerInfo;
+            state.globalMode = packet.globalMode;
+            state.replayIndex = packet.replayIndex;
+
+            this.releaseAllInstances();
+            this.setupMode("network");
+          }
+          break
+
+        case "move":
+          if (fromOwner) {
+            const newActions = applyMove( state.fenAST, decodeCoordMove(state.fenAST, packet.moveStr) );
+
+            if (state.pendingLocalMove === packet.moveStr) {
+              this.setupBoard(this.state.fenAST); // matches the local move we made, so just snap the board
+            } else {
+              state.actions.push(...newActions); // a move from someone else so use actions to change the board
+            }
+            state.pendingLocalMove = "";
+            state.replayIndex = packet.nextReplayIndex;
+            this.setCurrentPlayer( packet.nextPlayer );
+          }
+          break
+
+        case "possibleMove":
+          if (isMine(this)) {
+            this.garbochess.postMessage(packet.moveStr);
+          }
+          break
+
+        case "invalidMove":
+          if (fromOwner) {
+            this.setupBoard(this.state.fenAST);
+          }
+          break
+
+        case "setHuman":
+          const playerInfo = this.state.playerInfo[packet.player];
+          playerInfo.networkClientId = packet.networkClientId;
+
+          // if another client has started picking, then we should lose our
+          // ability to pick
+          // OR if the picking client has left, then we could start picking
+          if (state.currentPlayer === packet.player) {
+            this.setupHumanPicking(packet.player);
+          }
+          break
+      }
+    },
+
+    onClientDisconnected(event) {
+      const clientId = event.detail.clientId;
+      const owner = NAF.utils.getNetworkOwner(this.el);
+
+      
+      if (this.data.debug) {
+        console.log("onClientDisconnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el));
+      }
+
+      if (owner === NAF.clientId || owner == clientId) {
+        const state = this.state;
+
+        for (let player in state.playerInfo) {
+          const networkClientId = state.playerInfo[player].networkClientId;
+
+          if (networkClientId == clientId) {
+            state.playerInfo[player].networkClientId = "";
+            if (state.currentPlayer === player) {
+              this.setupHumanPicking(player);
+            }
+              
+            this.system.broadcastNetworkData(this, { command: "setHuman", player: player, networkClientId: "" });
+          }
+        }
+      }
+    },
+
+    onOwnershipGained() {
+      if (this.data.debug) {
+        console.log("ownership-gained");
+      }
+      const state = this.state;
+      this.system.broadcastNetworkData(this, this.getSetupPacket());
+      this.setupMode(state.globalMode);
+      state.waitingForSetup = false;
+    },
+
+    onOwnershipLost() {
+      if (this.data.debug) {
+        console.log("ownership-lost");
+      }
+      this.setupMode("network");
+      this.state.waitingForSetup = true;
     },
   });
 
@@ -3203,6 +4892,101 @@
     return packed / PACKED_FRAME_DIVISOR // in the range (0,1]
   }
 
+  function slerpolator(quaternions, duration, postStepFn) {
+    const startQuaternions = quaternions.slice();
+    const endQuaternions = quaternions.slice();
+    const outQuaternions = quaternions; // populate directly
+    let elapsed = 0;
+
+    function step(dt) {
+      elapsed += dt;
+      const r = THREE.Math.clamp(elapsed/duration, 0, 1);
+
+      for (let i = 0, n = startQuaternions.length; i < n; i += 4) {
+        THREE.Quaternion.slerpFlat(outQuaternions, i, startQuaternions, i, endQuaternions, i, r);
+      }
+
+      postStepFn();
+    }
+
+    function isFinished() {
+      return elapsed > duration
+    }
+
+    return {
+      endQuaternions,
+      step,
+      isFinished,
+    }
+  }
+
+  function packQuaternions(quaternions) {
+    let packed = Array(quaternions.length);
+
+    for (let i = 0; i < quaternions.length; i++) {
+      const v = Math.trunc(quaternions[i]*10);
+      let y;
+      switch (v) {
+        case 0: y = 0; break
+        case 5: y = 1; break
+        case 7: y = 2; break
+        case 10: y = 3; break
+        case -5: y = 4; break
+        case -7: y = 5; break
+        case -10: y = 6; break
+        default: console.assert(false, `unknown value ${v} from ${quaternions[i]}`);
+      }
+      packed[i] = y;
+    }
+    return packed.join("")
+  }
+
+  function unpackQuaternions(quaternions, packedQuats) {
+    console.assert(quaternions.length === packedQuats.length);
+    const cos45 = Math.cos(Math.PI/4);
+
+    for (let i = 0; i < packedQuats.length; i++) {
+      let y = 0;
+      switch (packedQuats[i]) {
+        case "0": y = 0; break
+        case "1": y = 0.5; break
+        case "2": y = cos45; break
+        case "3": y = 1; break
+        case "4": y = -0.5; break
+        case "5": y = -cos45; break
+        case "6": y = -1; break
+      }
+      quaternions[i] = y;
+    }
+  }
+
+  window.addEventListener("load", () => {
+    document.body.addEventListener("connected", () => {
+      let tagEl = document.querySelector("#clientId");
+      if (!tagEl) {
+        tagEl = document.createElement("div");
+        tagEl.id = "clientId";
+        tagEl.setAttribute("style", "position: absolute; left: 0; top: 0");
+        document.body.appendChild(tagEl);
+      }
+      tagEl.innerHTML = NAF.clientId.toString();
+    });
+  });
+
+
+  AFRAME.registerSystem("cube-puzzle", {
+    ...networkSystem("cube-puzzle"),
+
+    init() {
+      this.setupNetwork();
+    },
+
+    remove() {
+      this.shutdownNetwork();
+    },
+  });
+
+
   AFRAME.registerComponent("cube-puzzle", {
     schema: {
       hands: { type: "selectorAll", default: "[hand-controls], [oculus-touch-controls], [vive-controls], [windows-motion-controls]" },
@@ -3227,6 +5011,7 @@
       };
 
       this.highlightColor = new THREE.Color();
+      this.prevHighlighted = [];
 
       this.state = {
         name: "idle",
@@ -3243,10 +5028,26 @@
         },
         snapped: true,
         activeHands: [],
+        slerpolator: undefined,
+        snappedQuaternions: undefined,
+        holderId: undefined,
       };
 
       this.cube = this.createCube();
       this.el.setObject3D("mesh", this.cube);
+
+      this.state.snappedQuaternions = this.quaternions.slice();
+
+      this.system.registerNetworking(this, {
+        requestSync: this.requestSync.bind(this),
+        receiveNetworkData: this.receiveNetworkData.bind(this),
+        onClientDisconnected: this.onClientDisconnected.bind(this),
+        onOwnershipGained: this.onOwnershipGained.bind(this),
+      });
+    },
+
+    remove() {
+      this.system.unregisterNetworking(this);
     },
 
     update(oldData) {
@@ -3269,8 +5070,15 @@
       }
     },
 
-    tick() {
-      this.actionTick[this.state.name]();
+    tick(time, deltaTime) {
+      const dt = Math.min(100, deltaTime)/1000;
+      const state = this.state;
+
+      this.tickSlerpolator(dt);
+
+      if (!state.holderId || state.holderId === getClientId()) {
+        this.actionTick[this.state.name]();
+      }
     },
 
     dispatch(action) {
@@ -3288,7 +5096,10 @@
           if (state.name === "idle") {
             state.name = "hold";
             state.hold.side = NO_SIDE;
-            this.updateHoldMatrix(state.hold.matrix, state.activeHands[0]);
+            state.holderId = getClientId();
+            calcOffsetMatrix$1(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix);
+
+            takeOwnership(this);
 
           } else if (state.name === "hold") {
             const holdSide = state.hold.side;
@@ -3317,9 +5128,10 @@
             const i = state.activeHands.indexOf(action.hand);
             state.activeHands.splice(i, 1);
             if (state.activeHands.length > 0) {
-              this.updateHoldMatrix(state.hold.matrix, state.activeHands[0]);
+              calcOffsetMatrix$1(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix);
             } else {
               state.name = "idle";
+              this.broadcastState();
             }
     
           } else if (state.name === "turn" || state.name === "turning") {
@@ -3332,7 +5144,7 @@
             const i = state.activeHands.indexOf(action.hand);
             state.activeHands.splice(i, 1);
             if (state.activeHands.length > 0) {
-              this.updateHoldMatrix(state.hold.matrix, state.activeHands[0]);
+              calcOffsetMatrix$1(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix);
             }
     
             state.name = "hold";
@@ -3349,9 +5161,9 @@
           break
 
         case "snap":
-          if (state.name === "turning") {
-            state.snapped = true;
-          }
+          state.snappedQuaternions.set(this.quaternions);
+          this.broadcastState({slerp: true});
+          state.snapped = true;
           break
 
         case "hover":
@@ -3365,11 +5177,23 @@
       }
     },
 
-    updateHoldMatrix(holdMatrix, hand) {
-      holdMatrix.getInverse(hand.object3D.matrixWorld).multiply(this.el.object3D.matrixWorld);
+    tickSlerpolator(dt) {
+      const state = this.state;
+      if (state.slerpolator) {
+        if (state.slerpolator.isFinished()) {
+          state.snapped = true;
+          state.slerpolator = undefined;
+        } else {
+          state.slerpolator.step(dt);
+        }
+      }
     },
 
     tickIdle() {
+      if (!this.el.sceneEl.is('vr-mode')) {
+        return
+      }
+
       let hand = this.data.hands.find(hand => this.isNear(hand));
       if (hand) {
         this.highlightPieces(this.allPieces);
@@ -3380,7 +5204,8 @@
 
     tickHold() {
       const state = this.state;
-      this.stickToHand(state.activeHands[0]);
+      applyOffsetMatrix$1(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix);
+
       const hand = this.data.hands.find(hand => !state.activeHands.includes(hand) && this.isNear(hand));
       let pieces = EMPTY_ARRAY;
 
@@ -3406,7 +5231,7 @@
 
     tickTurn() {
       const state = this.state;
-      this.stickToHand(state.activeHands[0]);
+      applyOffsetMatrix$1(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix);
       this.highlightPieces(state.turn.pieces);
 
       const turnHand = state.activeHands[1];
@@ -3426,7 +5251,7 @@
 
       return function tickTurning() {
         const state = this.state;
-        this.stickToHand(state.activeHands[0]);
+        applyOffsetMatrix$1(state.activeHands[0].object3D, this.el.object3D, state.hold.matrix);
         this.highlightPieces(state.turn.pieces);
     
         const turnHand = state.activeHands[1];
@@ -3478,38 +5303,21 @@
       }
     })(),
 
-    stickToHand: (function() {
-      const invParentMatrix = new THREE.Matrix4();
-      const newMatrix = new THREE.Matrix4();
+    highlightPieces(pieces) {
+      if ( this.prevHighlighted !== pieces && ( 
+        this.prevHighlighted.length !== pieces.length ||
+        this.prevHighlighted.some(piece => !pieces.includes(piece)) 
+      ) ) {
 
-      return function stickToHand(hand) {
-        const self3D = this.el.object3D;
-        invParentMatrix.getInverse(this.el.object3D.parent.matrixWorld);  
-        newMatrix.multiplyMatrices(hand.object3D.matrixWorld, this.state.hold.matrix); // determine new hover3D world matrix
-        newMatrix.premultiply(invParentMatrix); // convert to a local matrix
-        newMatrix.decompose(self3D.position, self3D.quaternion, self3D.scale);
+          this.highlights.fill(0);
+          for (let piece of pieces) {
+            this.highlights[piece] = 1;
+          }
+
+          this.instanceHighlight.needsUpdate = true;
+          this.prevHighlighted = pieces;
       }
-    })(),
-
-    highlightPieces: (function () {
-      let highlighted = [];
-
-      return function highlightPieces(pieces) {
-        if ( highlighted !== pieces && ( 
-          highlighted.length !== pieces.length ||
-          highlighted.some(piece => !pieces.includes(piece)) 
-        ) ) {
-
-            this.highlights.fill(0);
-            for (let piece of pieces) {
-              this.highlights[piece] = 1;
-            }
-
-            this.instanceHighlight.needsUpdate = true;
-            highlighted = pieces;
-        }
-      }
-    })(),
+    },
 
     createCube() {
       const size = 1/3;
@@ -3630,11 +5438,19 @@
     },
 
     shuffleCube(turns = 30) {
+      const state = this.state;
       const moves = Object.keys(VALID_MOVES);
+
+      this.quaternions.set(state.snappedQuaternions);
+
       for (let i = 0; i < turns; i++) {
         const moveIndex = ~~( Math.random()*moves.length );
         this.rotateCube( moves[moveIndex] );
       }
+
+      state.snappedQuaternions.set(this.quaternions);
+      this.broadcastState();
+      state.snapped = true;
     },
 
     rotateCube: (function () {
@@ -3812,6 +5628,10 @@
     },
 
     onGrabStart(event) {
+      if (!this.el.sceneEl.is('vr-mode')) {
+        return
+      }
+
       const hand = event.target;
       if (this.state.activeHands.indexOf(hand) === -1 && this.isNear(hand)) {
         this.dispatch( { name: "grab", hand: hand } );
@@ -3819,10 +5639,70 @@
     },
 
     onGrabEnd(event) {
+      if (!this.el.sceneEl.is('vr-mode')) {
+        return
+      }
+
       const hand = event.target;
       if (this.state.activeHands.indexOf(hand) !== -1 && this.isNear(hand)) {
         this.dispatch( { name: "release", hand: hand } );
       }
+    },
+
+    // Networking
+    broadcastState(options = {}) {
+      this.sendStateToClient(options);
+    },
+
+    sendStateToClient(options, targetId) {
+      const state = this.state;
+      if (isMine(this)) {
+        
+        const data = {
+          holderId: state.holderId,
+          slerp: false,
+          packedQuats: packQuaternions(state.snappedQuaternions),
+          ...options,
+        };
+
+        this.system.sendNetworkData(this, data, targetId);
+      }
+    },
+
+    receiveNetworkData(data, senderId) {
+      const state = this.state;
+
+      if (this.data.debug) {
+        console.log("received packet from:", senderId, "owner:", NAF.utils.getNetworkOwner(this.el));
+      }
+
+      if (senderId === NAF.utils.getNetworkOwner(this.el)) {
+        state.holderId = data.holderId;
+
+        const newSlerpolator = slerpolator( this.quaternions, data.slerp ? 0.3 : 0, () => { this.instanceQuaternion.needsUpdate = true; } );
+        unpackQuaternions(newSlerpolator.endQuaternions, data.packedQuats);
+    
+        state.snappedQuaternions.set(newSlerpolator.endQuaternions);
+        state.slerpolator = newSlerpolator;
+      }
+    },
+
+    requestSync(clientId) {
+      this.sendStateToClient({}, clientId);
+    },
+
+    onClientDisconnected(event) {
+      const clientId = event.detail.clientId;
+      if (this.state.holderId === clientId) {
+        this.state.holderId = undefined;
+      }
+    },
+
+    onOwnershipGained() {
+      if (this.data.debug) {
+        console.log("ownership-gained");
+      }
+      this.broadcastState();
     },
 
   });
@@ -4439,8 +6319,8 @@
 
     registerTarget(el, customConfig = {}) {
       const data = this.data;
-      const config = Object.assign( {el, obj3D: el.object3D, grabStart: data.grabStart, grabEnd: data.grabEnd }, customConfig );
-      const index = this.targets.findIndex(target => target.el === el && target.obj3D == config.obj3D);
+      const config = Object.assign( {el, obj3D: el.object3D, grabStart: data.grabStart, grabEnd: data.grabEnd, instanceIndex: -1 }, customConfig );
+      const index = this.targets.findIndex(target => target.el === el && target.obj3D === config.obj3D && target.instanceIndex === config.instanceIndex);
       if (index === -1) {
         this.targets.push( config );
 
@@ -4450,19 +6330,20 @@
         this.addHandListeners(config.grabEnd, this.onGrabEvent);
 
         if (data.debug) {
-          log(this, `registered: ${getDebugName(el)}, grabStart: ${config.grabStart}, grabEnd: ${config.grabEnd}`);
+          log(this, `registered: ${getDebugName(el)}, grabStart: ${config.grabStart}, grabEnd: ${config.grabEnd}, instanceIndex: ${config.instanceIndex}`);
         }
       }
     },
 
-    unregisterTarget(el, customObj3D) {
-      const obj3D = customObj3D || el.object3D;
-      const index = this.targets.findIndex(target => target.el === el && target.obj3D === obj3D);
+    unregisterTarget(el, customConfig) {
+      const obj3D = customConfig.obj3D || el.object3D;
+      const instanceIndex = typeof customConfig.instanceIndex !== "undefined" ? customConfig.instanceIndex : -1;
+      const index = this.targets.findIndex(target => target.el === el && target.obj3D === obj3D && target.instanceIndex === instanceIndex);
       if (index !== -1) {
         this.targets.splice(index);
 
         if (this.data.debug) {
-          log(this, `unregistered ${getDebugName(el)}`);
+          log(this, `unregistered ${getDebugName(el)}, instanceIndex: ${instanceIndex}`);
         }
       }
     },
@@ -4497,58 +6378,73 @@
     },
 
     // find the smallest overlapping volume
-    findOverlapping(handEl, targets) {
-      const data = this.data;
-      let minScore = Number.MAX_VALUE;
-      let overlapping = undefined;
+    findOverlapping: (function () {
+      const instancedMatrixWorld = new THREE.Matrix4();
 
-      // generate the bounding boxes of hands and targets (this is useful for debugging, even if some are missing)
-      const hand3D = handEl.object3D;
-      if (!hand3D.boundingSphere || !hand3D.boundingBox || hand3D.boundingBox.isEmpty()) {
-        generateOrientedBoundingBox(hand3D, data.debug ? 0x00FFFF : undefined); // cyan
+      return function findOverlapping(handEl, targets) {
+        // ignore overlapping when not in vr-mode, this prevents vr interactions in another
+        // broswer window that is in VR triggering interactions in a browser window that is not
+        // in vr
+        if (!this.el.is('vr-mode')) {
+          return undefined
+        }
+
+        const data = this.data;
+        const self = this;
+    
+        let minScore = Number.MAX_VALUE;
+        let overlapping = undefined;
+    
+        // generate the bounding boxes of hands and targets (this is useful for debugging, even if some are missing)
+        const hand3D = handEl.object3D;
+        if (!hand3D.boundingSphere || !hand3D.boundingBox || hand3D.boundingBox.isEmpty()) {
+          generateOrientedBoundingBox(hand3D, data.debug ? 0x00FFFF : undefined); // cyan
+        }
+    
+        for (let target of targets) {
+          const target3D = target.obj3D;  
+          if (!target3D) { 
+            continue 
+          }
+    
+          if (!target3D.boundingSphere || !target3D.boundingBox || target3D.boundingBox.isEmpty()) {
+            generateOrientedBoundingBox(target3D, data.debug ? 0xFFFF00 : undefined); // yellow
+          }
+        }
+    
+        if (hand3D.boundingBox.isEmpty()) {
+          return undefined
+        }
+    
+        for (let target of targets) {
+          const target3D = target.obj3D;  
+          if (!target3D) { 
+            continue 
+          }
+    
+          if (target3D.boundingBox.isEmpty()) { 
+            continue 
+          }
+    
+          const targetMatrixWorld = target.instanceIndex >= 0 ? calcMatrixWorld(target3D, target.instanceIndex, instancedMatrixWorld) : target3D.matrixWorld;
+    
+          // Bounding box collision check
+          const isOverlapping = boxWithBox(hand3D.boundingBox.min, hand3D.boundingBox.max, hand3D.matrixWorld.elements, target3D.boundingBox.min, target3D.boundingBox.max, targetMatrixWorld.elements);
+    
+          if (isOverlapping) {
+            const score = self.getScore(hand3D, target, targetMatrixWorld);
+            if (score < minScore) {
+              minScore = score;
+              overlapping = target;
+            }
+          }
+    
+        }
+    
+        return overlapping
       }
+    })(),
 
-      for (let target of targets) {
-        const target3D = target.obj3D;  
-        if (!target3D) { 
-          continue 
-        }
-
-        if (!target3D.boundingSphere || !target3D.boundingBox || target3D.boundingBox.isEmpty()) {
-          generateOrientedBoundingBox(target3D, data.debug ? 0xFFFF00 : undefined); // yellow
-        }
-      }
-
-      if (hand3D.boundingBox.isEmpty()) {
-        return
-      }
-
-      for (let target of targets) {
-        const target3D = target.obj3D;  
-        if (!target3D) { 
-          continue 
-        }
-
-        if (target3D.boundingBox.isEmpty()) { 
-          continue 
-        }
-
-        // Bounding box collision check
-        const isOverlapping = boxWithBox(hand3D.boundingBox.min, hand3D.boundingBox.max, hand3D.matrixWorld.elements, target3D.boundingBox.min, target3D.boundingBox.max, target3D.matrixWorld.elements);
-
-        if (!isOverlapping) {
-          continue
-        }
-
-        const score = this.getScore(hand3D, target);
-        if (score < minScore) {
-          minScore = score;
-          overlapping = target;
-        }
-      }
-
-      return overlapping
-    },
 
     transition(state, action) {
       const oldState = state.name;
@@ -4556,7 +6452,7 @@
       switch (oldState) {
         case IDLE:
           if (action.name === HOVER) {
-            this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D });
+            this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D, instanceIndex: action.target.instanceIndex });
             state.name = HOVER;
             state.target = action.target;
           }
@@ -4564,23 +6460,23 @@
 
         case HOVER:
           if (action.name === IDLE) {
-            this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D });
+            this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex });
             state.name = IDLE;
             state.target = undefined;
           } else if (action.name === GRAB) {
-            this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D });
-            this.sendEvent(state.target.el, "grabstart", { hand: state.el, obj3D: state.target.obj3D });
+            this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex });
+            this.sendEvent(state.target.el, "grabstart", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex });
             state.name = GRAB;
-          } else if (action.name === HOVER && action.target !== state.target) {
-            this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D });
-            this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D });
+          } else if (action.name === HOVER && (action.target !== state.target)) {
+            this.sendEvent(state.target.el, "hoverend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex });
+            this.sendEvent(action.target.el, "hoverstart", { hand: state.el, obj3D: action.target.obj3D, instanceIndex: action.target.instanceIndex });
             state.target = action.target;
           }
           break
 
         case GRAB:
           if (action.name === IDLE) {
-            this.sendEvent(state.target.el, "grabend", { hand: state.el, obj3D: state.target.obj3D });
+            this.sendEvent(state.target.el, "grabend", { hand: state.el, obj3D: state.target.obj3D, instanceIndex: state.target.instanceIndex });
             state.name = IDLE;
             state.target = undefined;
           }
@@ -4603,24 +6499,35 @@
       }
     },
 
-    getScore(hand3D, target) {
-      switch (target.score) {
-        case "horizontalnearest":
-          const handPos = new THREE.Vector3().setFromMatrixPosition(hand3D.matrixWorld);
-          const targetPos = new THREE.Vector3().setFromMatrixPosition(target.obj3D.matrixWorld);
-          const handForward = new THREE.Vector3().setFromMatrixColumn(target.obj3D.matrixWorld, 3);
-          const handToTarget = new THREE.Vector3().subVectors(handPos, targetPos);
-          handToTarget.setComponent(1, 0);
-          handToTarget.normalize();
-          handForward.setComponent(1, 0);
-          handForward.normalize();
-          return -handForward.dot(handToTarget)
-          
-        case "volume":
-        default:
-          return volume(target.obj3D.boundingBox)
+    // more negative is better
+    getScore: (function() {
+      const handPos = new THREE.Vector3();
+      const targetPos = new THREE.Vector3();
+      const handForward = new THREE.Vector3();
+      const handToTarget = new THREE.Vector3();
+      const pointOnForward = new THREE.Vector3();
+
+      return function getScore(hand3D, target, targetMatrixWorld) {
+        switch (target.score) {
+          case "closestforward":
+            handPos.setFromMatrixPosition(hand3D.matrixWorld);
+            targetPos.setFromMatrixPosition(targetMatrixWorld);
+            handForward.setFromMatrixColumn(hand3D.matrixWorld, 2); // controller points in the -z direction
+            handToTarget.subVectors(targetPos, handPos);
+            handForward.normalize();
+    
+            // prefer targets that are in front of the controller origin, and closer to the forward axis
+            const scalar = handForward.dot(handToTarget);
+            pointOnForward.copy(handForward).multiplyScalar(scalar);
+            const score = pointOnForward.sub(handToTarget).length();
+            return scalar < 0 ? score : score*10 // prefer targets in front (-ve scalar)
+            
+          case "volume":
+          default:
+            return volume(target.obj3D.boundingBox)
+        }
       }
-    }
+    })(),
   });
 
   AFRAME.registerComponent( "handle", {
@@ -6052,16 +7959,16 @@
     return str + (i < args.length ? " " + args.slice(i).join(" ") : "")
   }
 
-  function toLowerCase(x) { return x.toLowerCase() }
+  function toLowerCase$1(x) { return x.toLowerCase() }
 
   AFRAME.registerComponent("manipulate", {
     schema: {
       hands: { type: "selectorAll" },
       oneHanded: { default: "grab" },
-      twoHanded: { default: "grab, uniformscale", parse: toLowerCase },
+      twoHanded: { default: "grab, uniformscale", parse: toLowerCase$1 },
       pivot: { type: "vec3", default: { x:0, y:0, z:0 } },
-      startEvent: { default: "triggerdown", parse: toLowerCase },
-      endEvent: { default: "triggerup", parse: toLowerCase },
+      startEvent: { default: "triggerdown", parse: toLowerCase$1 },
+      endEvent: { default: "triggerup", parse: toLowerCase$1 },
       enabled: { default: true },
       debug: { default: false },
     },
@@ -6845,7 +8752,7 @@
   	}
   });
 
-  const toLowerCase$1 = x => x.toLowerCase();
+  const toLowerCase$2 = x => x.toLowerCase();
 
   const TWO_PI = 2*Math.PI;
   const PI_2$1 = .5*Math.PI;
@@ -6962,7 +8869,7 @@
       position: { default: "" },
       velocity: { default: "" },
       acceleration: { default: "" },
-      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circleyz", "circlexz"], parse: toLowerCase$1 },
+      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circleyz", "circlexz"], parse: toLowerCase$2 },
       radialPosition: { default: "" },
       radialVelocity: { default: "" },
       radialAcceleration: { default: "" },
@@ -9450,7 +11357,7 @@ vec2 worley(const vec2 P, const float jitter) {
   };
   const PRESET_SOUNDS = Object.fromEntries( Object.entries(PRESET_SOUNDS_ENTRIES).map(x => [x[0], toNumberArray(x[1])]) );
 
-  function toLowerCase$2(str) { return str.toLowerCase() }
+  function toLowerCase$3(str) { return str.toLowerCase() }
   function clamp$1(x,a,b) { return x < a ? a : (x > b ? b : x) }
   function toNumberArray(str) { return str.split(",").map(x => Number(x)) }
   function rand() { return Math.random() }
@@ -9463,7 +11370,7 @@ vec2 worley(const vec2 P, const float jitter) {
       preset: { oneOf: Object.keys(PRESET_SOUNDS), default: "" },
       events: { default: "" },
       delay: { default: 0 },
-      waveType: { oneOf: WAVE_TYPES, default: "square", parse: toLowerCase$2 },
+      waveType: { oneOf: WAVE_TYPES, default: "square", parse: toLowerCase$3 },
       attackTime: { default: 0, min: 0, max: 1 },
       sustainTime: { default: .18, min: .18, max: 1 },
       sustainPunch: { default: 0, min: 0, max: 1 },
@@ -9702,7 +11609,7 @@ vec2 worley(const vec2 P, const float jitter) {
 
   const FRAME_STYLES = ["sequence", "randomsequence", "random"];
 
-  function toLowerCase$3(str) {
+  function toLowerCase$4(str) {
     return str.toLowerCase()
   }
 
@@ -9719,7 +11626,7 @@ vec2 worley(const vec2 P, const float jitter) {
       scales: { default: "" },
       opacities: { default: "" },
       frames: { default: "" },
-      frameStyle: { default: "sequence", oneOf: FRAME_STYLES, parse: toLowerCase$3 },
+      frameStyle: { default: "sequence", oneOf: FRAME_STYLES, parse: toLowerCase$4 },
       velocity: { default: "0 0 0" },
       acceleration: { default: "0 0 0" },
       radialVelocity: { default: "0" },
@@ -9728,7 +11635,7 @@ vec2 worley(const vec2 P, const float jitter) {
       angularAcceleration: { default: "0 0 0" },
       orbitalVelocity: { default: "0" },
       orbitalAcceleration: { default: "0" },
-      spawnShape: { default: "point", oneOf: ["point", "geometrytriangle", "geometryedge", "geometryvertex", "circle", "sphere", "box", "insidecircle", "insidesphere", "insidebox" ], parse: toLowerCase$3 },
+      spawnShape: { default: "point", oneOf: ["point", "geometrytriangle", "geometryedge", "geometryvertex", "circle", "sphere", "box", "insidecircle", "insidesphere", "insidebox" ], parse: toLowerCase$4 },
       spawnGeometry: { type: "selector" },
     },
 
@@ -9916,7 +11823,7 @@ vec2 worley(const vec2 P, const float jitter) {
   const WHITE_TEXTURE$1 = new THREE.DataTexture(new Uint8Array(3).fill(255), 1, 1, THREE.RGBFormat);
   WHITE_TEXTURE$1.needsUpdate = true;
 
-  function toLowerCase$4(x) { return x.toLowerCase() }
+  function toLowerCase$5(x) { return x.toLowerCase() }
 
   const BLENDING_MAP = {
     "none": THREE.NoBlending,
@@ -9970,7 +11877,7 @@ vec2 worley(const vec2 P, const float jitter) {
       alphaTest: { default: 0 },
       depthWrite: { default: true },
       depthTest: { default: true },
-      blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase$4 },   
+      blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase$5 },   
       fog: { default: true },
       usePerspective: { default: true },
       useLinearMotion: { default: true },
@@ -10603,7 +12510,7 @@ void main()
     }) )
   };
 
-  function toLowerCase$5(x) { return x.toLowerCase() }
+  function toLowerCase$6(x) { return x.toLowerCase() }
 
   // console.assert(AFRAME.utils.deepEqual(parseVecRange("", [1,2,3]), [1,2,3,1,2,3]))
   // console.assert(AFRAME.utils.deepEqual(parseVecRange("5", [1,2,3]), [5,2,3,5,2,3]))
@@ -10641,7 +12548,7 @@ void main()
       texture: { type: "map" },
       delay: { default: 0 },
       duration: { default: -1 },
-      spawnType: { default: "continuous", oneOf: ["continuous", "burst"], parse: toLowerCase$5 },
+      spawnType: { default: "continuous", oneOf: ["continuous", "burst"], parse: toLowerCase$6 },
       spawnRate: { default: 10 },
       source: { type: "selector" },
       textureFrame: { type: "vec2", default: {x: 1, y: 1} },
@@ -10652,15 +12559,15 @@ void main()
       trailLifeTime: { default: "0" },
       trailType: { default: "particle", oneOf: ["particle", "ribbon", "ribbon3d"] },
       ribbonWidth: { default: 1, },
-      ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase$5 },
-      ribbonUVType: { default: "overtime", oneOf: UV_TYPE_STRINGS, parse: toLowerCase$5 },
+      ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase$6 },
+      ribbonUVType: { default: "overtime", oneOf: UV_TYPE_STRINGS, parse: toLowerCase$6 },
       emitterColor: { type: "color" },
 
       lifeTime: { default: "1" },
       position: { default: "0 0 0" },
       velocity: { default: "0 0 0" },
       acceleration: { default: "0 0 0" },
-      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circlexz"], parse: toLowerCase$5 },
+      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circlexz"], parse: toLowerCase$6 },
       radialPosition: { default: "0" },
       radialVelocity: { default: "0" },
       radialAcceleration: { default: "0" },
@@ -10669,7 +12576,7 @@ void main()
       orbitalVelocity: { default: "0" },
       orbitalAcceleration: { default: "0" },
       scale: { default: "1" },
-      color: { default: "white", parse: toLowerCase$5 },
+      color: { default: "white", parse: toLowerCase$6 },
       rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
       opacity: { default: "1" },
       velocityScale: { default: 0 },
@@ -10683,17 +12590,17 @@ void main()
       enabled: { default: true },
       emitterTime: { default: 0 },
       model: { type: "selector" },
-      modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase$5 },
-      direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase$5 },
+      modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase$6 },
+      direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase$6 },
       particleOrder: { default: "any", oneOf: PARTICLE_ORDER_STRINGS },
       ribbonUVMultiplier: { default: 1 },
-      materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase$5 },
+      materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase$6 },
       screenDepthOffset: { default: 0 },
       alphaTest: { default: 0 },
       fog: { default: true },
       depthWrite: { default: false },
       depthTest: { default: true },
-      blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase$5 },
+      blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase$6 },
       transparent: { default: true },
       particleSize: { default: 100 },
       usePerspective: { default: true },
@@ -12367,13 +14274,13 @@ void main() {
   #include <fog_fragment>
 }`;
 
-  function toLowerCase$6(x) {
+  function toLowerCase$7(x) {
     return typeof x === "string" ? x.toLowerCase() : x
   }
 
   AFRAME.registerComponent('store', {
     schema: {
-      type: { default: "temporary", oneOf: ["temporary", "local", "session"], parse: toLowerCase$6 },
+      type: { default: "temporary", oneOf: ["temporary", "local", "session"], parse: toLowerCase$7 },
     },
 
     multiple: true,
@@ -13653,7 +15560,7 @@ void main() {
     },
   });
 
-  function toLowerCase$7(str) { return str.toLowerCase() }
+  function toLowerCase$8(str) { return str.toLowerCase() }
 
   const WRAPPING_MAP = {
     "repeat": THREE.RepeatWrapping,
@@ -13668,8 +15575,8 @@ void main() {
       rotate: { type: "number" },
       pivot: { type: "vec2", default: {x:.5, y:.5} },
       meshName: { default: "mesh" },
-      wrapS: { default: "repeat", oneOf: ["repeat", "clampToEdge", "mirroredRepeat"], parse: toLowerCase$7},
-      wrapT: { default: "repeat", oneOf: ["repeat", "clampToEdge", "mirroredRepeat"], parse: toLowerCase$7},
+      wrapS: { default: "repeat", oneOf: ["repeat", "clampToEdge", "mirroredRepeat"], parse: toLowerCase$8},
+      wrapT: { default: "repeat", oneOf: ["repeat", "clampToEdge", "mirroredRepeat"], parse: toLowerCase$8},
       maps: { type: "string", default: "map" },
       textureFrame: { type: "vec2", default: {x:1, y:1} },
       frame: { default: 0 },
