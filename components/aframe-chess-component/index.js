@@ -411,7 +411,7 @@ AFRAME.registerComponent("chess", {
 
   setupHumanPicking(side) {
     const playerInfo = this.state.playerInfo[side]
-    if (!playerInfo.networkClientId || playerInfo.networkClientId === NAF.clientId) {
+    if (!playerInfo.networkClientId || playerInfo.networkClientId === nafHelper.getClientId()) {
       this.setupPicking(side)
     } else {
       this.setupPicking("none")
@@ -756,7 +756,7 @@ AFRAME.registerComponent("chess", {
         })
       }
 
-      this.system.broadcastNetworkData(this, { command: "setHuman", player: state.currentPlayer, networkClientId: NAF.clientId })
+      this.system.broadcastNetworkData(this, { command: "setHuman", player: state.currentPlayer, networkClientId: nafHelper.getClientId() })
     }
   },
 
@@ -889,6 +889,7 @@ AFRAME.registerComponent("chess", {
     const clientId = event.detail.clientId
     const owner = NAF.utils.getNetworkOwner(this.el)
 
+    
     if (this.data.debug) {
       console.log("onClientDisconnected client:", clientId, "me:", NAF.clientId, "owner:", NAF.utils.getNetworkOwner(this.el))
     }
