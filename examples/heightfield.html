@@ -2,8 +2,8 @@
 <html>
   <head>
     <title>Heightfield examples</title>
-    <!--script src="https://aframe.io/releases/0.9.2/aframe.js"></script-->
-    <script src="../../aframe/aframe-0.9.2.js"></script>
+    <script src="https://aframe.io/releases/0.9.2/aframe.js"></script>
+    <!--script src="../../aframe/aframe-0.9.2.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="heightmapshader" type="x-shader/x-fragment">
       #include <procedural-ext>
@@ -57,7 +57,6 @@
         pixel-color__tree="src: #heightmap; canvas: #island; color: green; maxSlope: 60; maxIntensity: .25"
         pixel-color__sea= "src: #heightmap; canvas: #island; color: blue; maxIntensity: 0"
       ></a-entity>
-      <a-gltf-model id="treepool" src="#tree" instance-pool=""></a-gltf-model>
       <a-entity light="type: ambient; color: #BBB"></a-entity>
       <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="-0.5 1 1"></a-entity>
       
@@ -134,13 +133,16 @@
       <a-entity id="foliageGeneration"
         position="-1.5 0 -3"
       >
+        <a-gltf-model id="treepool" src="#tree" instance-pool=""></a-gltf-model>
+        <a-box id="boxpool" instance-pool="" material="color: green"></a-box>
+
         <a-plane position="0 0 -1" material="src: #debugCanvas; side: double"></a-plane>
-        <a-entity foliage__tree="instancePool: #treepool; intensityMap: #foliage; debugCanvas: #debugCanvas; seed: 73281; modelScale: .02 .02 .02; cellSize: .1; densities: 1,5,10; avoidance: .01"></a-entity>
+        <a-entity foliage__tree="instancePool: #treepool; intensityMap: #foliage; debugCanvas: #debugCanvas; seed: 73281; cellSize: .1; densities: 1,5,10; avoidance: .01; rotations: 0->360; scales: .018 -> .025; colors: #fff->#aaa"></a-entity>
         <a-box position="0 0 1" scale=".1 .1 .1" material="src: #foliage"></a-box>
       </a-entity>
       
 
-      <a-box id="facecolor" position="2 2 -2" scale=".1 .1 .1" face-color__0="faces: 0,1; color: red" face-color__2="faces: 2,3; color: blue" face-color__4="faces: 4,5; color: yellow" face-color__6="faces: 6,7; color: magenta" face-color__8="faces: 8,9; color: cyan"></a-box-->
+      <a-box id="facecolor" position="2 2 -2" scale=".1 .1 .1" face-color__0="faces: 0,1; color: red" face-color__2="faces: 2,3; color: blue" face-color__4="faces: 4,5; color: yellow" face-color__6="faces: 6,7; color: magenta" face-color__8="faces: 8,9; color: cyan"></a-box>
     </a-scene>
   </body>
 </html>

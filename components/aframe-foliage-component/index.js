@@ -1,16 +1,18 @@
-import { pseudorandom, threeHelper } from "harlyq-helpers"
+import { attribute, pseudorandom, threeHelper } from "harlyq-helpers"
 
 const indexFromXY = (x,y, width) => y*width + x
-const xyFromIndex = (i, width) => [ i % width, Math.trunc( i/width ) ]
+const xyFromIndex = (cellID, width) => [ cellID % width, Math.trunc( cellID/width ) ]
 const ATTEMPT_MULTIPLIER = 4
 
 AFRAME.registerComponent("foliage", {
   schema: {
     instancePool: { type: "selector" },
     cellSize: { default: 10 },
-    modelScale: { type: "vec3", default: { x:1, y:1, z:1 } },
     avoidance: { default: 1 },
     densities: { default: "1" },
+    rotations: { default: "0" },
+    scales: { default: "1" },
+    colors: { default: "white" },
     intensityMap: { type: "selector" },
     debugCanvas: { type: "selector" },
     seed: { default: -1 }
@@ -35,13 +37,12 @@ AFRAME.registerComponent("foliage", {
   update(oldData) {
     const data = this.data
     this.lcg.setSeed(data.seed)
-    this.densities = data.densities.split(",").map( x => Number(x) )
+    this.densities = attribute.parseNumberArray( data.densities )
+    this.rotations = attribute.parseNumberArray( data.rotations )
+    this.scales = attribute.parseNumberArray( data.scales )
+    this.colors = attribute.parseColorArray( data.colors )
 
     this.drawCtx = data.debugCanvas instanceof HTMLCanvasElement ? data.debugCanvas.getContext("2d") : undefined
-
-    // if (data.model) {
-    //   this.loadModel(data.model)
-    // }
 
     if (data.instancePool) {
       this.pool = data.instancePool.components["instance-pool"]
@@ -50,6 +51,14 @@ AFRAME.registerComponent("foliage", {
         this.createFoliage()
       }
     }
+  },
+
+  tick() {
+
+  },
+
+  tock() {
+
   },
 
   createFoliage() {
@@ -70,16 +79,14 @@ AFRAME.registerComponent("foliage", {
     }
 
     const FLOATS_PER_COLOR = 4
-    const maxDensities = this.densities.length
+    const maxDensities = this.densities.length - 1
     const srcImage = srcCtx.getImageData(0, 0, width, height)
     const srcImageData = srcImage.data
-    const intensities = Float32Array.from( { length: srcImageData.length/FLOATS_PER_COLOR }, (_, i) => {
-      return ( srcImageData[i*FLOATS_PER_COLOR] + srcImageData[i*FLOATS_PER_COLOR + 1] + srcImageData[i*FLOATS_PER_COLOR + 2] ) / ( 255*3 + 1 )  // ignore alpha
+    const intensities = Float32Array.from( { length: srcImageData.length/FLOATS_PER_COLOR }, (_, cellID) => {
+      return ( srcImageData[cellID*FLOATS_PER_COLOR] + srcImageData[cellID*FLOATS_PER_COLOR + 1] + srcImageData[cellID*FLOATS_PER_COLOR + 2] ) / ( 255*3 + 1 )  // ignore alpha
     } ) // in the range 0..1
 
     const sortedIndices = Array.from( intensities.keys() ).sort( (a,b) => intensities[b] - intensities[a] ) // descending
-    const levels = intensities.map(intensity => Math.trunc( intensity * ( maxDensities + 1 ) ) ) // +1 because we include the 0th
-    const estimatedCount = levels.reduce((t,x) => x > 0 ? t + this.densities[x - 1] : t, 0)
 
     for (let cell of this.cells) {
       this.removeModels(cell)
@@ -88,17 +95,20 @@ AFRAME.registerComponent("foliage", {
     this.cells = []
     this.drawGrid2D(width, height, "black")
 
-    this.el.sceneEl.object3D.updateMatrixWorld(true) // we want to capture the whole hierarchy, is there a better way to do this?
+    // this.el.sceneEl.object3D.updateMatrixWorld(true) // we want to capture the whole hierarchy, is there a better way to do this?
 
     for (let index of sortedIndices) {
-      const level = levels[index]
+      const level = Math.trunc( intensities[index] * ( maxDensities + 2 ) ) // +2 because we count the 0th and intensities is only to 0.99999 
       if (level === 0) {
         break
       }
 
       const [x,y] = xyFromIndex(index, width)
-      const density = this.densities[level - 1] // -1 because we ingnore the 0th
-      const newCell = this.populateCell(level, index, x, y, width, height, data.cellSize, density, data.avoidance, this.model, data.modelScale)
+      const densityAttribute = this.densities[level - 1] || 1 // -1 because we ingnore the 0th
+      const rotationAttribute = this.rotations[ Math.min(this.rotations.length - 1, level - 1) ] || 0
+      const scaleAttribute = this.scales[ Math.min(this.scales.length - 1, level - 1) ] || 1
+      const colorAttribute = this.colors[ Math.min(this.colors.length - 1, level - 1) ] || 1
+      const newCell = this.populateCell(level, index, x, y, width, height, data.cellSize, densityAttribute, rotationAttribute, scaleAttribute, colorAttribute, data.avoidance)
       this.cells[index] = newCell
 
       this.addModels(newCell, width, height, data.cellSize)
@@ -109,7 +119,8 @@ AFRAME.registerComponent("foliage", {
 
   addModels(cell, width, height, cellSize) {
     const pos = new THREE.Vector3()
-    const foliage3D = this.el.object3D
+    const rotationEuler = new THREE.Euler()
+    const rotationQuat = new THREE.Quaternion()
     const objectCount = cell.objects.length
 
     if (!cell.indexCount || cell.indexCount < objectCount) {
@@ -131,10 +142,13 @@ AFRAME.registerComponent("foliage", {
       pos.x = (obj.x - width/2)*cellSize
       pos.y = 0
       pos.z = (obj.y - height/2)*cellSize
-      pos.applyMatrix4(foliage3D.matrixWorld)
 
-      this.pool.setScaleAt(start + k, obj.modelScale.x, obj.modelScale.y, obj.modelScale.z)
+      rotationQuat.setFromEuler( rotationEuler.set( 0, obj.rotation, 0 ) )
+
+      this.pool.setScaleAt(start + k, obj.scale, obj.scale, obj.scale)
       this.pool.setPositionAt(start + k, pos.x, pos.y, pos.z)
+      this.pool.setQuaternionAt( start + k, rotationQuat.x, rotationQuat.y, rotationQuat.z, rotationQuat.w )
+      this.pool.setColorAt( start + k, obj.color.r, obj.color.g, obj.color.b )
     }
 
     return cell.objects.length
@@ -148,12 +162,12 @@ AFRAME.registerComponent("foliage", {
     }
   },
 
-  populateCell(level, i, x, y, width, height, cellSize, density, avoidance, model, modelScale) {
+  populateCell(level, cellID, x, y, width, height, cellSize, densityAttribute, rotationAttribute, scaleAttribute, colorAttribute, avoidance) {
     const r = avoidance/cellSize
     const square = x => x*x
-    const cell = { id: i, objects: [] }
+    const cell = { id: cellID, objects: [] }
 
-    this.lcg.setSeed(i*1761)
+    this.lcg.setSeed(cellID*1761)
 
     function hasOverlap(cell, x, y, r) {
       if (cell) {
@@ -166,6 +180,7 @@ AFRAME.registerComponent("foliage", {
       return false
     }
 
+    const density = attribute.randomize(densityAttribute, this.lcg.random)
     let count = 0
     let attempts = density*ATTEMPT_MULTIPLIER
 
@@ -182,7 +197,10 @@ AFRAME.registerComponent("foliage", {
       if (overlap) {
         this.drawCircle2D( nx/width, ny/height, r/width, "red" )
       } else {
-        cell.objects.push( { level, x: nx, y: ny, r, model, modelScale } )
+        const rotation = attribute.randomize(rotationAttribute, this.lcg.random)
+        const scale = attribute.randomize(scaleAttribute, this.lcg.random)
+        const color = attribute.randomize(colorAttribute, this.lcg.random)
+        cell.objects.push( { level, x: nx, y: ny, r, scale, rotation, color } )
         this.drawCircle2D( nx/width, ny/height, r/width, "blue", true )
         count++
       }
