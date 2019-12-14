@@ -36,7 +36,7 @@ AFRAME.registerComponent("chess", {
     debug: { default: false },
     boardMoveSpeed: { default: 4 },
     replayTurnDuration: { default: .5 },
-    mode: { oneOf: ["freestyle", "replay", "static", "game", "network"], default: "freestyle", parse: toLowerCase },
+    mode: { oneOf: ["freestyle", "replay", "static", "game"], default: "freestyle", parse: toLowerCase },
     aiDuration: { default: 1 },
     whitePlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },
     blackPlayer: { oneOf: ["human", "ai"], default: "ai", parse: toLowerCase },

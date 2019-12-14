@@ -6,6 +6,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/movement.html
 none
 ### chalk
 https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+### chess
+https://harlyq.github.io/aframe-harlyq-components/examples/toy.html
 ### climb
 https://harlyq.github.io/aframe-harlyq-components/examples/movement.html
 ### clone-entity
@@ -14,6 +16,8 @@ none
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
 
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
+### cube-puzzle
+https://harlyq.github.io/aframe-harlyq-components/examples/toy.html
 ### extrude
 https://harlyq.github.io/aframe-harlyq-components/examples/extrude-lathe.html
 ### face-color
