@@ -24,6 +24,7 @@ const PARAMS_LENGTH = 5 // 0->4
 
 const MODEL_MESH = "mesh"
 const VERTS_PER_RIBBON = 2
+const INDICES_PER_RIBBON = 6
 
 const RANDOM_REPEAT_COUNT = 131072 // random numbers will start repeating after this number of particles
 
@@ -171,7 +172,7 @@ AFRAME.registerComponent("sprite-particles", {
     direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
     particleOrder: { default: "any", oneOf: PARTICLE_ORDER_STRINGS },
     ribbonUVMultiplier: { default: 1 },
-    materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase },
+    materialSide: { default: "double", oneOf: ["double", "front", "back"], parse: toLowerCase },
     screenDepthOffset: { default: 0 },
     alphaTest: { default: 0 },
     fog: { default: true },
@@ -203,18 +204,18 @@ AFRAME.registerComponent("sprite-particles", {
 
     // this.useTransparent = false
     this.textureFrames = new Float32Array(4) // xy is TextureFrame, z is TextureCount, w is TextureLoop
-    this.offset = new Float32Array(2*4).fill(0) // xyz is position, w is radialPosition
-    this.velocity = new Float32Array(2*4).fill(0) // xyz is velocity, w is radialVelocity
-    this.acceleration = new Float32Array(2*4).fill(0) // xyz is acceleration, w is radialAcceleration
-    this.angularVelocity = new Float32Array(2*4).fill(0) // xyz is angularVelocity, w is lifeTime
-    this.angularAcceleration = new Float32Array(2*4).fill(0) // xyz is angularAcceleration
-    this.orbital = new Float32Array(2*2).fill(0) // x is orbitalVelocity, y is orbitalAcceleration
+    this.offset = new Float32Array(2*4) // xyz is position, w is radialPosition
+    this.velocity = new Float32Array(2*4) // xyz is velocity, w is radialVelocity
+    this.acceleration = new Float32Array(2*4) // xyz is acceleration, w is radialAcceleration
+    this.angularVelocity = new Float32Array(2*4) // xyz is angularVelocity, w is lifeTime
+    this.angularAcceleration = new Float32Array(2*4) // xyz is angularAcceleration
+    this.orbital = new Float32Array(2*2) // x is orbitalVelocity, y is orbitalAcceleration
     this.colorOverTime // color is xyz and opacity is w. created in update()
     this.rotationScaleOverTime // x is rotation, y is scale. created in update()
-    this.params = new Float32Array(5*4).fill(0) // see ..._PARAM constants
-    this.velocityScale = new Float32Array(3).fill(0) // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
+    this.params = new Float32Array(5*4) // see ..._PARAM constants
+    this.velocityScale = new Float32Array(3) // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
     this.emitterColor = new THREE.Vector3() // use vec3 for color
-    this.destination = new Float32Array(2*4).fill(0) // range value, xyz is destinationEntity.position + destinationOffset, w is destinationWeight
+    this.destination = new Float32Array(2*4) // range value, xyz is destinationEntity.position + destinationOffset, w is destinationWeight
     this.destinationOffset // parsed value for destinationOffset, this will be blended into destination
     this.destinationWeight // parsed value for destinationWeight
     this.nextID = 0
@@ -250,8 +251,8 @@ AFRAME.registerComponent("sprite-particles", {
     // can only change overTimeSlots while paused, as it will rebuild the shader (see updateDefines())
     if (data.overTimeSlots !== oldData.overTimeSlots && !this.isPlaying) {
       this.overTimeArrayLength = this.data.overTimeSlots*2 + 1 // each slot represents 2 glsl array elements pluse one element for the length info
-      this.colorOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // color is xyz and opacity is w
-      this.rotationScaleOverTime = new Float32Array(2*this.overTimeArrayLength).fill(0) // x is rotation, y is scale
+      this.colorOverTime = new Float32Array(4*this.overTimeArrayLength) // color is xyz and opacity is w
+      this.rotationScaleOverTime = new Float32Array(2*this.overTimeArrayLength) // x is rotation, y is scale
       overTimeDirty = true
     }
 
@@ -565,7 +566,7 @@ AFRAME.registerComponent("sprite-particles", {
       // // this.material.side = THREE.DoubleSide
       // this.material.side = THREE.FrontSide
       this.mesh = new THREE.Mesh(this.geometry, [this.material]) // geometry groups need an array of materials
-      this.mesh.drawMode = THREE.TriangleStripDrawMode
+      //this.mesh.drawMode = THREE.TriangleStripDrawMode
     } else {
       this.mesh = new THREE.Points(this.geometry, this.material)
     }
@@ -803,23 +804,41 @@ AFRAME.registerComponent("sprite-particles", {
         }
       }
 
-      this.geometry.addAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
-      this.geometry.addAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3).fill(0), 3))
+      this.geometry.setAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
+      this.geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3), 3))
 
       if (this.data.source) {
-        this.geometry.addAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4).fill(0), 4))
+        this.geometry.setAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4), 4))
       }
 
-      // the ribbons are presented as triangle strips, so each vert pairs with it's two previous verts to
-      // form a triangle.  To ensure each particle ribbon is not connected to other ribbons we place each
+      // the ribbons are presented as indexed triangles (triangle strips are no longer supported), with
+      // 2 verts and 6 indices per particle.  To ensure each particle ribbon is not connected to other ribbons we place each
       // one in a group containing only the verts for that ribbon
       if (this.isRibbon()) {
         this.geometry.clearGroups()
 
-        const m = this.trailCount * VERTS_PER_RIBBON
-        for (let i = 0; i < n; i += m) {
-          this.geometry.addGroup(i, m, 0)
+        const numParticles = this.count/VERTS_PER_RIBBON/this.trailCount
+        const indicesPerParticle = (this.trailCount - 1)*INDICES_PER_RIBBON
+        const vertsPerParticle = this.trailCount*VERTS_PER_RIBBON
+        const numIndices = numParticles*indicesPerParticle
+        const indices = new Array(numIndices)
+
+        for (let i = 0, particle = 0; i < numIndices; i += indicesPerParticle, particle++) {
+          this.geometry.addGroup(i, indicesPerParticle, 0)
+
+          for (let j = 0, vertex = 0; j < indicesPerParticle; j += INDICES_PER_RIBBON, vertex += VERTS_PER_RIBBON) {
+            const startVertex = particle*vertsPerParticle + vertex
+            indices[i+j] = startVertex
+            indices[i+j+1] = startVertex + 2
+            indices[i+j+2] = startVertex + 3
+            indices[i+j+3] = startVertex
+            indices[i+j+4] = startVertex + 3
+            indices[i+j+5] = startVertex + 1
+          }
+  
         }
+
+        this.geometry.setIndex( indices )
       }
     }
   },
@@ -1004,10 +1023,10 @@ AFRAME.registerComponent("sprite-particles", {
           modelFillFn(this.modelVertices, modelPosition)
         }
 
-        // for each particle, update all of its trails. if there are no trails, then
+        // for each particle, give all of its trails the same position/quaternion. if there are no trails, then
         // trailcount is 1
-        for (let particleVert = 0, particleVertCount = isRibbon ? VERTS_PER_RIBBON : 1; particleVert < particleVertCount; particleVert++ ) {
-          for (let trail = 0; trail < this.trailCount; trail++) {
+        for (let trail = 0; trail < this.trailCount; trail++) {
+          for (let ribbonVert = 0, ribbonVertCount = isRibbon ? VERTS_PER_RIBBON : 1; ribbonVert < ribbonVertCount; ribbonVert++) {
             id = this.nextID
 
             if (isUsingModel) {
@@ -1037,7 +1056,7 @@ AFRAME.registerComponent("sprite-particles", {
 
       if (numSpawned > 0) {
         const trailVertCount = this.trailCount * (isRibbon ? VERTS_PER_RIBBON : 1)
-        this.params[ID_PARAM] = Math.floor(id/trailVertCount) // particle ID
+        this.params[ID_PARAM] = Math.floor(id/trailVertCount) // ID of previous particle
 
         if (isBurst) { // if we did burst emit, then wait for maxAge before emitting again
           this.nextTime += this.lifeTime[1]
@@ -1053,14 +1072,14 @@ AFRAME.registerComponent("sprite-particles", {
         }
 
         if (hasSource || isUsingModel) {
-          particlePosition.updateRange.offset = startIndex
-          particlePosition.updateRange.count = numSpawned
+          particlePosition.updateRange.offset = startIndex*3
+          particlePosition.updateRange.count = numSpawned*3
           particlePosition.needsUpdate = true
         }
 
         if (hasSource) {
-          particleQuaternion.updateRange.offset = startIndex
-          particleQuaternion.updateRange.count = numSpawned
+          particleQuaternion.updateRange.offset = startIndex*4
+          particleQuaternion.updateRange.count = numSpawned*4
           particleQuaternion.needsUpdate = true
         }
 

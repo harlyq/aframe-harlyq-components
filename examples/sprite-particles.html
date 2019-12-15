@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <script src="https://aframe.io/releases/0.9.2/aframe.js"></script>
-    <!--script src="../../aframe/aframe-0.9.2.js"></script-->
+    <script src="https://aframe.io/releases/1.0.0/aframe.js"></script>
+    <!--script src="../../aframe/aframe-1.0.0.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="blobshader" type="x-shader/x-fragment">
       precision highp float;
@@ -400,15 +400,15 @@
           <a-text value="textured interval" mixin="label"></a-text>
         </a-entity>
         <a-entity id="textured_ribbon3d" position="-20 -12 0">
-          <a-entity sprite-particles="texture: #texturegrid_2x2; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; trailInterval: 0.2; trailType: ribbon3D; materialSide: double; ribbonWidth: 1"></a-entity>
+          <a-entity sprite-particles="texture: #texturegrid_2x2; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; trailInterval: 0.2; trailType: ribbon3D; ribbonWidth: 1"></a-entity>
           <a-text value="textured ribbon3D" mixin="label"></a-text>
         </a-entity>
         <a-entity id="ribbon3d_interval" position="-24 -12 0">
-          <a-entity sprite-particles="texture: #frame; velocity: -0.5 1 0->0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 4->6; color: yellow, red; spawnRate: 1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon3D; materialSide: double; ribbonWidth: 0.1"></a-entity>
+          <a-entity sprite-particles="texture: #frame; velocity: -0.5 1 0->0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 4->6; color: yellow, red; spawnRate: 1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon3D; ribbonWidth: 0.1"></a-entity>
           <a-text value="ribbon3D interval" mixin="label"></a-text>
         </a-entity>
         <a-entity id="ribbon3d_rotation" position="-28 -12 0">
-          <a-entity sprite-particles="texture: #frame; position: -0.75 0 0; velocity: 0.5 0 0; lifeTime: 4; color: yellow, red; spawnRate: 0.1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon3D; materialSide: double; rotation: 0,360"></a-entity>
+          <a-entity sprite-particles="texture: #frame; position: -0.75 0 0; velocity: 0.5 0 0; lifeTime: 4; color: yellow, red; spawnRate: 0.1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon3D; rotation: 0,360"></a-entity>
           <a-text value="ribbon3D rotation" mixin="label"></a-text>
         </a-entity>
         <a-entity id="common_seed" position="16 -12 0">
@@ -438,9 +438,12 @@
         </a-entity>
       </a-entity>
       <!--a-entity position="0 0 -4">
-        <a-entity position="0 0 0">
-          <a-entity sprite-particles="texture: #texturegrid_2x2; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; trailInterval: 0.2; trailType: ribbon; ribbonWidth: 20"></a-entity>
-          <a-text value="textured ribbon" mixin="label"></a-text>
+        <a-entity id="ribbon_source" position="0 0 0">
+          <a-entity id="ribbonsource2" animation="property: position; dur: 4500; to: 1 0 0; loop: -1; easing: linear; dir: alternate">
+            <a-box scale="0.1 0.1 0.1" color="purple"></a-box>
+          </a-entity>
+          <a-entity sprite-particles="source: #ribbonsource2; velocity: -0.5 1 0->0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3->4; spawnRate: 1; trailInterval: 0.2; trailType: ribbon; ribbonShape: taperout; trailLifeTime: 4->6; color: red,blue; opacity: 1,0"></a-entity>
+          <a-text value="ribbon + source" mixin="label"></a-text>
         </a-entity>
       </a-entity-->
     </a-scene>

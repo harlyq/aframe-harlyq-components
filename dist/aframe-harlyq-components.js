@@ -4694,7 +4694,6 @@
     init() {
       this.onGrabStart = this.onGrabStart.bind(this);
       this.onGrabEnd = this.onGrabEnd.bind(this);
-      this.onSceneLoaded = this.onSceneLoaded.bind(this);
 
       this.grab = { hand: undefined, target: undefined, position: new THREE.Vector3() };
     },
@@ -5377,10 +5376,10 @@
       this.instancePackedFrame = new THREE.InstancedBufferAttribute(this.packedFrames, FLOATS_PER_PACKED_FRAME);
       this.instanceHighlight = new THREE.InstancedBufferAttribute(this.highlights, 1);
 
-      instanceGeo.addAttribute("instancePosition", this.instancePosition);
-      instanceGeo.addAttribute("instanceQuaternion", this.instanceQuaternion);
-      instanceGeo.addAttribute("instancePackedFrame", this.instancePackedFrame);
-      instanceGeo.addAttribute("instanceHighlight", this.instanceHighlight);
+      instanceGeo.setAttribute("instancePosition", this.instancePosition);
+      instanceGeo.setAttribute("instanceQuaternion", this.instanceQuaternion);
+      instanceGeo.setAttribute("instancePackedFrame", this.instancePackedFrame);
+      instanceGeo.setAttribute("instanceHighlight", this.instanceHighlight);
       instanceGeo.maxInstanceCount = numInstances;
 
       const mesh = new THREE.Mesh(instanceGeo, cubeMaterial);
@@ -5849,7 +5848,7 @@
 
         if (!geometry.getAttribute("color")) {
           const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX).fill(1);
-          geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX));
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX));
         }
 
         // if (!geometry.getAttribute("color")) {
@@ -5932,7 +5931,7 @@
     //     newColors[j+2] = defaultColor.b
     //   }
 
-    //   geometry.addAttribute("color", new THREE.Float32BufferAttribute(newColors, COLOR_FLOATS_PER_VERTEX))
+    //   geometry.setAttribute("color", new THREE.Float32BufferAttribute(newColors, COLOR_FLOATS_PER_VERTEX))
     // },
   });
 
@@ -6735,9 +6734,9 @@
           }
         }
     
-        geometry.addAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        geometry.addAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-        geometry.addAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
 
       }
 
@@ -6912,7 +6911,7 @@
       const newPositions = triangles.flatMap( index => [ points [index ], points[ index+1 ], points[ index+2 ] ] );
 
       const geo = new THREE.BufferGeometry();
-      geo.addAttribute( "position", new THREE.BufferAttribute( Float32Array.from( newPositions ), 3 ) );
+      geo.setAttribute( "position", new THREE.BufferAttribute( Float32Array.from( newPositions ), 3 ) );
 
       if ( this.data.computeNormals ) {
         geo.computeVertexNormals();
@@ -7129,10 +7128,10 @@
       this.instanceScale = new THREE.InstancedBufferAttribute(scales, FLOATS_PER_SCALE);
       this.instanceColor = new THREE.InstancedBufferAttribute(colors, FLOATS_PER_COLOR);
 
-      instancedGeometry.addAttribute("instancePosition", this.instancePosition);
-      instancedGeometry.addAttribute("instanceQuaternion", this.instanceQuaternion);
-      instancedGeometry.addAttribute("instanceScale", this.instanceScale);
-      instancedGeometry.addAttribute("instanceColor", this.instanceColor);
+      instancedGeometry.setAttribute("instancePosition", this.instancePosition);
+      instancedGeometry.setAttribute("instanceQuaternion", this.instanceQuaternion);
+      instancedGeometry.setAttribute("instanceScale", this.instanceScale);
+      instancedGeometry.setAttribute("instanceColor", this.instanceColor);
 
       let instancedMaterial = mesh.material;
 
@@ -10484,7 +10483,7 @@ vec2 worley(const vec2 P, const float jitter) {
       let actuators = [];
 
       if ( elements.length === 0 ) {
-        warn( "no controller elements found" );
+        warn( this, "no controller elements found" );
 
       } else {
         for ( let el of elements ) {
@@ -10497,7 +10496,7 @@ vec2 worley(const vec2 P, const float jitter) {
         }
 
         if ( actuators.length === 0 ) {
-          warn( "no tracked-controls found" );
+          warn( this, "no tracked-controls found" );
         }
       }
 
@@ -12447,6 +12446,7 @@ void main()
 
   const MODEL_MESH = "mesh";
   const VERTS_PER_RIBBON = 2;
+  const INDICES_PER_RIBBON = 6;
 
   const RANDOM_REPEAT_COUNT = 131072; // random numbers will start repeating after this number of particles
 
@@ -12594,7 +12594,7 @@ void main()
       direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase$6 },
       particleOrder: { default: "any", oneOf: PARTICLE_ORDER_STRINGS },
       ribbonUVMultiplier: { default: 1 },
-      materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase$6 },
+      materialSide: { default: "double", oneOf: ["double", "front", "back"], parse: toLowerCase$6 },
       screenDepthOffset: { default: 0 },
       alphaTest: { default: 0 },
       fog: { default: true },
@@ -12626,18 +12626,18 @@ void main()
 
       // this.useTransparent = false
       this.textureFrames = new Float32Array(4); // xy is TextureFrame, z is TextureCount, w is TextureLoop
-      this.offset = new Float32Array(2*4).fill(0); // xyz is position, w is radialPosition
-      this.velocity = new Float32Array(2*4).fill(0); // xyz is velocity, w is radialVelocity
-      this.acceleration = new Float32Array(2*4).fill(0); // xyz is acceleration, w is radialAcceleration
-      this.angularVelocity = new Float32Array(2*4).fill(0); // xyz is angularVelocity, w is lifeTime
-      this.angularAcceleration = new Float32Array(2*4).fill(0); // xyz is angularAcceleration
-      this.orbital = new Float32Array(2*2).fill(0); // x is orbitalVelocity, y is orbitalAcceleration
+      this.offset = new Float32Array(2*4); // xyz is position, w is radialPosition
+      this.velocity = new Float32Array(2*4); // xyz is velocity, w is radialVelocity
+      this.acceleration = new Float32Array(2*4); // xyz is acceleration, w is radialAcceleration
+      this.angularVelocity = new Float32Array(2*4); // xyz is angularVelocity, w is lifeTime
+      this.angularAcceleration = new Float32Array(2*4); // xyz is angularAcceleration
+      this.orbital = new Float32Array(2*2); // x is orbitalVelocity, y is orbitalAcceleration
       this.colorOverTime; // color is xyz and opacity is w. created in update()
       this.rotationScaleOverTime; // x is rotation, y is scale. created in update()
-      this.params = new Float32Array(5*4).fill(0); // see ..._PARAM constants
-      this.velocityScale = new Float32Array(3).fill(0); // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
+      this.params = new Float32Array(5*4); // see ..._PARAM constants
+      this.velocityScale = new Float32Array(3); // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
       this.emitterColor = new THREE.Vector3(); // use vec3 for color
-      this.destination = new Float32Array(2*4).fill(0); // range value, xyz is destinationEntity.position + destinationOffset, w is destinationWeight
+      this.destination = new Float32Array(2*4); // range value, xyz is destinationEntity.position + destinationOffset, w is destinationWeight
       this.destinationOffset; // parsed value for destinationOffset, this will be blended into destination
       this.destinationWeight; // parsed value for destinationWeight
       this.nextID = 0;
@@ -12673,8 +12673,8 @@ void main()
       // can only change overTimeSlots while paused, as it will rebuild the shader (see updateDefines())
       if (data.overTimeSlots !== oldData.overTimeSlots && !this.isPlaying) {
         this.overTimeArrayLength = this.data.overTimeSlots*2 + 1; // each slot represents 2 glsl array elements pluse one element for the length info
-        this.colorOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0); // color is xyz and opacity is w
-        this.rotationScaleOverTime = new Float32Array(2*this.overTimeArrayLength).fill(0); // x is rotation, y is scale
+        this.colorOverTime = new Float32Array(4*this.overTimeArrayLength); // color is xyz and opacity is w
+        this.rotationScaleOverTime = new Float32Array(2*this.overTimeArrayLength); // x is rotation, y is scale
         overTimeDirty = true;
       }
 
@@ -12988,7 +12988,7 @@ void main()
         // // this.material.side = THREE.DoubleSide
         // this.material.side = THREE.FrontSide
         this.mesh = new THREE.Mesh(this.geometry, [this.material]); // geometry groups need an array of materials
-        this.mesh.drawMode = THREE.TriangleStripDrawMode;
+        //this.mesh.drawMode = THREE.TriangleStripDrawMode
       } else {
         this.mesh = new THREE.Points(this.geometry, this.material);
       }
@@ -13226,23 +13226,41 @@ void main()
           }
         }
 
-        this.geometry.addAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)); // gl_VertexID is not supported, so make our own id
-        this.geometry.addAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3).fill(0), 3));
+        this.geometry.setAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)); // gl_VertexID is not supported, so make our own id
+        this.geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3), 3));
 
         if (this.data.source) {
-          this.geometry.addAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4).fill(0), 4));
+          this.geometry.setAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4), 4));
         }
 
-        // the ribbons are presented as triangle strips, so each vert pairs with it's two previous verts to
-        // form a triangle.  To ensure each particle ribbon is not connected to other ribbons we place each
+        // the ribbons are presented as indexed triangles (triangle strips are no longer supported), with
+        // 2 verts and 6 indices per particle.  To ensure each particle ribbon is not connected to other ribbons we place each
         // one in a group containing only the verts for that ribbon
         if (this.isRibbon()) {
           this.geometry.clearGroups();
 
-          const m = this.trailCount * VERTS_PER_RIBBON;
-          for (let i = 0; i < n; i += m) {
-            this.geometry.addGroup(i, m, 0);
+          const numParticles = this.count/VERTS_PER_RIBBON/this.trailCount;
+          const indicesPerParticle = (this.trailCount - 1)*INDICES_PER_RIBBON;
+          const vertsPerParticle = this.trailCount*VERTS_PER_RIBBON;
+          const numIndices = numParticles*indicesPerParticle;
+          const indices = new Array(numIndices);
+
+          for (let i = 0, particle = 0; i < numIndices; i += indicesPerParticle, particle++) {
+            this.geometry.addGroup(i, indicesPerParticle, 0);
+
+            for (let j = 0, vertex = 0; j < indicesPerParticle; j += INDICES_PER_RIBBON, vertex += VERTS_PER_RIBBON) {
+              const startVertex = particle*vertsPerParticle + vertex;
+              indices[i+j] = startVertex;
+              indices[i+j+1] = startVertex + 2;
+              indices[i+j+2] = startVertex + 3;
+              indices[i+j+3] = startVertex;
+              indices[i+j+4] = startVertex + 3;
+              indices[i+j+5] = startVertex + 1;
+            }
+    
           }
+
+          this.geometry.setIndex( indices );
         }
       }
     },
@@ -13427,10 +13445,10 @@ void main()
             modelFillFn(this.modelVertices, modelPosition);
           }
 
-          // for each particle, update all of its trails. if there are no trails, then
+          // for each particle, give all of its trails the same position/quaternion. if there are no trails, then
           // trailcount is 1
-          for (let particleVert = 0, particleVertCount = isRibbon ? VERTS_PER_RIBBON : 1; particleVert < particleVertCount; particleVert++ ) {
-            for (let trail = 0; trail < this.trailCount; trail++) {
+          for (let trail = 0; trail < this.trailCount; trail++) {
+            for (let ribbonVert = 0, ribbonVertCount = isRibbon ? VERTS_PER_RIBBON : 1; ribbonVert < ribbonVertCount; ribbonVert++) {
               id = this.nextID;
 
               if (isUsingModel) {
@@ -13460,7 +13478,7 @@ void main()
 
         if (numSpawned > 0) {
           const trailVertCount = this.trailCount * (isRibbon ? VERTS_PER_RIBBON : 1);
-          this.params[ID_PARAM] = Math.floor(id/trailVertCount); // particle ID
+          this.params[ID_PARAM] = Math.floor(id/trailVertCount); // ID of previous particle
 
           if (isBurst) { // if we did burst emit, then wait for maxAge before emitting again
             this.nextTime += this.lifeTime[1];
@@ -13476,14 +13494,14 @@ void main()
           }
 
           if (hasSource || isUsingModel) {
-            particlePosition.updateRange.offset = startIndex;
-            particlePosition.updateRange.count = numSpawned;
+            particlePosition.updateRange.offset = startIndex*3;
+            particlePosition.updateRange.count = numSpawned*3;
             particlePosition.needsUpdate = true;
           }
 
           if (hasSource) {
-            particleQuaternion.updateRange.offset = startIndex;
-            particleQuaternion.updateRange.count = numSpawned;
+            particleQuaternion.updateRange.offset = startIndex*4;
+            particleQuaternion.updateRange.count = numSpawned*4;
             particleQuaternion.needsUpdate = true;
           }
 
@@ -15751,7 +15769,7 @@ void main() {
 
         if (!geometry.getAttribute("color")) {
           const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX$1).fill(1);
-          geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX$1));
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX$1));
         }
 
         const positions = geometry.getAttribute("position");

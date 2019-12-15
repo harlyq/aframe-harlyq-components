@@ -86,7 +86,7 @@ AFRAME.registerComponent("face-color", {
 
       if (!geometry.getAttribute("color")) {
         const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX).fill(1)
-        geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX))
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX))
       }
 
       // if (!geometry.getAttribute("color")) {
@@ -169,6 +169,6 @@ AFRAME.registerComponent("face-color", {
   //     newColors[j+2] = defaultColor.b
   //   }
 
-  //   geometry.addAttribute("color", new THREE.Float32BufferAttribute(newColors, COLOR_FLOATS_PER_VERTEX))
+  //   geometry.setAttribute("color", new THREE.Float32BufferAttribute(newColors, COLOR_FLOATS_PER_VERTEX))
   // },
 })

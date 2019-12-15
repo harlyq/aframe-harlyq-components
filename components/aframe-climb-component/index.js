@@ -10,7 +10,6 @@ AFRAME.registerComponent("climb", {
   init() {
     this.onGrabStart = this.onGrabStart.bind(this)
     this.onGrabEnd = this.onGrabEnd.bind(this)
-    this.onSceneLoaded = this.onSceneLoaded.bind(this)
 
     this.grab = { hand: undefined, target: undefined, position: new THREE.Vector3() }
   },

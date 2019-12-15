@@ -53,8 +53,8 @@ AFRAME.registerComponent("tracer", {
       colors[i+2] = this.color.b
     }
 
-    this.geometry.addAttribute( "position", new THREE.BufferAttribute(positions, 3) )
-    this.geometry.addAttribute( "color", new THREE.BufferAttribute(colors, 3) )
+    this.geometry.setAttribute( "position", new THREE.BufferAttribute(positions, 3) )
+    this.geometry.setAttribute( "color", new THREE.BufferAttribute(colors, 3) )
 
     const mesh = new THREE.Mesh(this.geometry)
     mesh.drawMode = THREE.TriangleStripDrawMode

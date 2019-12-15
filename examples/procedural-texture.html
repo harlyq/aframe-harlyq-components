@@ -2,8 +2,8 @@
 <html>
   <head>
     <title>Procedural Texture Example</title>
-    <script src="https://aframe.io/releases/0.9.2/aframe.js"></script>
-    <!--script src="../../aframe/aframe-0.9.2.js"></script-->
+    <script src="https://aframe.io/releases/1.0.0/aframe.js"></script>
+    <!--script src="../../aframe/aframe-1.0.0.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script id="cloudshader" type="x-shader/x-fragment">
       #include <procedural-ext>
@@ -253,15 +253,6 @@
       <a-box id="testbox" position="0 2 -5" material="src:#test;" uv-transform="wrapS: mirroredRepeat; repeat: 1 1; rotation: 15; offset: 1 4; center: .9 .9" keyframe="uv-transform.offset: 0 0,4 4; uv-transform.rotation: 15,100,15; duration: 5.5"></a-box>
 
       <a-box id="gaussianshaderbox" position="-2 4 -5" procedural-texture="width: 256; height: 256; shader: url(assets/gaussianshader.glsl); backgroundColor: blue; fillColor: white"></a-box>
-
-      <a-box id="animatedtexture" position="6 4 -5" material="src:#animatedsvg" texture-updater>
-        <img id="animatedsvg" crossorigin="anonymous" width="128" height="128" src='data:image/svg+xml;utf8,
-          <svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" version="1.1">
-            <rect x="10" y="10" width="100" height="100" cursor="move">
-              <animate attributeType="XML" attributeName="x" from="-100" to="120" dur="10s" repeatCount="indefinite"/>
-            </rect>
-          </svg>'>
-      </a-box>
 
       <a-sphere id="voronoisphere" scale="0.5 0.5 0.5" position="-6 2 -5" material="src:#voronoi; alphaTest: .3; side: double"></a-sphere>
       <a-sphere id="cloudsphere" scale="0.5 0.5 0.5" position="-4 2 -5" material="src:#cloud;"></a-sphere>

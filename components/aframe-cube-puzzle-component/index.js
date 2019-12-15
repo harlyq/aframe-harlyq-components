@@ -535,10 +535,10 @@ AFRAME.registerComponent("cube-puzzle", {
     this.instancePackedFrame = new THREE.InstancedBufferAttribute(this.packedFrames, FLOATS_PER_PACKED_FRAME)
     this.instanceHighlight = new THREE.InstancedBufferAttribute(this.highlights, 1)
 
-    instanceGeo.addAttribute("instancePosition", this.instancePosition)
-    instanceGeo.addAttribute("instanceQuaternion", this.instanceQuaternion)
-    instanceGeo.addAttribute("instancePackedFrame", this.instancePackedFrame)
-    instanceGeo.addAttribute("instanceHighlight", this.instanceHighlight)
+    instanceGeo.setAttribute("instancePosition", this.instancePosition)
+    instanceGeo.setAttribute("instanceQuaternion", this.instanceQuaternion)
+    instanceGeo.setAttribute("instancePackedFrame", this.instancePackedFrame)
+    instanceGeo.setAttribute("instanceHighlight", this.instanceHighlight)
     instanceGeo.maxInstanceCount = numInstances
 
     const mesh = new THREE.Mesh(instanceGeo, cubeMaterial)

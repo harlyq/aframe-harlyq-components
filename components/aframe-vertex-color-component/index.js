@@ -70,7 +70,7 @@ AFRAME.registerComponent("vertex-color", {
 
       if (!geometry.getAttribute("color")) {
         const whiteColors = new Float32Array(geometry.getAttribute("position").count*COLOR_FLOATS_PER_VERTEX).fill(1)
-        geometry.addAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX))
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(whiteColors, COLOR_FLOATS_PER_VERTEX))
       }
 
       const positions = geometry.getAttribute("position")

@@ -101,7 +101,7 @@ AFRAME.registerComponent( "rumble", {
     let actuators = []
 
     if ( elements.length === 0 ) {
-      aframeHelper.warn( "no controller elements found" )
+      aframeHelper.warn( this, "no controller elements found" )
 
     } else {
       for ( let el of elements ) {
@@ -114,7 +114,7 @@ AFRAME.registerComponent( "rumble", {
       }
 
       if ( actuators.length === 0 ) {
-        aframeHelper.warn( "no tracked-controls found" )
+        aframeHelper.warn( this, "no tracked-controls found" )
       }
     }
 

@@ -52,7 +52,7 @@ AFRAME.registerComponent( "hull", {
     const newPositions = triangles.flatMap( index => [ points [index ], points[ index+1 ], points[ index+2 ] ] )
 
     const geo = new THREE.BufferGeometry()
-    geo.addAttribute( "position", new THREE.BufferAttribute( Float32Array.from( newPositions ), 3 ) )
+    geo.setAttribute( "position", new THREE.BufferAttribute( Float32Array.from( newPositions ), 3 ) )
 
     if ( this.data.computeNormals ) {
       geo.computeVertexNormals()

@@ -72,10 +72,10 @@ AFRAME.registerComponent("instance-pool", {
     this.instanceScale = new THREE.InstancedBufferAttribute(scales, FLOATS_PER_SCALE)
     this.instanceColor = new THREE.InstancedBufferAttribute(colors, FLOATS_PER_COLOR)
 
-    instancedGeometry.addAttribute("instancePosition", this.instancePosition)
-    instancedGeometry.addAttribute("instanceQuaternion", this.instanceQuaternion)
-    instancedGeometry.addAttribute("instanceScale", this.instanceScale)
-    instancedGeometry.addAttribute("instanceColor", this.instanceColor)
+    instancedGeometry.setAttribute("instancePosition", this.instancePosition)
+    instancedGeometry.setAttribute("instanceQuaternion", this.instanceQuaternion)
+    instancedGeometry.setAttribute("instanceScale", this.instanceScale)
+    instancedGeometry.setAttribute("instanceColor", this.instanceColor)
 
     let instancedMaterial = mesh.material
 

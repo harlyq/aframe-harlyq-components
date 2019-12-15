@@ -114,9 +114,9 @@ AFRAME.registerComponent("heightfield", {
         }
       }
   
-      geometry.addAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-      geometry.addAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-      geometry.addAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
 
     }
 
