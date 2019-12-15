@@ -1184,11 +1184,10 @@ uniform vec4 textureFrames;
 uniform vec3 velocityScale;
 uniform vec4 destination[2];
 
+varying mat3 vUvTransform;
 varying vec4 vParticleColor;
-varying vec2 vCosSinRotation;
 varying vec2 vUv;
 varying float vOverTimeRatio;
-varying float vFrame;
 
 float VERTS_PER_RIBBON = 2.;
 
@@ -1690,8 +1689,6 @@ void main() {
 
 #endif // defined(USE_PARTICLE_VELOCITY_SCALE)
 
-  vCosSinRotation = vec2( c, s );
-
   // #include <color_vertex>
   // #include <begin_vertex> replaced by code above
   // #include <morphtarget_vertex>
@@ -1756,15 +1753,13 @@ void main() {
 
 #endif // defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
 
-// vFrame is an int, but we must pass it as a float, so add .5 now and floor() in the
-// fragment shader to ensure there is no rounding error
 #if defined(USE_PARTICLE_RANDOMIZE_FRAMES)
-  vFrame = floor ( random( seed ) * textureFrames.z ) + .5;
+  float frame = floor ( random( seed ) * textureFrames.z );
 #else
   float textureCount = textureFrames.z;
   float textureLoop = textureFrames.w;
 
-  vFrame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) ) + .5;
+  float frame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) );
 #endif
 
 #if !defined(USE_RIBBON_TRAILS) && !defined(USE_RIBBON_3D_TRAILS)
@@ -1784,6 +1779,31 @@ void main() {
 
   vUv = vec2( mix( 1. - vOverTimeRatio, motionAge/trailInterval, ribbonUVType ) * ribbonUVMultiplier, 1. - ribbonID );
 #endif
+
+vUvTransform = mat3(1.);
+
+#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
+  {
+    vec2 invTextureFrame = 1. / textureFrames.xy;
+    float textureCount = textureFrames.z;
+    float textureLoop = textureFrames.w;
+
+    float tx = mod( frame, textureFrames.x ) * invTextureFrame.x;
+    float ty = (textureFrames.y - 1. - floor( frame * invTextureFrame.x )) * invTextureFrame.y; // assumes textures are flipped on y
+    float sx = invTextureFrame.x;
+    float sy = invTextureFrame.y;
+    float cx = tx + invTextureFrame.x * .5;
+    float cy = ty + invTextureFrame.y * .5;
+  
+    vUvTransform[0][0] = sx * c;
+    vUvTransform[0][1] = -sx * s;
+    vUvTransform[1][0] = sy * s;
+    vUvTransform[1][1] = sy * c;
+    vUvTransform[2][0] = c * tx + s * ty - ( c * cx + s * cy ) + cx;
+    vUvTransform[2][1] = -s * tx + c * ty - ( -s * cx + c * cy ) + cy;
+  }
+#endif // defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
+
 }`
 
   // based upon https://github.com/mrdoob/three.js/blob/master/src/renderers/shaders/ShaderLib/points_frag.glsl
@@ -1799,11 +1819,10 @@ void main() {
 uniform vec4 textureFrames;
 uniform vec3 emitterColor;
 
+varying mat3 vUvTransform;
 varying vec4 vParticleColor;
-varying vec2 vCosSinRotation;
 varying vec2 vUv;
 varying float vOverTimeRatio;
-varying float vFrame;
 
 void main() {
   if ( vOverTimeRatio < 0. || vOverTimeRatio > 1. ) {
@@ -1814,32 +1833,6 @@ void main() {
 
   vec3 outgoingLight = vec3( 0. );
   vec4 diffuseColor = vec4( emitterColor, 1. );
-  mat3 uvTransform = mat3( 1. );
-
-#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
-  {
-    vec2 invTextureFrame = 1. / textureFrames.xy;
-    float textureCount = textureFrames.z;
-    float textureLoop = textureFrames.w;
-
-    float frame = floor(vFrame);
-    float c = vCosSinRotation.x;
-    float s = vCosSinRotation.y;
-    float tx = mod( frame, textureFrames.x ) * invTextureFrame.x;
-    float ty = (textureFrames.y - 1. - floor( frame * invTextureFrame.x )) * invTextureFrame.y; // assumes textures are flipped on y
-    float sx = invTextureFrame.x;
-    float sy = invTextureFrame.y;
-    float cx = tx + invTextureFrame.x * .5;
-    float cy = ty + invTextureFrame.y * .5;
-  
-    uvTransform[0][0] = sx * c;
-    uvTransform[0][1] = -sx * s;
-    uvTransform[1][0] = sy * s;
-    uvTransform[1][1] = sy * c;
-    uvTransform[2][0] = c * tx + s * ty - ( c * cx + s * cy ) + cx;
-    uvTransform[2][1] = -s * tx + c * ty - ( -s * cx + c * cy ) + cy;
-  }
-#endif // defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
 
   // #include <logdepthbuf_fragment>
   // #include <map_particle_fragment>
@@ -1848,9 +1841,9 @@ void main() {
 #ifdef USE_MAP
 
 #if defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
-  vec2 uv = ( uvTransform * vec3( vUv, 1. ) ).xy;
+  vec2 uv = ( vUvTransform * vec3( vUv, 1. ) ).xy;
 #else
-  vec2 uv = ( uvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
+  vec2 uv = ( vUvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
 #endif
 
   vec4 mapTexel = texture2D( map, uv );
