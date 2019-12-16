@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title></title>
+    <!--script src="https://aframe.io/releases/1.0.0/aframe.js"></script-->
+    <script src="../../aframe/aframe-1.0.0.js"></script>
+    <script src="../dist/aframe-harlyq-components.js"></script>
+  </head>
+  <body>
+    <a-scene background="color: grey" stats>
+      <a-assets>
+
+      </a-assets>
+      <a-box scale="2 2 2" position="0 1 -5" outline></a-box>
+      <a-sphere scale="2.9 .2 .7" position="1 1 -5" material="color:blue;" outline="style: screenspace; color: lightblue;"></a-sphere>
+      <a-box scale="2 20 2" position="100 1 -100" outline></a-box>
+      <a-box scale="2 20 2" position="110 1 -100" material="color:blue;" outline="style: screenspace; color: lightblue;"></a-box>
+      <a-gltf-model scale=".2 .2 .2" position="-10 1 -10" src="url(assets/Books_01.gltf)" outline></a-gltf-model>
+      <a-gltf-model scale=".2 .2 .2" position="-10 -1 -10" src="url(assets/Books_01.gltf)" outline="style: screenspace; color: lightblue;"></a-gltf-model>
+      <a-sphere scale=".2 .2 .2" position="3 3 -5" material="color:green;" outline="style: screenspace; color: lightblue; enabled: false"></a-sphere>
+    </a-scene>
+  </body>
+</html>
