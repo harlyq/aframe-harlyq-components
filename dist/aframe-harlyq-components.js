@@ -2128,6 +2128,17 @@
     return out
   }
 
+  /** @type {<T extends Vertices, TV extends Vertices, TA extends Affine4>(out: T, vertices: TV, aff: TA, vi?: number, oi?: number) => T} */
+  function applyAffine4(out, vertices, aff, vi=0, oi=0) {
+    const vx = vertices[vi], vy = vertices[vi+1], vz = vertices[vi+2];
+
+    out[oi] = aff[0]*vx + aff[4]*vy + aff[8]*vz + aff[12];
+    out[oi+1] = aff[1]*vx + aff[5]*vy + aff[9]*vz + aff[13];
+    out[oi+2] = aff[2]*vx + aff[6]*vy + aff[10]*vz + aff[14];
+
+    return out
+  }
+
   // import hullCModule from "../build/hull.c.mjs"
 
   /**
@@ -3204,9 +3215,10 @@
       const tempParent = object3D.parent;
 
       object3D.parent = null;
-      object3D.position.set(0,0,0);
+      object3D.position.set(0,0,0); // TODO - we should get rid of these???!!!
       object3D.quaternion.set(0,0,0,1);
       object3D.scale.set(1,1,1);
+      object3D.updateMatrixWorld(true);
 
       tempBox3.setFromObject(object3D); // expensive for models
 
@@ -4428,7 +4440,7 @@
           this.garbochess = new Worker(workerUrl);
 
           this.garbochess.onerror = (event) => {
-            throw Error(`problem with worker "${this.data.aiWorker}"`)
+            throw Error(`problem with worker "${this.data.aiWorker} - ${event.message}"`)
           };
     
           this.garbochess.onmessage = (event) => {
@@ -9472,6 +9484,171 @@
     return result
   }
 
+  AFRAME.registerComponent("outline", {
+    schema: {
+      color: { type: "color", default: "purple" },
+      width: { default: 0.01 },
+      meshName: { default: "mesh" },
+      style: { oneOf: ["screenspace", "3dspace"], default: "3dspace", parse: (str) => str.toLowerCase() },
+      enabled: { default: true },
+    },
+
+    init() {
+      this.onObject3DSet = this.onObject3DSet.bind(this);
+      this.el.addEventListener("object3dset", this.onObject3DSet);
+
+      this.color = new THREE.Color();
+      this.material = this.createMaterial();
+
+      const obj3D = this.el.getObject3D(this.data.meshName);
+      this.outline = this.createOutline(obj3D, this.material);
+    },
+
+    remove() {
+      this.el.removeEventListener("object3dset", this.onObject3DSet);
+    },
+
+    update(oldData) {
+      const data = this.data;
+
+      if (data.color !== oldData.color) {
+        this.color.set(data.color);
+        this.material.uniforms['color'].value.set( this.color.r, this.color.g, this.color.b );
+      }
+
+      if (data.style !== oldData.style) {
+        switch (data.style) {
+          case "screenspace": this.material.defines = { USE_SCREEN_SPACE: true }; break
+          default: this.material.defines = { USE_THREED_SPACE: true }; break
+        }
+      }
+
+      this.material.uniforms['width'].value = data.style === 'screenspace' ? data.width : data.width*10;
+
+      if (this.outline) {
+        this.outline.visible = this.data.enabled;
+      }
+    },
+
+    createMaterial() {
+      return new THREE.ShaderMaterial( {
+        uniforms: {
+          color: { value: new THREE.Vector3() },
+          width: { value: .1 },
+        },
+        depthWrite: true,
+        transparent: false,
+        side: THREE.BackSide,
+
+        vertexShader: `
+uniform float width;
+void main() {
+
+  float outlineWidth = width;
+
+  vec3 modelScale = vec3( 
+    length( modelMatrix[0].xyz ), 
+    length( modelMatrix[1].xyz ), 
+    length( modelMatrix[2].xyz )
+  );
+
+#if defined(USE_SCREEN_SPACE)
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  
+  outlineWidth *= gl_Position.w;
+#endif // defined(USE_THREED_SPACE)
+
+  vec3 widthScale = outlineWidth / modelScale;
+
+  mat4 scaleMatrix = mat4(1.);
+  scaleMatrix[0][0] = widthScale.x;
+  scaleMatrix[1][1] = widthScale.y;
+  scaleMatrix[2][2] = widthScale.z;
+
+  vec4 widthOffset = scaleMatrix * vec4( normalize( position ), 1. );
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position + widthOffset.xyz, 1.0 );
+}`,
+
+        fragmentShader: `
+uniform vec3 color;
+void main() {
+  gl_FragColor = vec4( color, 1. );
+}`,
+
+      } )
+    },
+
+    createOutline(obj, material) {
+      if (obj) {
+        
+        obj.updateMatrixWorld(true);
+        const outlineObj3D = this.createHullOutline(obj, material);
+
+        if (outlineObj3D) {
+          outlineObj3D.visible = this.data.enabled;
+          this.el.setObject3D("outline", outlineObj3D);
+        }
+
+        return outlineObj3D
+      }
+    },
+
+    createHullOutline(root, material) {
+      const VERTS_PER_POSITION = 3;
+      let numVerts = 0;
+
+      root.traverse(node => {
+        const position = node.geometry && node.geometry.getAttribute("position");
+        if (position && position.itemSize === VERTS_PER_POSITION) {
+          numVerts += position.array.length;
+        }
+      });
+
+      const verts = new Float32Array(numVerts);
+      let startIndex = 0;
+
+      // detach the parent so we can get the matrixWorld of each child relative
+      // to the root
+      const oldParent = root.parent;
+      root.parent = null;
+      root.updateMatrixWorld(true);
+
+      root.traverse(node => {
+        const position = node.geometry && node.geometry.getAttribute("position");
+        if (position && position.itemSize === VERTS_PER_POSITION) {
+          verts.set(position.array, startIndex);
+
+          for (let i = 0; i < position.count; i++) {
+            const positionIndex = startIndex + i*VERTS_PER_POSITION;
+            applyAffine4(verts, verts, node.matrixWorld.elements, positionIndex, positionIndex);
+          }
+
+          startIndex += position.count*VERTS_PER_POSITION;
+        }
+      });
+
+      // restore the state of the parent
+      root.parent = oldParent;
+      root.updateMatrixWorld(true);
+
+      const hullIndices = generateHullTriangles(verts);
+      if (hullIndices) {
+        const uniqueIndices = hullIndices.slice().sort((a,b) => a - b).filter((x,i,list) => i === 0 || x !== list[i-1]);
+        const hullGeo = new THREE.BufferGeometry();
+        const hullVerts = new Float32Array( uniqueIndices.flatMap( i => [verts[i], verts[i+1], verts[i+2]] ) );
+        hullGeo.setAttribute( "position", new THREE.BufferAttribute( hullVerts, VERTS_PER_POSITION ) );
+        hullGeo.setIndex( hullIndices.map(i => uniqueIndices.indexOf(i) ) );
+        return new THREE.Mesh(hullGeo, material)
+      }
+    },
+
+    onObject3DSet(event) {
+      if (event.detail.type === this.data.meshName) {
+        this.outline = this.createOutline(event.detail.object, this.material);
+      }
+    },
+  });
+
   const WHITE_TEXTURE = new THREE.DataTexture(new Uint8Array(3).fill(255), 1, 1, THREE.RGBFormat);
 
   AFRAME.registerComponent("picture", {
@@ -13607,11 +13784,10 @@ uniform vec4 textureFrames;
 uniform vec3 velocityScale;
 uniform vec4 destination[2];
 
+varying mat3 vUvTransform;
 varying vec4 vParticleColor;
-varying vec2 vCosSinRotation;
 varying vec2 vUv;
 varying float vOverTimeRatio;
-varying float vFrame;
 
 float VERTS_PER_RIBBON = 2.;
 
@@ -14113,8 +14289,6 @@ void main() {
 
 #endif // defined(USE_PARTICLE_VELOCITY_SCALE)
 
-  vCosSinRotation = vec2( c, s );
-
   // #include <color_vertex>
   // #include <begin_vertex> replaced by code above
   // #include <morphtarget_vertex>
@@ -14179,15 +14353,13 @@ void main() {
 
 #endif // defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
 
-// vFrame is an int, but we must pass it as a float, so add .5 now and floor() in the
-// fragment shader to ensure there is no rounding error
 #if defined(USE_PARTICLE_RANDOMIZE_FRAMES)
-  vFrame = floor ( random( seed ) * textureFrames.z ) + .5;
+  float frame = floor ( random( seed ) * textureFrames.z );
 #else
   float textureCount = textureFrames.z;
   float textureLoop = textureFrames.w;
 
-  vFrame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) ) + .5;
+  float frame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) );
 #endif
 
 #if !defined(USE_RIBBON_TRAILS) && !defined(USE_RIBBON_3D_TRAILS)
@@ -14207,6 +14379,31 @@ void main() {
 
   vUv = vec2( mix( 1. - vOverTimeRatio, motionAge/trailInterval, ribbonUVType ) * ribbonUVMultiplier, 1. - ribbonID );
 #endif
+
+vUvTransform = mat3(1.);
+
+#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
+  {
+    vec2 invTextureFrame = 1. / textureFrames.xy;
+    float textureCount = textureFrames.z;
+    float textureLoop = textureFrames.w;
+
+    float tx = mod( frame, textureFrames.x ) * invTextureFrame.x;
+    float ty = (textureFrames.y - 1. - floor( frame * invTextureFrame.x )) * invTextureFrame.y; // assumes textures are flipped on y
+    float sx = invTextureFrame.x;
+    float sy = invTextureFrame.y;
+    float cx = tx + invTextureFrame.x * .5;
+    float cy = ty + invTextureFrame.y * .5;
+  
+    vUvTransform[0][0] = sx * c;
+    vUvTransform[0][1] = -sx * s;
+    vUvTransform[1][0] = sy * s;
+    vUvTransform[1][1] = sy * c;
+    vUvTransform[2][0] = c * tx + s * ty - ( c * cx + s * cy ) + cx;
+    vUvTransform[2][1] = -s * tx + c * ty - ( -s * cx + c * cy ) + cy;
+  }
+#endif // defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
+
 }`;
 
     // based upon https://github.com/mrdoob/three.js/blob/master/src/renderers/shaders/ShaderLib/points_frag.glsl
@@ -14222,11 +14419,10 @@ void main() {
 uniform vec4 textureFrames;
 uniform vec3 emitterColor;
 
+varying mat3 vUvTransform;
 varying vec4 vParticleColor;
-varying vec2 vCosSinRotation;
 varying vec2 vUv;
 varying float vOverTimeRatio;
-varying float vFrame;
 
 void main() {
   if ( vOverTimeRatio < 0. || vOverTimeRatio > 1. ) {
@@ -14237,32 +14433,6 @@ void main() {
 
   vec3 outgoingLight = vec3( 0. );
   vec4 diffuseColor = vec4( emitterColor, 1. );
-  mat3 uvTransform = mat3( 1. );
-
-#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
-  {
-    vec2 invTextureFrame = 1. / textureFrames.xy;
-    float textureCount = textureFrames.z;
-    float textureLoop = textureFrames.w;
-
-    float frame = floor(vFrame);
-    float c = vCosSinRotation.x;
-    float s = vCosSinRotation.y;
-    float tx = mod( frame, textureFrames.x ) * invTextureFrame.x;
-    float ty = (textureFrames.y - 1. - floor( frame * invTextureFrame.x )) * invTextureFrame.y; // assumes textures are flipped on y
-    float sx = invTextureFrame.x;
-    float sy = invTextureFrame.y;
-    float cx = tx + invTextureFrame.x * .5;
-    float cy = ty + invTextureFrame.y * .5;
-  
-    uvTransform[0][0] = sx * c;
-    uvTransform[0][1] = -sx * s;
-    uvTransform[1][0] = sy * s;
-    uvTransform[1][1] = sy * c;
-    uvTransform[2][0] = c * tx + s * ty - ( c * cx + s * cy ) + cx;
-    uvTransform[2][1] = -s * tx + c * ty - ( -s * cx + c * cy ) + cy;
-  }
-#endif // defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
 
   // #include <logdepthbuf_fragment>
   // #include <map_particle_fragment>
@@ -14271,9 +14441,9 @@ void main() {
 #ifdef USE_MAP
 
 #if defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
-  vec2 uv = ( uvTransform * vec3( vUv, 1. ) ).xy;
+  vec2 uv = ( vUvTransform * vec3( vUv, 1. ) ).xy;
 #else
-  vec2 uv = ( uvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
+  vec2 uv = ( vUvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
 #endif
 
   vec4 mapTexel = texture2D( map, uv );
