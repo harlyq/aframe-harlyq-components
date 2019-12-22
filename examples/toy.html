@@ -3,7 +3,7 @@
   <head>
     <title>Toy Example</title>
     <script src="https://aframe.io/releases/1.0.0/aframe.js"></script>
-    <!--script src="../../aframe/aframe-1.0.0.js"></script-->
+    <!--script src="../../aframe/aframe-master.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
   </head>
   <body>
@@ -38,11 +38,13 @@
       </a-box>
       <a-box id="stick" tool="handPosition: -.5 0 0; handRotation: 0 90 45; maxHands: 2" position="1 1 -1" scale=".01 .01 2" rotation="90 0 0" color="yellow"></a-box>
       <!--a-entity position="1 1 -1" picture="src: #pic"></a-entity-->
-      <a-entity position="-1 1 -1" scale=".1 .1 .1" cube-puzzle="moves: U R' B' L2 B U2 R B' R2"></a-entity>
+      <a-entity position="-1 1 -1" scale=".1 .1 .1" cube-puzzle="moves: U R' B' L2 B U2 R B' R2" bounding-box="targets: [vive-controls]; padding: .35"></a-entity>
+      <a-box position="-1 1.2 -1" color="red" scale=".5 .1 .1" bounding-box="targets: [vive-controls]"></a-box>
       <a-entity scale=".01 .01 .01" position="-.5 1 .5" chess="mode: freestyle; highlightColor: #4f4;"></a-entity>
       <a-entity scale=".01 .01 .01" position="-.5 1 1.5" chess="mode:replay; blackColor: #00f; pgn: url(assets/fischer_spassky_1992.pgn);"></a-entity>
       <a-entity scale=".01 .01 .01" position=".5 1 1.5" chess="debug: false; mode:game; whitePlayer: ai; blackPlayer: ai; blackColor: #ff0; whiteColor: #ffe; fen: 8/6PK/8/8/8/8/8/k7 w - - 0 1"></a-entity>
       <a-entity scale=".01 .01 .01" position=".5 1 .5" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: false; blackColor: #e00"></a-entity>
+      <a-entity position=".8 1 -.5" scale=".8 .8 .8" rotation="0 -80 0" sliding-puzzle="debug: false"></a-entity>
     </a-scene>
   </body>
 </html>
