@@ -693,7 +693,7 @@ AFRAME.registerComponent("chess", {
         this.garbochess = new Worker(workerUrl)
 
         this.garbochess.onerror = (event) => {
-          throw Error(`problem with worker "${this.data.aiWorker}"`)
+          throw Error(`problem with worker "${this.data.aiWorker} - ${event.message}"`)
         }
   
         this.garbochess.onmessage = (event) => {
