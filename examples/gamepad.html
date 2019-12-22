@@ -3,22 +3,38 @@
   <head>
     <title>Gamepad Tests</title>
     <script src="https://aframe.io/releases/1.0.0/aframe.js"></script>
-    <!--script src="../../aframe/aframe-1.0.0.js"></script-->
+    <!--script src="../../aframe/aframe-master.js"></script-->
   </head>
   <body>
-    <a-scene>      
+    <a-scene background="color: black">
+      <a-entity hand-controls="left"></a-entity>
+      <a-entity hand-controls="right"></a-entity>
+      <a-entity id="output" position="0 1 -2" text="value:Waiting for gamepads..."></a-entity>
     </a-scene>
     <script>
+      const outputEl = document.getElementById("output")
+      let str = ""
+
       window.addEventListener("gamepadconnected", function(e) {
-        console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
-          e.gamepad.index, e.gamepad.id,
-          e.gamepad.buttons.length, e.gamepad.axes.length);
+        str += `Gamepad connected at index ${e.gamepad.index}: ${e.gamepad.id}. ${e.gamepad.buttons.length} buttons, ${e.gamepad.axes.length} axes.\n`
+        outputEl.setAttribute("text", "value", str)
       });
 
       window.addEventListener("gamepaddisconnected", function(e) {
-        console.log("Gamepad disconnected from index %d: %s",
-          e.gamepad.index, e.gamepad.id);
+        str += `Gamepad disconnected at index ${e.gamepad.index}: ${e.gamepad.id}\n`
+        outputEl.setAttribute("text", "value", str)
       });
+
+      window.addEventListener("controllerconnected", function(e) {
+        str += `Controller connected ${e.detail.component.name}\n`
+        outputEl.setAttribute("text", "value", str)
+      });
+
+      window.addEventListener("controllerdisconnected", function(e) {
+        str += `Controller disconnected ${e.detail.component.name}\n`
+        outputEl.setAttribute("text", "value", str)
+      });
+
     </script>
   </body>
 </html>
