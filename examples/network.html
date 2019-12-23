@@ -6,7 +6,7 @@
   <meta name="description" content="Dev Example — naf-native-webrtc-adapter">
 
   <script src="https://aframe.io/releases/1.0.0/aframe.js"></script>
-  <!--script src="../../aframe/aframe-1.0.0.js"></script-->
+  <!--script src="../../aframe/aframe-master.js"></script-->
 
   <script src="../network/socket.io.js"></script>
   <script src="../network/networked-aframe.js"></script>
@@ -35,13 +35,17 @@
   </template>
 
   <template id="chessReplay-template">
-    <a-entity scale=".01 .01 .01" chess="mode:replay; src:url(assets/chess_set/chess_set.glb); boardMesh: board; meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn);">
+    <a-entity scale=".01 .01 .01" chess="mode:replay; pgn: url(assets/fischer_spassky_1992.pgn);">
     </a-entity>
   </template>
   
   <template id="chessAIHuman-template">
-    <a-entity scale=".01 .01 .01" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: false; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee;">
+    <a-entity scale=".01 .01 .01" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: false;">
     </a-entity>
+  </template>
+
+  <template id="slidingPuzzle-template">
+    <a-entity scale=".8 .8 .8" sliding-puzzle></a-entity>
   </template>
 
   <script>
@@ -78,7 +82,7 @@
       document.addEventListener("keydown", (event) => {
         const sceneEl = document.querySelector("a-scene")
 
-        if (event.keyCode == 32) { // space
+        if (event.keyCode == 67) { // c
           const newCubeEl = document.createElement("a-entity")
           newCubeEl.setAttribute("networked", "template: #cube-template")
           newCubeEl.setAttribute("scale", ".3 .3 .3")
@@ -98,6 +102,14 @@
           newChessEl.setAttribute("rotation", "0 0 0")
           newChessEl.flushToDOM()
           sceneEl.appendChild(newChessEl)
+        }
+        else if (event.keyCode == 66) { // b
+          const newSlidingEl = document.createElement("a-entity")
+          newSlidingEl.setAttribute("networked", "template: #slidingPuzzle-template")
+          newSlidingEl.setAttribute("position", "0 1 0")
+          newSlidingEl.setAttribute("rotation", "0 0 0")
+          newSlidingEl.flushToDOM()
+          sceneEl.appendChild(newSlidingEl)
         }
       })
     }
@@ -122,8 +134,13 @@
     <a-entity id="player" networked="template:#avatar-template;" position="0 1.6 1" camera wasd-controls look-controls></a-entity>
     <!--a-entity id="initcube" scale=".2 .2 .2" position="0 1.3 0" networked="attachTemplateToLocal: false; networkId:aaaaaaa" cube-puzzle="debug:true"></a-entity-->
     <!--a-entity scale=".01 .01 .01" position="0 1.2 0" networked="attachTemplateToLocal:false; networkId:bbbbb" chess="mode: replay; whitePlayer: ai; blackPlayer: human; debug: true; boardMesh: board; src:url(assets/chess_set/chess_set.glb); meshes: rook,knight',bishop',queen,king,pawn,rook,knight,bishop,queen,king,pawn; blackColor: #ff0000; whiteColor: #eee; pgn: url(assets/fischer_spassky_1992.pgn)"-->
-
+    <!--a-entity position="0 1 -.5" scale=".8 .8 .8" sliding-puzzle="debug: true;" networked="attachTemplateToLocal:false; networkId:ccccc;"></a-entity-->
   </a-scene>
+  <div style="position: absolute; top: 0px; right: 0px">
+    <div>c - cube</div>
+    <div>m - chess set</div>
+    <div>b - sliding puzzle</div>
+  </div>
 </body>
 
 </html>

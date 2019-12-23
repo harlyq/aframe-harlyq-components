@@ -1,6 +1,19 @@
-import { domHelper, intersection, slidingHelper } from "harlyq-helpers"
+import { domHelper, intersection, nafHelper, slidingHelper } from "harlyq-helpers"
 
 const VERTS_PER_TILE = 6
+
+AFRAME.registerSystem("sliding-puzzle", {
+
+  ...nafHelper.networkSystem("sliding-puzzle"),
+
+  init() {
+    this.setupNetwork()
+  },
+
+  remove() {
+    this.shutdownNetwork()
+  },
+})
 
 AFRAME.registerComponent("sliding-puzzle", {
   schema: {
@@ -20,6 +33,7 @@ AFRAME.registerComponent("sliding-puzzle", {
   init() {
     this.onGrab = this.onGrab.bind(this)
     this.onRelease = this.onRelease.bind(this)
+    this.onShuffle = this.onShuffle.bind(this)
 
     this.mesh = undefined
     this.hands = []
@@ -29,14 +43,27 @@ AFRAME.registerComponent("sliding-puzzle", {
       // local state
       grabHands: [],
       hoverTiles: [],
+      needsBroadcast: false,
 
       // networked state
       puzzle: undefined,
       controllerId: undefined,
     }
+
+    this.el.addEventListener("shuffle", this.onShuffle)
+
+    this.system.registerNetworking(this, {
+      onClientDisconnected: this.onClientDisconnected.bind(this),
+      onOwnershipGained: this.onOwnershipGained.bind(this),
+      receiveNetworkData: this.receiveNetworkData.bind(this),
+      requestSync: this.requestSync.bind(this),
+    })
   },
 
   remove() {
+    this.el.removeEventListener("shuffle", this.onShuffle)
+
+    this.system.unregisterNetworking(this)
   },
 
   update(oldData) {
@@ -63,7 +90,7 @@ AFRAME.registerComponent("sliding-puzzle", {
       }
     }
 
-    if (data.layout !== oldData.layout) {
+    if (data.layout !== oldData.layout && data.layout) {
       const newLayout = data.layout.split(",").map( x => Number( x.trim() ) )
       this.dispatch("layout", newLayout)
     }
@@ -73,16 +100,22 @@ AFRAME.registerComponent("sliding-puzzle", {
     const dt = Math.min(100, deltaTime)/1000
     const state = this.state
 
-    if (state.grabHands.some(grab => grab.tile)) {
+    if (this.canControl() && state.grabHands.some(grab => grab.tile)) {
       this.tickGrabbing()
     } else {
       this.tickHovering()
+    }
+
+    // managed in the tick, so we broadcast at most once per frame
+    if (state.needsBroadcast) {
+      this.dispatch("broadcast")
     }
   },
 
   dispatch(action, ...args) {
     const state = this.state
     let repaint = true
+    let broadcast = true
 
     switch (action) {
       case "create": 
@@ -99,20 +132,25 @@ AFRAME.registerComponent("sliding-puzzle", {
 
       case "hover":
         state.hoverTiles = args[0]
+        broadcast = false
         break
 
       case "slide":
         slidingHelper.slideTiles(state.puzzle, args[0], args[1], args[2])
+        broadcast = false
         break
 
       case "grab":
         state.grabHands.push({hand: args[0], tile: args[1], row: args[2], col: args[3]})
+        nafHelper.takeOwnership(this)
+        this.controllerId = nafHelper.getClientId()
         break
 
       case "release":
         state.grabHands = state.grabHands.filter(grab => grab.hand !== args[0])
 
         if (state.grabHands.length === 0) {
+          state.controllerId = undefined
           slidingHelper.recalculateMissingTile(state.puzzle)
     
           if (this.data.debug) {
@@ -122,13 +160,32 @@ AFRAME.registerComponent("sliding-puzzle", {
         }
         break
 
+      case "controller":
+        state.controllerId = args[0]
+        if (!this.canControl()) {
+          state.grabHands.length = 0
+        }
+        break
+
+      case "broadcast":
+        this.system.broadcastNetworkData(this, this.getNetworkPacket())
+        state.needsBroadcast = false
+        broadcast = false
+        repaint = false
+        break
+
       default:
         repaint = false
+        broadcast = false
         break
     }
 
     if (repaint) {
       this.drawAllTiles()
+    }
+
+    if (broadcast) {
+      state.needsBroadcast = nafHelper.isNetworked(this)
     }
   },
 
@@ -265,9 +322,10 @@ AFRAME.registerComponent("sliding-puzzle", {
 
   // row and col may be fractional, both start from 0
   drawTile(id, row, col, zOffset = 0) {
+    const puzzle = this.state.puzzle
     const position = this.mesh.geometry.getAttribute("position")
-    const numCols = this.data.cols
-    const numRows = this.data.rows
+    const numCols = puzzle.numCols
+    const numRows = puzzle.numRows
     const missingTileId = numCols*numRows - 1
     const y0 = id === missingTileId ? 0 : .5 - row/numRows // .5 is the top, -.5 the bottom
     const x0 = id === missingTileId ? 0 : col/numCols - .5 // -.5 is the left, .5 the right
@@ -340,14 +398,19 @@ AFRAME.registerComponent("sliding-puzzle", {
   },
 
   onGrab(event) {
+    if (!this.el.sceneEl.is('vr-mode')) {
+      return // ignore events when a different browser window is in vr-mode
+    }
+
     const localPoint = new THREE.Vector3()
     const hand = event.target
+    const state = this.state
 
-    if (this.getIntersection(localPoint, hand, false)) {
+    if (!state.grabHands.find(grab => grab.hand === hand) && this.getIntersection(localPoint, hand, false)) {
       const tile = this.findTileByLocalPos(localPoint)
       if (tile) {
         // subtract any existing sliding such that (new grab - grab) === slidingInfo
-        const slidingInfo = this.state.puzzle.slidingInfos.find(sliding => sliding.tile === tile)
+        const slidingInfo = state.puzzle.slidingInfos.find(sliding => sliding.tile === tile)
         const row = this.rowFromY(localPoint.y) - (slidingInfo ? slidingInfo.row : 0)
         const col = this.colFromX(localPoint.x) - (slidingInfo ? slidingInfo.col : 0)
         this.dispatch("grab", hand, tile, row, col)
@@ -360,6 +423,10 @@ AFRAME.registerComponent("sliding-puzzle", {
   },
 
   onRelease(event) {
+    if (!this.el.sceneEl.is('vr-mode')) {
+      return // ignore events when a different browser window is in vr-mode
+    }
+
     const hand = event.target
 
     if (this.state.grabHands.find(grab => grab.hand === hand)) {
@@ -369,6 +436,52 @@ AFRAME.registerComponent("sliding-puzzle", {
         console.log("released ", domHelper.getDebugName(hand))
       }
     }
+  },
+
+  onShuffle() {
+    this.dispatch("shuffle")
+  },
+
+  // networking
+  canControl() {
+    return this.state.controllerId === undefined || nafHelper.isMine(this)
+  },
+
+  getNetworkPacket() {
+    const puzzle = this.state.puzzle
+    return {
+      numRows: puzzle.numRows,
+      numCols: puzzle.numCols,
+      layout: slidingHelper.get(puzzle),
+      controllerId: this.state.controllerId
+    }
+  },
+
+  onClientDisconnected(clientId) {
+    if (clientId === this.state.controllerId) {
+      this.dispatch("controller", undefined)
+    }
+  },
+
+  onOwnershipGained() {
+    this.system.broadcastNetworkData(this, this.getNetworkPacket())
+  },
+
+  receiveNetworkData(packet, senderId) {
+    const owner = NAF.utils.getNetworkOwner(this.el)
+    const state = this.state
+
+    if (senderId === owner) {
+      if (state.numRows !== packet.numRows || state.numCols !== packet.numCols) {
+        this.dispatch("create", packet.numRows, packet.numCols)
+      }
+      this.dispatch("layout", packet.layout)
+      this.dispatch("controller", packet.controllerId)
+    }
+  },
+
+  requestSync(clientId) {
+    this.system.sendNetworkData(this, this.getNetworkPacket(), clientId)
   },
 
 })

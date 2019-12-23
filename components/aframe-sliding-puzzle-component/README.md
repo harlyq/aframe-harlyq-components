@@ -2,6 +2,8 @@
 
 NxM sliding puzzle game, where tiles are slid along cartesian axes until all tiles are back in order.  Any tile along the same row or column of the missing tile can be slid
 
+The **sliding-puzzle** works with **networked-aframe**
+
 ## Parameters
 
 ---
