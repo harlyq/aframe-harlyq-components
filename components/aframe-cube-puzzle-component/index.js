@@ -118,18 +118,18 @@ function unpackQuaternions(quaternions, packedQuats) {
   }
 }
 
-window.addEventListener("load", () => {
-  document.body.addEventListener("connected", () => {
-    let tagEl = document.querySelector("#clientId")
-    if (!tagEl) {
-      tagEl = document.createElement("div")
-      tagEl.id = "clientId"
-      tagEl.setAttribute("style", "position: absolute; left: 0; top: 0")
-      document.body.appendChild(tagEl)
-    }
-    tagEl.innerHTML = NAF.clientId.toString()
-  })
-})
+// window.addEventListener("load", () => {
+//   document.body.addEventListener("connected", () => {
+//     let tagEl = document.querySelector("#clientId")
+//     if (!tagEl) {
+//       tagEl = document.createElement("div")
+//       tagEl.id = "clientId"
+//       tagEl.setAttribute("style", "position: absolute; left: 0; top: 0")
+//       document.body.appendChild(tagEl)
+//     }
+//     tagEl.innerHTML = NAF.clientId.toString()
+//   })
+// })
 
 
 AFRAME.registerSystem("cube-puzzle", {
