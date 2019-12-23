@@ -6,25 +6,34 @@ AFRAME.registerComponent("sliding-puzzle", {
   schema: {
     rows: { default: 4, },
     cols: { default: 4, },
-    hands: { type: "selectorAll", default: "[tracked-controls],[hand-controls],[vive-controls],[oculus-touch-controls],[windows-motion-controls]" },
+    hands: { default: "[tracked-controls],[hand-controls],[vive-controls],[oculus-touch-controls],[windows-motion-controls]" },
     grabEvent: { default: "triggerdown" },
     releaseEvent: { default: "triggerup" },
     startOffset: { type: "vec3" },
     endOffset: { type: "vec3", default: {x:0, y:0, z:-.3} },
     snapRatio: { default: .2 },
     hoverOffset: { default: .01 },
-    debug: { default: false, }
+    layout: { default: "" },
+    debug: { default: false, },
   },
 
   init() {
     this.onGrab = this.onGrab.bind(this)
     this.onRelease = this.onRelease.bind(this)
 
-    this.interpolators = []
-    this.grabHands = []
-    this.hoverTiles = []
     this.mesh = undefined
-    this.puzzle = undefined
+    this.hands = []
+    this.layout = []
+
+    this.state = {
+      // local state
+      grabHands: [],
+      hoverTiles: [],
+
+      // networked state
+      puzzle: undefined,
+      controllerId: undefined,
+    }
   },
 
   remove() {
@@ -33,32 +42,94 @@ AFRAME.registerComponent("sliding-puzzle", {
   update(oldData) {
     const data = this.data
 
-    const checkerBoard = this.createCheckerBoardTexture(data.rows, data.cols)
-    this.mesh = this.createMesh(data.rows, data.cols)
-    this.mesh.material.map = checkerBoard
-    this.el.setObject3D("mesh", this.mesh)
+    if (data.rows !== oldData.rows && data.cols !== oldData.cols) {
+      const checkerBoard = this.createCheckerBoardTexture(data.rows, data.cols)
+      this.mesh = this.createMesh(data.rows, data.cols)
+      this.mesh.material.map = checkerBoard
+      this.el.setObject3D("mesh", this.mesh)
 
-    this.setupTiles(data.rows, data.cols)
-
-    if (data.debug) {
-      console.log("found", data.hands.length, "hands")
+      this.dispatch("create", data.rows, data.cols)
+      this.dispatch("shuffle")
     }
 
-    this.addListeners()
-    this.grabHands.length = 0
+    if (data.hands !== oldData.hands) {
+      this.removeListeners()
+      this.hands = document.querySelectorAll(data.hands)
+      this.addListeners()
+      this.state.grabHands.length = 0
 
-    this.shuffle()
+      if (data.debug) {
+        console.log("found", this.hands.length, "hands")
+      }
+    }
+
+    if (data.layout !== oldData.layout) {
+      const newLayout = data.layout.split(",").map( x => Number( x.trim() ) )
+      this.dispatch("layout", newLayout)
+    }
   },
 
   tick(_, deltaTime) {
     const dt = Math.min(100, deltaTime)/1000
+    const state = this.state
 
-    if (this.grabHands.some(grab => grab.tile)) {
+    if (state.grabHands.some(grab => grab.tile)) {
       this.tickGrabbing()
     } else {
       this.tickHovering()
     }
-    // this.tickMoving(dt)
+  },
+
+  dispatch(action, ...args) {
+    const state = this.state
+    let repaint = true
+
+    switch (action) {
+      case "create": 
+        state.puzzle = slidingHelper.create(args[0], args[1])
+        break
+
+      case "shuffle": 
+        slidingHelper.shuffle(state.puzzle)
+        break
+
+      case "layout":
+        slidingHelper.set(state.puzzle, args[0])
+        break
+
+      case "hover":
+        state.hoverTiles = args[0]
+        break
+
+      case "slide":
+        slidingHelper.slideTiles(state.puzzle, args[0], args[1], args[2])
+        break
+
+      case "grab":
+        state.grabHands.push({hand: args[0], tile: args[1], row: args[2], col: args[3]})
+        break
+
+      case "release":
+        state.grabHands = state.grabHands.filter(grab => grab.hand !== args[0])
+
+        if (state.grabHands.length === 0) {
+          slidingHelper.recalculateMissingTile(state.puzzle)
+    
+          if (this.data.debug) {
+            const missingTile = state.puzzle.missingTile
+            console.log("new missing tile", missingTile.id, missingTile.row, missingTile.col)
+          }
+        }
+        break
+
+      default:
+        repaint = false
+        break
+    }
+
+    if (repaint) {
+      this.drawAllTiles()
+    }
   },
 
   getIntersection: (function () {
@@ -87,20 +158,21 @@ AFRAME.registerComponent("sliding-puzzle", {
 
   tickHovering: (function () {
     const localPoint = new THREE.Vector3()
+    const hoverTiles = []
 
     return function tickHovering() {
-      this.hoverTiles.length = 0
+      hoverTiles.length = 0
       
-      for (let hand of this.data.hands) {
+      for (let hand of this.hands) {
         if (this.getIntersection(localPoint, hand, false)) {
           const newHoverTile = this.findTileByLocalPos(localPoint)
           if (newHoverTile) {
-            this.hoverTiles.push(newHoverTile)
+            hoverTiles.push(newHoverTile)
           }
         }
       }
-  
-      this.drawAllTiles()
+
+      this.dispatch("hover", hoverTiles)
     }
   })(),
 
@@ -110,7 +182,7 @@ AFRAME.registerComponent("sliding-puzzle", {
     return function tickGrabbing() {
       const data = this.data
   
-      for (let grab of this.grabHands) {
+      for (let grab of this.state.grabHands) {
         if (!grab.tile || !grab.row || !grab.col) {
           continue
         }
@@ -136,36 +208,12 @@ AFRAME.registerComponent("sliding-puzzle", {
     }
   },
 
-  setupTiles(numRows, numCols) {
-    this.puzzle = slidingHelper.create(numRows, numCols)
-
-    this.drawAllTiles()
-  },
-
-  shuffle() {
-    slidingHelper.shuffle(this.puzzle)
-
-    this.drawAllTiles()
-  },
-
   rowFromY(y) {
     return (.5 - y)*this.data.rows
   },
 
   colFromX(x) {
     return (.5 + x)*this.data.cols
-  },
-
-  yFromRow(row) {
-    return .5 - row/this.data.rows
-  },
-
-  xFromCol(col) {
-    return col/this.data.cols - .5
-  },
-
-  rowColFromHand(hand) {
-
   },
 
   rowColFromWorldPos: (function () {
@@ -187,12 +235,12 @@ AFRAME.registerComponent("sliding-puzzle", {
   findTileByLocalPos(localPos) {
     const row = this.rowFromY(localPos.y)
     const col = this.colFromX(localPos.x)
-    return slidingHelper.findTileBySlidingRowCol(this.puzzle, row, col)
+    return slidingHelper.findTileBySlidingRowCol(this.state.puzzle, row, col)
   },
 
   findTileByWorldPos(worldPos) {
     const { row, col } = this.rowColFromWorldPos(worldPos)
-    return slidingHelper.findTileBySlidingRowCol(this.puzzle, row, col)
+    return slidingHelper.findTileBySlidingRowCol(this.state.puzzle, row, col)
   },
 
   dragTile(tile, deltaRow, deltaCol) {
@@ -204,15 +252,13 @@ AFRAME.registerComponent("sliding-puzzle", {
       return false
     }
 
-    const missingTile = slidingHelper.findTile(this.puzzle, missingTileId)
+    const missingTile = slidingHelper.findTile(this.state.puzzle, missingTileId)
 
     if (tile.row === missingTile.row && (this.sliding === "row" || !this.sliding)) {
-      slidingHelper.slideTiles(this.puzzle, tile, "row", deltaCol)
-      this.drawAllTiles()
+      this.dispatch("slide", tile, "row", deltaCol)
 
     } else if (tile.col === missingTile.col && (this.sliding === "col" || !this.sliding)) {
-      slidingHelper.slideTiles(this.puzzle, tile, "col", deltaRow)
-      this.drawAllTiles()
+      this.dispatch("slide", tile, "col", deltaRow)
 
     }
   },
@@ -241,42 +287,39 @@ AFRAME.registerComponent("sliding-puzzle", {
   },
 
   drawAllTiles() {
+    const state = this.state
     const hoverOffset = this.data.hoverOffset
 
-    for (let tile of this.puzzle.tiles) {
-      const zOffset = this.hoverTiles.includes(tile) ? hoverOffset : 0
+    for (let tile of state.puzzle.tiles) {
+      const zOffset = state.hoverTiles.includes(tile) ? hoverOffset : 0
       this.drawTile(tile.id, tile.row, tile.col, zOffset)
     }
 
-    for (let info of this.puzzle.slidingInfos) {
-      const zOffset = this.hoverTiles.includes(info.tile) ? hoverOffset : 0
+    for (let info of state.puzzle.slidingInfos) {
+      const zOffset = state.hoverTiles.includes(info.tile) ? hoverOffset : 0
       this.drawTile(info.tile.id, info.tile.row + info.row, info.tile.col + info.col, zOffset)
     }
   },
 
   addListeners() {
     const data = this.data
-    if (data.hands) {
-      for (let hand of data.hands) {
-        if (data.debug) {
-          console.log("listening for:", data.grabEvent, "and", data.releaseEvent, "on", domHelper.getDebugName(hand))
-        }
-        hand.addEventListener(data.grabEvent, this.onGrab)
-        hand.addEventListener(data.releaseEvent, this.onRelease)
+    for (let hand of this.hands) {
+      if (data.debug) {
+        console.log("listening for:", data.grabEvent, "and", data.releaseEvent, "on", domHelper.getDebugName(hand))
       }
+      hand.addEventListener(data.grabEvent, this.onGrab)
+      hand.addEventListener(data.releaseEvent, this.onRelease)
     }
   },
 
   removeListeners() {
     const data = this.data
-    if (data.hands) {
-      for (let hand of data.hands) {
-        if (data.debug) {
-          console.log("removed:", data.grabEvent, "and", data.releaseEvent, "on", domHelper.getDebugName(hand))
-        }
-        hand.removeEventListener(data.grabEvent, this.onGrab)
-        hand.removeEventListener(data.releaseEvent, this.onRelease)
+    for (let hand of this.hands) {
+      if (data.debug) {
+        console.log("removed:", data.grabEvent, "and", data.releaseEvent, "on", domHelper.getDebugName(hand))
       }
+      hand.removeEventListener(data.grabEvent, this.onGrab)
+      hand.removeEventListener(data.releaseEvent, this.onRelease)
     }
   },
 
@@ -299,42 +342,32 @@ AFRAME.registerComponent("sliding-puzzle", {
   onGrab(event) {
     const localPoint = new THREE.Vector3()
     const hand = event.target
-    const grab = {hand}
 
     if (this.getIntersection(localPoint, hand, false)) {
       const tile = this.findTileByLocalPos(localPoint)
       if (tile) {
         // subtract any existing sliding such that (new grab - grab) === slidingInfo
-        const slidingInfo = this.puzzle.slidingInfos.find(sliding => sliding.tile === tile)
-        grab.tile = tile
-        grab.row = this.rowFromY(localPoint.y) - (slidingInfo ? slidingInfo.row : 0)
-        grab.col = this.colFromX(localPoint.x) - (slidingInfo ? slidingInfo.col : 0)
+        const slidingInfo = this.state.puzzle.slidingInfos.find(sliding => sliding.tile === tile)
+        const row = this.rowFromY(localPoint.y) - (slidingInfo ? slidingInfo.row : 0)
+        const col = this.colFromX(localPoint.x) - (slidingInfo ? slidingInfo.col : 0)
+        this.dispatch("grab", hand, tile, row, col)
+
+        if (this.data.debug) {
+          console.log("grabbed:", tile.id, "with", domHelper.getDebugName(hand))
+        }
       }
-    }
-
-    this.grabHands.push(grab)
-
-    if (this.data.debug) {
-      console.log("grabbed:", grab.tile ? grab.tile.id : "nothing", "with", domHelper.getDebugName(grab.hand))
     }
   },
 
   onRelease(event) {
-    const data = this.data
-    this.grabHands = this.grabHands.filter(grab => grab.hand !== event.target)
+    const hand = event.target
 
-    if (this.grabHands.every(grab => !grab.tile)) {
-      slidingHelper.recalculateMissingTile(this.puzzle)
-      this.drawAllTiles()
+    if (this.state.grabHands.find(grab => grab.hand === hand)) {
+      this.dispatch("release", hand)
 
-      if (data.debug) {
-        const missingTile = this.puzzle.missingTile
-        console.log("new missing tile", missingTile.id, missingTile.row, missingTile.col)
+      if (this.data.debug) {
+        console.log("released ", domHelper.getDebugName(hand))
       }
-    }
-
-    if (this.data.debug) {
-      console.log("released ", domHelper.getDebugName(event.target))
     }
   },
 
