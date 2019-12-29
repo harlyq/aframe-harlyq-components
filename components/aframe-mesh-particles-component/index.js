@@ -139,9 +139,6 @@ AFRAME.registerComponent("mesh-particles", {
   multiple: true,
 
   init() {
-    this.startParticles = this.startParticles.bind(this)
-    this.onEvent = this.onEvent.bind(this)
-
     this.isStarted = false
     this.hasListeners = false
     this.spawnID = 0
@@ -152,27 +149,23 @@ AFRAME.registerComponent("mesh-particles", {
     this.customData = {}
     this.lcg = pseudorandom.lcg()
 
-    this.delayClock = aframeHelper.basicClock()
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent )
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.startParticles.bind(this) )
   },
 
   remove() {
     this.releaseInstances()
-    this.eventListener.remove()
-    this.delayClock.clearAllTimers()
+    this.delayedEventHandler.remove()
 
     this.source = undefined
     this.destination = undefined
   },
 
   play() {
-    this.eventListener.add()
-    this.delayClock.resume()
+    this.delayedEventHandler.play()
   },
 
   pause() {
-    this.eventListener.remove()
-    this.delayClock.pause()
+    this.delayedEventHandler.pause()
   },
 
   update(oldData) {
@@ -247,13 +240,8 @@ AFRAME.registerComponent("mesh-particles", {
       }
     }
 
-    if (data.events !== oldData.events) {
-      this.eventListener.set(data.events)
-
-      if (!data.events) {
-        this.startTime = data.delay
-        this.startParticles()
-      }
+    if ( data.events !== oldData.events || data.enabled !== oldData.enabled || data.delay !== oldData.delay ) {
+      this.delayedEventHandler.update(data.events, "", "", data.delay, data.enabled)
     }
   },
 
@@ -279,10 +267,6 @@ AFRAME.registerComponent("mesh-particles", {
     }
 
     this.move(dt)
-  },
-
-  onEvent(e) {
-    this.delayClock.startTimer( this.delay, this.startParticles )
   },
 
   startParticles() {

@@ -197,7 +197,6 @@ AFRAME.registerComponent("sprite-particles", {
     this.trailCount = 0
     this.overTimeArrayLength = 0
     this.emitterTime = 0
-    this.delayTime = 0
     this.lifeTime = [1,1]
     this.trailLifeTime = [0,0] // if 0, then use this.lifeTime
     this.paused = false // track paused because isPlaying will be false on the first frame
@@ -220,13 +219,12 @@ AFRAME.registerComponent("sprite-particles", {
     this.destinationWeight // parsed value for destinationWeight
     this.nextID = 0
     this.nextTime = 0
-    this.startDisabled = !this.data.enabled || !!this.data.events // prevents the tick, and doesn't spawn any particles
+    this.startDisabled = !this.data.enabled || !!this.data.events || this.data.delay > 0 // prevents the tick, and doesn't spawn any particles
     this.manageIDs = false
 
     this.params[ID_PARAM] = -1 // unmanaged IDs
 
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent.bind(this) )
-    this.delayClock = aframeHelper.basicClock()
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.startParticles.bind(this) )
   },
 
   remove() {
@@ -238,8 +236,7 @@ AFRAME.registerComponent("sprite-particles", {
       this.data.model.removeEventListener("object3dset", this.handleObject3DSet)
     }
 
-    this.eventListener.remove()
-    this.delayClock.clearAllTimers()
+    this.delayedEventHandler.remove()
   },
 
   update(oldData) {
@@ -370,7 +367,6 @@ AFRAME.registerComponent("sprite-particles", {
       // restart the particles
       this.params[DURATION_PARAM] = data.duration
       this.emitterTime = data.emitterTime
-      this.delayTime = data.delay
     }
 
     if (data.spawnType !== oldData.spawnType || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime || data.trailInterval !== oldData.trailInterval) {
@@ -433,8 +429,8 @@ AFRAME.registerComponent("sprite-particles", {
       this.loadTexture(data.texture)
     }
 
-    if (data.events !== oldData.events) {
-      this.eventListener.set(data.events)
+    if ( data.events !== oldData.events || data.enabled !== oldData.enabled || data.delay !== oldData.delay ) {
+      this.delayedEventHandler.update(data.events, "", "", data.delay, data.enabled)
     }
   },
 
@@ -445,9 +441,6 @@ AFRAME.registerComponent("sprite-particles", {
 
     if (deltaTime > 100) deltaTime = 100 // ignore long pauses
     const dt = deltaTime/1000 // dt is in seconds
-
-    if (data.enabled) { this.delayTime -= dt }
-    if (this.delayTime >= 0) { return }
 
     if (!data.model || this.modelVertices) {
       this.emitterTime += dt
@@ -468,29 +461,20 @@ AFRAME.registerComponent("sprite-particles", {
   pause() {
     this.paused = true
     this.enableEditorObject(this.data.editorObject)
-    this.eventListener.remove()
-    this.delayClock.pause()
+    this.delayedEventHandler.pause()
   },
 
   play() {
     this.paused = false
     this.enableEditorObject(false)
-    this.eventListener.add()
-    this.delayClock.resume()
+    this.delayedEventHandler.play()
   },
 
-  onEvent() {
-    const self = this
-    const data = this.data
-
-    this.delayClock.startTimer( data.delay, 
-    () => {
-      self.emitterTime = data.emitterTime
-      self.nextTime = 0
-      self.nextID = 0
-      self.delayTime = 0
-      self.startDisabled = false
-    } )
+  startParticles() {
+    this.emitterTime = this.data.emitterTime
+    this.nextTime = 0
+    this.nextID = 0
+    this.startDisabled = false
   },
 
   handleObject3DSet(e) {

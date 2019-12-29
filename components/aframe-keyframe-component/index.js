@@ -64,7 +64,6 @@ AFRAME.registerComponent("keyframe", {
   multiple: true,
 
   init() {
-    this.startKeyframes = this.startKeyframes.bind( this )
     this.lcg = pseudorandom.lcg()
 
     this.loopTime = 0 // seconds
@@ -73,23 +72,19 @@ AFRAME.registerComponent("keyframe", {
     this.rules = {}
     this.isStarted = false
 
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent.bind( this ) )
-    this.delayClock = aframeHelper.basicClock()
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.startKeyframes.bind( this ) )
   },
 
   remove() {
-    this.eventListener.remove()
-    this.delayClock.clearAllTimers()
+    this.delayedEventHandler.remove()
   },
 
   play() {
-    this.eventListener.add()
-    this.delayClock.resume()
+    this.delayedEventHandler.play()
   },
 
   pause() {
-    this.eventListener.remove()
-    this.delayClock.pause()
+    this.delayedEventHandler.pause()
   },
 
   updateSchema(newData) {
@@ -162,13 +157,10 @@ AFRAME.registerComponent("keyframe", {
       }
     }
 
-    if ( data.events !== oldData.events ) {
-      this.eventListener.set( data.events )      
+    if ( data.events !== oldData.events || data.enabled !== oldData.enabled || data.delay !== oldData.delay ) {
+      this.delayedEventHandler.update(data.events, "", "", data.delay, data.enabled)
     }
 
-    if ( !data.events && data.delay !== oldData.delay ) {
-      this.delayClock.startTimer( data.delay, this.startKeyframes )
-    }
   },
 
   tick(time, timeDelta) {
@@ -222,7 +214,11 @@ AFRAME.registerComponent("keyframe", {
     }
   },
 
-  startKeyframes() {
+  startKeyframes(event) {
+    if ( this.data.debug ) {
+      console.log( domHelper.getDebugName( this.el ), this.attrName, event ? `onEvent ${event.type}` : "no event" )
+    }
+
     if (!this.isStarted) {
       this.isStarted = true
       this.el.sceneEl.addBehavior( this ) // activate tick()
@@ -276,10 +272,4 @@ AFRAME.registerComponent("keyframe", {
     this.el.emit( type, detail, this.data.bubbles )
   },
 
-  onEvent( e ) {
-    if ( this.data.debug ) {
-      console.log( domHelper.getDebugName( this.el ), this.attrName, "onEvent", e.type )
-    }
-    this.delayClock.startTimer( this.data.delay, this.startKeyframes )
-  },
 })

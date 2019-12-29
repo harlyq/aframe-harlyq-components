@@ -55,51 +55,36 @@ AFRAME.registerComponent("wait-add-remove", {
     add: { type: "array" },
     addRepeat: { type: "int", default: 1 },
     remove: { type: "array" },
+    enabled: { default: true },
   },
   multiple: true,
 
   init() {
-    this.addRemoveEntities = this.addRemoveEntities.bind(this)
-    this.onEvent = this.onEvent.bind(this)
-
-    this.delayClock = aframeHelper.basicClock()
-    this.eventListener = aframeHelper.scopedEvents(this.el, this.onEvent)
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.addRemoveEntities.bind(this) )
   },
 
   remove() {
-    this.delayClock.clearAllTimers()
-    this.eventListener.remove()
+    this.delayedEventHandler.remove()
   },
 
   update(oldData) {
     const data = this.data
-    if (oldData.events !== data.events || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope) {
-      this.eventListener.set(data.events, data.source, data.sourceScope)
-    }
-    
-    // must be last as the waitTimer may trigger immediately
+
     if (oldData.delay !== data.delay) {
       this.delay = attribute.parse(data.delay)
-      if (data.events === "") {
-        this.delayClock.startTimer( attribute.randomize(this.delay), this.addRemoveEntities )
-      }
+    }
+
+    if (oldData.events !== data.events || oldData.source !== data.source || oldData.sourceScope !== data.sourceScope || data.enabled !== oldData.enabled) {
+      this.delayedEventHandler.update(data.events, data.sourceScope, data.source, () => attribute.randomize(this.delay), data.enabled)
     }
   },
 
   pause() {
-    this.delayClock.pause()
-    this.eventListener.remove()
+    this.delayedEventHandler.pause()
   },
 
   play() {
-    this.eventListener.add()
-    this.delayClock.resume()
-  },
-
-  // there may be several events "pending" at the same time, so use a separate timer for each event
-  onEvent() {
-    const data = this.data
-    this.delayClock.startTimer( attribute.randomize(this.delay), this.addRemoveEntities )
+    this.delayedEventHandler.play()
   },
 
   addRemoveEntities() {

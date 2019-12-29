@@ -69,28 +69,21 @@ AFRAME.registerComponent("sfxr", {
   multiple: true,
 
   init() {
-    this.onEvent = this.onEvent.bind(this)
-    this.playSound = this.playSound.bind(this)
-
     this.player = new Audio()
-    this.delayClock = aframeHelper.basicClock()
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent )
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.playSound.bind(this) )
   },
 
   remove() {
-    this.eventListener.remove()
-    this.delayClock.clearAllTimeouts()
+    this.delayedEventHandler.remove()
     this.player.stop()
   },
 
   pause() {
-    this.eventListener.remove()
-    this.delayClock.pause()
+    this.delayedEventHandler.pause()
   },
 
   play() {
-    this.eventListener.add()
-    this.delayClock.resume()
+    this.delayedEventHandler.play()
   },
 
   update(oldData) {
@@ -182,12 +175,8 @@ AFRAME.registerComponent("sfxr", {
       }
     }
 
-    if (data.events !== oldData.events) {
-      if (data.events) {
-        this.eventListener.set( data.events, "", "self" )
-      } else {
-        this.delayClock.startTimer( this.data.delay, this.playSound )
-      }
+    if ( data.events !== oldData.events || data.enabled !== oldData.enabled || data.delay !== oldData.delay ) {
+      this.delayedEventHandler.update(data.events, "", "", data.delay, data.enabled)
     }
 
   },
@@ -253,15 +242,9 @@ AFRAME.registerComponent("sfxr", {
     ])
   },
 
-  onEvent(event) {
-    this.delayClock.startTimer( this.data.delay, this.playSound )
-  },
-
   playSound() {
-    if (this.data.enabled) {
-      this.player.currentTime = 0
-      this.player.play()
-    }
+    this.player.currentTime = 0
+    this.player.play()
   }
 })
 

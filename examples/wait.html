@@ -2,7 +2,7 @@
 <html>
   <head>
     <script src="https://aframe.io/releases/1.0.0/aframe.js"></script>
-    <!--script src="../../aframe/aframe-1.0.0.js"></script-->
+    <!--script src="../../aframe/aframe-master.js"></script-->
     <script src="../dist/aframe-harlyq-components.js"></script>
     <script>
       AFRAME.registerComponent("foo-bar", {
@@ -30,7 +30,7 @@
       <a-box color="red" position="0 0 -10" rotation="0 0 -20" keyframe__blah="duration: 5; direction: alternate; loops: 5; color: ,green|black,,orange; position: ,0 0 -5; rotation: , 0 0 20"></a-box>
       <a-tetrahedron id="tetrahedron" class="special"
         keyframe__a="duration: 0; color: pink|brown|grey; position: 0 2 -5->0 3 -5; rotation: 0 -20 -20->0 0 20"
-        keyframe__b="duration: 5; position: , 5 5 -5; enabled: false"
+        keyframe__b="debug: true; duration: 5; position: , 5 5 -5; enabled: false"
         wait-set__1="events: _periodic; source: #listener; delay: 2->4; target: .special; toggles: keyframe__b.enabled"
         wait-set__2="debug: true; delay: ; target: .special; toggles: keyframe__b.enabled"
         ></a-tetrahedron>

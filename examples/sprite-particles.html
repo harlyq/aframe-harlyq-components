@@ -502,31 +502,31 @@
             }
           }
         }
+      }
 
-        // tell the particle shaders that this texture has been updated
-        const scene = document.querySelector("a-scene")
+      // tell the particle shaders that this texture has been updated
+      const scene = document.querySelector("a-scene")
 
-        function verifyNeedsUpdate(material) {
-          if (material && 
-              material.uniforms && 
-              material.uniforms.map && 
-              material.uniforms.map.value && 
-              typeof material.uniforms.map.value === "object" && 
-              material.uniforms.map.value.image === canvas) {
-            material.uniforms.map.value.needsUpdate = true
+      function verifyNeedsUpdate(material) {
+        if (material && 
+            material.uniforms && 
+            material.uniforms.map && 
+            material.uniforms.map.value && 
+            typeof material.uniforms.map.value === "object" && 
+            material.uniforms.map.value.image === canvas) {
+          material.uniforms.map.value.needsUpdate = true
+        }
+      }
+
+      scene.object3D.traverse(node => {
+        if (node.material) {
+          if (Array.isArray(node.material)) {
+            node.material.forEach(verifyNeedsUpdate)
+          } else {
+            verifyNeedsUpdate(node.material)
           }
         }
-
-        scene.object3D.traverse(node => {
-          if (node.material) {
-            if (Array.isArray(node.material)) {
-              node.material.forEach(verifyNeedsUpdate)
-            } else {
-              verifyNeedsUpdate(node.material)
-            }
-          }
-        })
-      }
+      })
     </script>
   </body>
 </html>

@@ -17,19 +17,16 @@ AFRAME.registerComponent("modifier", {
     // toggles: { default: "" },
     seed: { type: "int", default: -1 },
     debug: { default: false },
+    enabled: { default: true },
   },
   multiple: true,
 
   init() {
-    this.onStartEvent = this.onStartEvent.bind(this)
-    this.onEndEvent = this.onEndEvent.bind(this)
-    this.setProperties = this.setProperties.bind(this)
-
     this.rules = {}
     // this.toggles = []
 
-    this.startEventListener = aframeHelper.scopedEvents( this.el, this.onStartEvent )
-    this.endEventListener = aframeHelper.scopedEvents( this.el, this.onEndEvent )
+    this.startEventListener = aframeHelper.delayedEventHandler( this.el, this.setProperties.bind(this) )
+    this.endEventListener = aframeHelper.delayedEventHandler( this.el, this.clearProperties.bind(this) )
     this.lcg = pseudorandom.lcg()
   },
 
@@ -79,8 +76,8 @@ AFRAME.registerComponent("modifier", {
     }
 
     if (data.startEvents !== oldData.startEvents || data.endEvents !== oldData.endEvents || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.startEventListener.set( data.startEvents, data.source, data.sourceScope )
-      this.endEventListener.set( data.endEvents, data.source, data.sourceScope )
+      this.startEventListener.set( data.startEvents, data.source, data.sourceScope, 0, data.enabled )
+      this.endEventListener.set( data.endEvents, data.source, data.sourceScope, 0, data.enabled )
     }
 
     // if (data.toggles !== oldData.toggles) {
@@ -89,13 +86,13 @@ AFRAME.registerComponent("modifier", {
   },
 
   pause() {
-    this.startEventListener.remove()
-    this.endEventListener.remove()
+    this.startEventListener.pause()
+    this.endEventListener.pause()
   },
 
   play() {
-    this.startEventListener.add()
-    this.endEventListener.add()
+    this.startEventListener.play()
+    this.endEventListener.play()
   },
 
   setProperties(event) {
@@ -142,21 +139,6 @@ AFRAME.registerComponent("modifier", {
       }
     }
   },
-
-  // there may be several events "pending" at the same time, so use a separate timer for each event
-  onStartEvent(event) {
-    if (this.data.debug) {
-      console.log( domHelper.getDebugName(this.el), this.attrName, "onStartEvent", event.type, event )
-    }
-    this.setProperties(event)
-  },
-
-  onEndEvent(event) {
-    if (this.data.debug) {
-      console.log( domHelper.getDebugName(this.el), this.attrName, "onEndEvent", event.type, event )
-    }
-    this.clearProperties(event)
-  }
 
 })
 

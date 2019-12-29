@@ -13,29 +13,28 @@ AFRAME.registerComponent( "rumble", {
   multiple: true,
 
   init() {
-    this.delayClock = aframeHelper.basicClock()
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent.bind( this ) )
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.pulseActuators.bind(this) )
     this.pulses = []
   },
 
   remove() {
-    this.eventListener.remove()
+    this.delayedEventHandler.remove()
     this.stopAllActuators()
   },
 
   play() {
-    this.eventListener.add()
+    this.delayedEventHandler.play()
   },
 
   pause() {
-    this.eventListener.remove()
+    this.delayedEventHandler.pause()
     this.stopAllActuators()
   },
 
   update( oldData ) {
     const data = this.data
-    if ( data.events !== oldData.events ) {
-      this.eventListener.set( data.events )
+    if ( data.events !== oldData.events || data.enabled !== oldData.enabled || data.delay !== oldData.delay ) {
+      this.delayedEventHandler.update( data.events, "", "", data.delay, data.enabled )
     }
 
     if ( data.controllers !== oldData.controllers ) {
@@ -50,46 +49,32 @@ AFRAME.registerComponent( "rumble", {
     }
   },
 
-  onEvent( e ) {
+  pulseActuators() {
     const data = this.data
-    if ( !data.enabled ) {
-      return
-    }
+    this.pulses.length = 0
+    
+    const actuators = this.getActuators()
 
-    const actuators = this.getActuators( e )
-    if ( actuators.length === 0 ) {
-      return
-    }
+    actuators.forEach( actuator => {
+      this.pulses.push( actuator )
 
-    function pulseActuators(pulses) {
-      pulses = []
-      
-      actuators.map( actuator => {
-        pulses.push( actuator )
-
-        actuator.pulse( data.force, data.duration*1000 ).then( () => {
-          pulses.splice( pulses.indexOf( actuator ), 1 )
-        }, ( err ) => {
-          pulses.splice( pulses.indexOf( actuator ), 1 )
-          console.error( err ) 
-        } ) 
-      } )
-    }
-
-    const self = this
-    this.delayClock.startTimer( data.delay, () => pulseActuators(self.pulses) )
+      actuator.pulse( data.force, data.duration*1000 ).then( () => {
+        this.pulses.splice( this.pulses.indexOf( actuator ), 1 )
+      }, ( err ) => {
+        this.pulses.splice( this.pulses.indexOf( actuator ), 1 )
+        console.error( err ) 
+      } ) 
+    } )
   },
 
   stopAllActuators() {
-    this.delayClock.clearAllTimers()
-
     for (let actuator of this.pulses) {
       actuator.pulse(0,0)
     }
     this.pulses.length = 0
   },
 
-  getActuators( e ) {
+  getActuators() {
     if ( this.actuators.length > 0 ) {
       return this.actuators
     }

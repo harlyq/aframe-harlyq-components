@@ -14,24 +14,20 @@ AFRAME.registerComponent("wait-set", {
     toggles: { default: "" },
     seed: { type: "int", default: -1 },
     debug: { default: false },
+    enabled: { default: true },
   },
   multiple: true,
 
   init() {
-    this.onEvent = this.onEvent.bind(this)
-    this.setProperties = this.setProperties.bind(this)
-
     this.rules = {}
     this.toggles = []
 
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent )
-    this.delayClock = aframeHelper.basicClock()
+    this.delayedEventHandler = aframeHelper.delayedEventHandler(this.el, this.setProperties.bind(this))
     this.lcg = pseudorandom.lcg()
   },
 
   remove() {
-    this.eventListener.remove()
-    this.delayClock.clearAllTimers()
+    this.delayedEventHandler.remove()
   },
 
   updateSchema(newData) {
@@ -74,31 +70,25 @@ AFRAME.registerComponent("wait-set", {
       }
     }
 
-    if (data.events !== oldData.events || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.eventListener.set( data.events, data.source, data.sourceScope )
+    if (data.delay !== oldData.delay) {
+      this.delay = attribute.parse(data.delay)
+    }
+
+    if (data.events !== oldData.events || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope || data.enabled !== oldData.enabled) {
+      this.delayedEventHandler.update(data.events, data.sourceScope, data.source, () => attribute.randomize(this.delay), data.enabled)
     }
 
     if (data.toggles !== oldData.toggles) {
       this.toggles = data.toggles.split(",").map(x => x.trim()).filter(x => x)
     }
-
-    // must be last as the waitTimer may trigger immediately
-    if (data.delay !== oldData.delay) {
-      this.delay = attribute.parse(data.delay)
-      if (data.events === "") {
-        this.delayClock.startTimer( attribute.randomize(this.delay), this.setProperties )
-      }
-    }
   },
 
   pause() {
-    this.eventListener.remove()
-    this.delayClock.pause()
-  },
+    this.delayedEventHandler.pause()
+ },
 
   play() {
-    this.delayClock.resume()
-    this.eventListener.add()
+    this.delayedEventHandler.play()
   },
 
   setProperties(event) {
@@ -127,15 +117,6 @@ AFRAME.registerComponent("wait-set", {
         aframeHelper.setProperty(el, prop, toggleValue)
       }
     }
-  },
-
-  // there may be several events "pending" at the same time, so use a separate timer for each event
-  onEvent(e) {
-    if (this.data.debug) {
-      console.log( domHelper.getDebugName(this.el), this.attrName, "onEvent", e.type, e )
-    }
-    const self = this
-    this.delayClock.startTimer( attribute.randomize(this.delay), () => self.setProperties(e) )
   },
 
 })

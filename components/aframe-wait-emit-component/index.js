@@ -14,51 +14,46 @@ AFRAME.registerComponent("wait-emit", {
     targetScope: { default: "document", oneOf: ["parent", "self", "document", "event"] },
     bubbles: { default: false },
     debug: { default: false },
+    enabled: { default: true },
   },
   multiple: true,
 
   init() {
-    this.onEvent = this.onEvent.bind(this)
-    this.sendEvent = this.sendEvent.bind(this)
     this.sources = []
 
-    this.delayClock = aframeHelper.basicClock()
-    this.eventListener = aframeHelper.scopedEvents( this.el, this.onEvent )
+    this.delayedEventHandler = aframeHelper.delayedEventHandler( this.el, this.sendEvent.bind(this) )
   },
 
   remove() {
-    this.eventListener.remove()
-    this.delayClock.clearAllTimeouts()
+    this.delayedEventHandler.remove()
   },
 
   update(oldData) {
     const data = this.data
 
-    if (data.events !== oldData.events || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.eventListener.set( data.events, data.source, data.sourceScope )
-    }
-
-    // must be last as the waitTimer may trigger immediately
     if (data.delay !== oldData.delay) {
       this.delay = attribute.parse(data.delay)
-      if (data.events === "") {
-        this.delayClock.startTimer( attribute.randomize(data.delay), this.sendEvent )
-      }
+    }
+
+    if (data.events !== oldData.events || data.sourceScope !== oldData.sourceScope || data.source !== oldData.source || data.enabled !== oldData.enabled) {
+      this.delayedEventHandler.update(data.events, data.sourceScope, data.source, () => attribute.randomize(this.delay), data.enabled)
     }
   },
 
   pause() {
-    this.eventListener.remove()
-    this.delayClock.pause()
+    this.delayedEventHandler.pause()
   },
 
   play() {
-    this.eventListener.add()
-    this.delayClock.resume()
+    this.delayedEventHandler.play()
   },
 
   sendEvent(event) {
     const data = this.data
+    if (data.debug) {
+      console.log( domHelper.getDebugName( this.el ), this.attrName, event ? `received ${event.type}` : "no event")
+    }
+
     const targets = aframeHelper.getElementsInScope(this.el, data.target, data.targetScope, event ? event.target : undefined)
     const eventData = Object.assign(event, { source: this.el })
     const name = data.out ? data.out : data.event
@@ -73,14 +68,5 @@ AFRAME.registerComponent("wait-emit", {
     }
   },
 
-  // there may be several events "pending" at the same time, so use a separate timer for each event
-  onEvent( e ) {
-    if ( this.data.debug ) {
-      console.log( domHelper.getDebugName( this.el ), this.attrName, "onEvent", e.type )
-    }
-
-    const self = this
-    this.delayClock.startTimer( attribute.randomize(this.delay), () => self.sendEvent(e) )
-  },
-
 })
+
