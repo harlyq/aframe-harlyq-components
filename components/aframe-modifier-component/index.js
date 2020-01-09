@@ -76,8 +76,8 @@ AFRAME.registerComponent("modifier", {
     }
 
     if (data.startEvents !== oldData.startEvents || data.endEvents !== oldData.endEvents || data.source !== oldData.source || data.sourceScope !== oldData.sourceScope) {
-      this.startEventListener.set( data.startEvents, data.source, data.sourceScope, 0, data.enabled )
-      this.endEventListener.set( data.endEvents, data.source, data.sourceScope, 0, data.enabled )
+      this.startEventListener.update( data.startEvents, data.source, data.sourceScope, 0, data.enabled )
+      this.endEventListener.update( data.endEvents, data.source, data.sourceScope, 0, data.enabled )
     }
 
     // if (data.toggles !== oldData.toggles) {
