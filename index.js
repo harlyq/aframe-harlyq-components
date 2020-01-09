@@ -1,5 +1,6 @@
 import './components/aframe-arm-swinger-component/index.js'
 import './components/aframe-audio-vis-component/index.js'
+import './components/aframe-card-pack-component/index.js'
 import './components/aframe-chalk-component/index.js'
 import './components/aframe-chess-component/index.js'
 import './components/aframe-climb-component/index.js'

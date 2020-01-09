@@ -21,6 +21,8 @@ AFRAME.registerSystem("grab-system", {
     this.onGrabEvent = this.onGrabEvent.bind(this)
     this.targets = []
     this.hands = []
+    this.raycaster = new THREE.Raycaster()
+    this.raycaster.cache = new Map()
   },
 
   remove() {
@@ -116,6 +118,7 @@ AFRAME.registerSystem("grab-system", {
   // find the smallest overlapping volume
   findOverlapping: (function () {
     const instancedMatrixWorld = new THREE.Matrix4()
+    const rayOffset = new THREE.Vector3()
 
     return function findOverlapping(handEl, targets) {
       // ignore overlapping when not in vr-mode, this prevents vr interactions in another
@@ -136,6 +139,12 @@ AFRAME.registerSystem("grab-system", {
       if (!hand3D.boundingSphere || !hand3D.boundingBox || hand3D.boundingBox.isEmpty()) {
         threeHelper.generateOrientedBoundingBox(hand3D, data.debug ? 0x00FFFF : undefined) // cyan
       }
+
+      this.raycaster.ray.origin.setFromMatrixPosition(hand3D.matrixWorld)
+      this.raycaster.ray.direction.setFromMatrixColumn(hand3D.matrixWorld, 2).negate() // forward
+      rayOffset.copy(this.raycaster.ray.direction).multiplyScalar(.1)
+      this.raycaster.ray.origin.sub(rayOffset)
+      this.raycaster.cache.clear()
   
       for (let target of targets) {
         const target3D = target.obj3D  
@@ -245,7 +254,7 @@ AFRAME.registerSystem("grab-system", {
 
     return function getScore(hand3D, target, targetMatrixWorld) {
       switch (target.score) {
-        case "closestforward":
+        case "closestforward": {
           handPos.setFromMatrixPosition(hand3D.matrixWorld)
           targetPos.setFromMatrixPosition(targetMatrixWorld)
           handForward.setFromMatrixColumn(hand3D.matrixWorld, 2) // controller points in the -z direction
@@ -257,7 +266,17 @@ AFRAME.registerSystem("grab-system", {
           pointOnForward.copy(handForward).multiplyScalar(scalar)
           const score = pointOnForward.sub(handToTarget).length()
           return scalar < 0 ? score : score*10 // prefer targets in front (-ve scalar)
+        }
           
+        case "raycast": {
+          let intersections = this.raycaster.cache.get(target.obj3D)
+          if (!intersections) {
+            intersections = this.raycaster.intersectObject(target.obj3D, true)
+            this.raycaster.cache.set(target.obj3D, intersections)
+          }
+          return intersections.length > 0 && (target.instanceIndex < 0 || target.instanceIndex === intersections[0].instanceId) ? intersections[0].distance : Infinity
+        }
+
         case "volume":
         default:
           return extent.volume(target.obj3D.boundingBox)
