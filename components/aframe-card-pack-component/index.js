@@ -1,19 +1,31 @@
-import { aframeHelper, cardHelper, domHelper, instanced, utils } from "harlyq-helpers"
+import { aframeHelper, cardHelper, domHelper, instanced, nafHelper, utils } from "harlyq-helpers"
+
+AFRAME.registerSystem("card-pack", {
+  ...nafHelper.networkSystem("card-pack"),
+
+  init() {
+    this.setupNetwork()
+  },
+
+  remove() {
+    this.shutdownNetwork()
+  },
+})
 
 AFRAME.registerComponent("card-pack", {
   schema: {
-    src: { type: "asset" },
-    textureRows: { default: 1 },
-    textureCols: { default: 1 },
-    width: { default: 1 },
+    src: { type: "asset", default: "https://cdn.jsdelivr.net/gh/harlyq/aframe-harlyq-components@master/examples/assets/Svg-cards-2.0.svg" },
+    textureRows: { default: 5 },
+    textureCols: { default: 13 },
+    width: { default: .67 },
     height: { default: 1 },
-    numCards: { default: 1 },
+    numCards: { default: 54 },
     grabbable: { default: true },
     moveDeadZone: { default: .02 },
     hoverColor: { type: "color", default: "#888" },
     grabScale: { type: "vec3", default: {x:1.1, y:1, z:1.1} },
     frontStart: { default: 0 },
-    back: { default: 0 },
+    back: { default: 54 },
     zOffset: { default: 0.001 },
     faceDown: { default: false },
     debug: { default: false },
@@ -30,14 +42,25 @@ AFRAME.registerComponent("card-pack", {
     this.hoverIndices = []
     this.hoverColor = new THREE.Color()
     this.grabScale = new THREE.Vector3()
+    this.controllerIds = [] // sparse array
 
     this.el.addEventListener("grabstart", this.onGrabStart)
     this.el.addEventListener("grabend", this.onGrabEnd)
     this.el.addEventListener("hoverstart", this.onHoverStart)
     this.el.addEventListener("hoverend", this.onHoverEnd)
+
+    this.system.registerNetworking(this, {
+      onClientDisconnected: this.onClientDisconnected.bind(this),
+      onOwnershipGained: this.onOwnershipGained.bind(this),
+      onOwnershipLost: this.onOwnershipLost.bind(this),
+      receiveNetworkData: this.receiveNetworkData.bind(this),
+      requestSync: this.requestSync.bind(this),
+    })
   },
 
   remove() {
+    this.system.unregisterNetworking(this)
+
     this.el.removeEventListener("grabstart", this.onGrabStart)
     this.el.removeEventListener("grabend", this.onGrabEnd)
     this.el.removeEventListener("hoverstart", this.onHoverStart)
@@ -152,8 +175,20 @@ AFRAME.registerComponent("card-pack", {
       utils.exchangeList(
         grabbedIndices,
         this.grabbedIndices.get(hand) || [],
-        (index) => instanced.setScaleAt(instancedMesh, index, this.grabScale),
-        (index) => instanced.setScaleAt(instancedMesh, index, 1, 1, 1),
+        (index) => {
+          instanced.setScaleAt(instancedMesh, index, this.grabScale)
+
+          if (nafHelper.isNetworked(this)) {
+            this.sendControlPacket(index, NAF.client)
+          }
+        },
+        (index) => {
+          instanced.setScaleAt(instancedMesh, index, 1, 1, 1)
+
+          if (nafHelper.isNetworked(this)) {
+            this.sendControlPacket(index, "")
+          }
+        },
       )
     )
   },
@@ -175,7 +210,7 @@ AFRAME.registerComponent("card-pack", {
       }
 
       // toggle grabbed cards
-      if (i === -1) {
+      if (i === -1 && this.canControl(instanceIndex)) {
         grabbedIndices.push(instanceIndex)
         this.deadZonePosition.set(hand, hand.object3D.position.clone())
         this.grabOffsetMatrices.set(
@@ -241,6 +276,134 @@ AFRAME.registerComponent("card-pack", {
         undefined,
         (index) => instanced.setColorAt(this.pack.packInstancedMesh, index, 1, 1, 1)
       )
+    }
+  },
+
+  /* Networking */
+  // can be called outside of a networked client
+  canControl(index) {
+    if (nafHelper.isNetworked(this)) {
+      return !this.controllerIds[index] || this.controllerIds[index] === NAF.clientId
+    } else {
+      return true
+    }
+  },
+
+  // can only be called from a networked client
+  sendControlPacket(index, controllerId) {
+    if (this.canControl(index)) {
+      const instancedMesh = this.pack.packInstancedMesh
+      const position = {x:0,y:0,z:0}
+      const quaternion = {x:0,y:0,z:0,w:0}
+      const owner = NAF.utils.getNetworkOwner(this.el)
+
+      const packet = {
+        command: undefined,
+        index,
+        controllerId,
+        position: instanced.getPositionAt(instancedMesh, index, position),
+        quaternion: instanced.getQuaternionAt(instancedMesh, index, quaternion),
+      }
+
+      if (NAF.clientId === owner) {
+        packet.command = "control" // only the owner can broadcast *control* messages
+        this.system.broadcastNetworkData(this, packet)
+      } else {
+        packet.command = "request" // everyone else sends a *request* to the owner, who will later broadcast a *control*
+        this.system.sendNetworkData(this, packet, owner)
+      }
+    }
+  },
+
+  applyControlPacket(packet) {
+    const instancedMesh = this.pack.packInstancedMesh
+    const index = packet.index
+
+    if (packet.controllerId) {
+      this.controllerIds[index] = packet.controllerId
+    } else {
+      delete this.controllerIds[index]
+    }
+
+    instanced.setPositionAt(instancedMesh, index, packet.position)
+    instanced.setQuaternionAt(instancedMesh, index, packet.quaternion)
+  },
+
+  getSetupPacket() {
+    if (this.pack) {
+      const instancedMesh = this.pack.packInstancedMesh
+      return {
+        command: "setup",
+        positions: Array.from(instancedMesh.geometry.getAttribute("instancePosition").array),
+        quaternions: Array.from(instancedMesh.geometry.getAttribute("instanceQuaternion").array),
+        controllerIds: this.controllerIds,
+      }
+    }
+  },
+
+  requestSync(senderId) {
+    this.system.sendNetworkData(this, this.getSetupPacket(), senderId)
+  },
+
+  receiveNetworkData(packet, senderId) {
+    const owner = NAF.utils.getNetworkOwner(this.el)
+    const fromOwner = senderId === owner
+
+    switch (packet.command) {
+      case "setup":
+        if (fromOwner) {
+          const instancedMesh = this.pack.packInstancedMesh
+          const instancePosition = instancedMesh.geometry.getAttribute("instancePosition")
+          const instanceQuaterion = instancedMesh.geometry.getAttribute("instanceQuaternion")
+          
+          instancePosition.copyArray(packet.positions)
+          instanceQuaterion.copyArray(packet.quaternions)
+          instancePosition.needsUpdate = true
+          instanceQuaterion.needsUpdate = true
+
+          this.controllerIds = packet.controllerIds
+        }
+        break
+
+      case "request":
+        if (owner === NAF.clientId) {
+          const index = packet.index
+          if (!this.controllerIds[index] || this.controllerIds[index] === senderId) {
+            this.applyControlPacket(packet)
+            this.sendControlPacket(index, packet.controllerId)
+          }
+        }
+        break
+      
+      case "control":
+        if (fromOwner) {
+          this.applyControlPacket(packet)
+        }
+        break
+    }
+  },
+
+  onClientDisconnected(event) {
+    const clientId = event.detail.clientId
+
+    for (let i = 0; i < this.controllerIds.length; i++) {
+      if (this.controllerIds[i] === clientId) {
+        this.controllerIds[i] = ""
+      }
+    }
+  },
+
+  onOwnershipGained() {
+    if (this.data.debug) {
+      console.log("ownership-gained")
+    }
+
+    this.system.broadcastNetworkData(this, this.getSetupPacket())
+  },
+
+  onOwnershipLost() {
+    if (this.data.debug) {
+      console.log("ownership-lost")
     }
   },
 })
