@@ -6,6 +6,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/movement.html
 none
 ### chalk
 https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
+### card-pack
+https://harlyq.github.io/aframe-harlyq-components/examples/toy.html
 ### chess
 https://harlyq.github.io/aframe-harlyq-components/examples/toy.html
 ### climb
@@ -78,6 +80,8 @@ https://harlyq.github.io/aframe-harlyq-components/examples/sprite-particles.html
 https://harlyq.github.io/aframe-harlyq-components/examples/chalk.html
 ### sfxr
 https://harlyq.github.io/aframe-harlyq-components/examples/sfxr.html
+### sliding-puzzle
+https://harlyq.github.io/aframe-harlyq-components/examples/toy.html
 ### sprite-particles
 https://harlyq.github.io/aframe-harlyq-components/examples/keyframe.html
 

@@ -24,7 +24,7 @@ AFRAME.registerComponent("card-pack", {
     hoverColor: { type: "color", default: "#888" },
     frontStart: { default: 0 },
     back: { default: 54 },
-    zOffset: { default: 0.001 },
+    yOffset: { default: 0.001 },
     faceDown: { default: false },
     debug: { default: false },
   },
@@ -107,7 +107,7 @@ AFRAME.registerComponent("card-pack", {
     for (let i = 0; i < data.numCards; i++) {
       const index = cardHelper.createCard(this.pack, data.frontStart + i, data.back)
 
-      pos.set(0, i*data.zOffset, 0)
+      pos.set(0, i*data.yOffset, 0)
       instanced.setPositionAt(instancedMesh, index, pos)
 
       if (data.faceDown) {
