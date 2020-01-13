@@ -21,9 +21,7 @@ AFRAME.registerComponent("card-pack", {
     height: { default: 1 },
     numCards: { default: 54 },
     grabbable: { default: true },
-    moveDeadZone: { default: .02 },
     hoverColor: { type: "color", default: "#888" },
-    grabScale: { type: "vec3", default: {x:1.1, y:1, z:1.1} },
     frontStart: { default: 0 },
     back: { default: 54 },
     zOffset: { default: 0.001 },
@@ -36,12 +34,9 @@ AFRAME.registerComponent("card-pack", {
     this.onGrabEnd = this.onGrabEnd.bind(this)
     this.onHoverStart = this.onHoverStart.bind(this)
     this.onHoverEnd = this.onHoverEnd.bind(this)
-    this.grabbedIndices = new Map() // map of handEl, []
-    this.grabOffsetMatrices = new Map() // map of handEl, Matrix4
-    this.deadZonePosition = new Map() // map of handEl, Vector3
+    this.grabbedData = new Map() // map of handEl, {number, Matrix4}
     this.hoverIndices = []
     this.hoverColor = new THREE.Color()
-    this.grabScale = new THREE.Vector3()
     this.controllerIds = [] // sparse array
 
     this.el.addEventListener("grabstart", this.onGrabStart)
@@ -80,14 +75,10 @@ AFRAME.registerComponent("card-pack", {
       this.hoverColor.setStyle(data.hoverColor)
     }
 
-    this.grabScale.copy(data.grabScale)
-
     this.updateDeck()
 
     if (oldData.grabbable !== data.grabbable) {
-      this.grabbedIndices.clear()
-      this.deadZonePosition.clear()
-      this.grabOffsetMatrices.clear()
+      this.grabbedData.clear()
 
       if (data.grabbable) {
         this.updateGrabbable(0, data.numCards)
@@ -99,7 +90,7 @@ AFRAME.registerComponent("card-pack", {
     }
   },
 
-  tick(time, deltaTime) {
+  tick(_, deltaTime) {
     const dt = deltaTime/1000
     this.tickGrab(dt)
   },
@@ -127,27 +118,11 @@ AFRAME.registerComponent("card-pack", {
   },
 
   tickGrab(dt) {
-    const data = this.data
-
-    for (let item of this.grabbedIndices) {
-      const indices = item[1]
+    for (let item of this.grabbedData) {
+      const [index, offsetMatrix] = item[1]
       const hand = item[0]
       const hand3D = hand.object3D
-
-      if (this.grabOffsetMatrices.has(hand)) {
-        const deadZonePosition = this.deadZonePosition.get(hand)
-        if (deadZonePosition && hand.object3D.position.distanceTo(deadZonePosition) > data.moveDeadZone)
-        {
-          this.deadZonePosition.delete(hand)
-        }
-
-        if (!this.deadZonePosition.has(hand)) {
-          const offsetMatrices = this.grabOffsetMatrices.get(hand)
-          for (let i = 0; i < indices.length; i++) {
-            instanced.applyOffsetMatrix(hand3D, this.pack.packInstancedMesh, indices[i], offsetMatrices[i])
-          }
-        }
-      }
+      instanced.applyOffsetMatrix(hand3D, this.pack.packInstancedMesh, index, offsetMatrix)
     }
   },
 
@@ -167,30 +142,29 @@ AFRAME.registerComponent("card-pack", {
     }
   },
   
-  updateGrabbedIndices(hand, grabbedIndices) {
-    const instancedMesh = this.pack.packInstancedMesh
+  updateGrabbedData(hand, newIndex) {
+    const data = this.grabbedData.get(hand)
+    const oldIndex = data ? data[0] : undefined
 
-    this.grabbedIndices.set(
-      hand,
-      utils.exchangeList(
-        grabbedIndices,
-        this.grabbedIndices.get(hand) || [],
-        (index) => {
-          instanced.setScaleAt(instancedMesh, index, this.grabScale)
+    if (oldIndex !== newIndex) {
+      if (nafHelper.isNetworked(this)) {
 
-          if (nafHelper.isNetworked(this)) {
-            this.sendControlPacket(index, NAF.client)
-          }
-        },
-        (index) => {
-          instanced.setScaleAt(instancedMesh, index, 1, 1, 1)
-
-          if (nafHelper.isNetworked(this)) {
-            this.sendControlPacket(index, "")
-          }
-        },
-      )
-    )
+        if (oldIndex) {
+          this.sendControlPacket(oldIndex, "")
+        }
+  
+        if (newIndex) {
+          this.sendControlPacket(newIndex, NAF.client)
+        }
+      }
+  
+      if (typeof newIndex !== "undefined") {
+        const offsetMatrix = instanced.calcOffsetMatrix(hand.object3D, this.pack.packInstancedMesh, newIndex)
+        this.grabbedData.set(hand, [newIndex, offsetMatrix])
+      } else {
+        this.grabbedData.delete(hand)
+      }
+    }
   },
 
   getPack() {
@@ -202,30 +176,12 @@ AFRAME.registerComponent("card-pack", {
     if (data.grabbable && this.pack && event.detail.obj3D === this.pack.packInstancedMesh) {
       const hand = event.detail.hand
       const instanceIndex = event.detail.instanceIndex
-      const grabbedIndices = (this.grabbedIndices.get(hand) || []).slice()
-      const i = grabbedIndices.indexOf(instanceIndex)
 
       if (data.debug) {
         aframeHelper.log(this, "grabstart", domHelper.getDebugName(hand), event.detail.instanceIndex)
       }
 
-      // toggle grabbed cards
-      if (i === -1 && this.canControl(instanceIndex)) {
-        grabbedIndices.push(instanceIndex)
-        this.deadZonePosition.set(hand, hand.object3D.position.clone())
-        this.grabOffsetMatrices.set(
-          hand, 
-          grabbedIndices.map(
-            index => instanced.calcOffsetMatrix(hand.object3D, this.pack.packInstancedMesh, index)
-          )
-        )
-      } else {
-        grabbedIndices.splice(i, 1) 
-        this.grabOffsetMatrices.delete(hand)
-        this.deadZonePosition.delete(hand)
-      }
-
-      this.updateGrabbedIndices(hand, grabbedIndices)
+      this.updateGrabbedData(hand, this.canControl(instanceIndex) ? instanceIndex : undefined)
     }
   },
 
@@ -238,13 +194,7 @@ AFRAME.registerComponent("card-pack", {
         aframeHelper.log(this, "grabend", domHelper.getDebugName(hand), event.detail.instanceIndex)
       }
 
-      if (this.grabOffsetMatrices.has(hand) && !this.deadZonePosition.has(hand)) {
-        this.updateGrabbedIndices(hand, [])
-        this.grabbedIndices.delete(hand) // drop after move, so clear indices
-      }
-
-      this.deadZonePosition.delete(hand)
-      this.grabOffsetMatrices.delete(hand)
+      this.updateGrabbedData(hand, undefined)
     }
   },
 
@@ -254,9 +204,9 @@ AFRAME.registerComponent("card-pack", {
         aframeHelper.log(this, "hoverstart", domHelper.getDebugName(event.detail.hand), event.detail.instanceIndex)
       }
 
-      this.hoverIndices = utils.exchangeList(
-        this.hoverIndices.concat(event.detail.instanceIndex),
+      this.hoverIndices = utils.exchangeArray(
         this.hoverIndices,
+        this.hoverIndices.concat(event.detail.instanceIndex),
         (index) => instanced.setColorAt(this.pack.packInstancedMesh, index, this.hoverColor)
       )
     }
@@ -270,9 +220,10 @@ AFRAME.registerComponent("card-pack", {
 
       const newHoverIndices = this.hoverIndices.slice()
       newHoverIndices.splice( newHoverIndices.indexOf(event.detail.instanceIndex) )
-      this.hoverIndices = utils.exchangeList(
-        newHoverIndices,
+
+      this.hoverIndices = utils.exchangeArray(
         this.hoverIndices,
+        newHoverIndices,
         undefined,
         (index) => instanced.setColorAt(this.pack.packInstancedMesh, index, 1, 1, 1)
       )
