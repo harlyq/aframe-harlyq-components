@@ -19,6 +19,8 @@ AFRAME.registerComponent("card-pack", {
     textureCols: { default: 13 },
     width: { default: .67 },
     height: { default: 1 },
+    cornerRadius: { default: .02 },
+    cornerSegments: { default: 4 },
     numCards: { default: 54 },
     grabbable: { default: true },
     hoverColor: { type: "color", default: "#888" },
@@ -67,8 +69,8 @@ AFRAME.registerComponent("card-pack", {
 
     let materialSystem = this.el.sceneEl.systems["material"]
     materialSystem.loadTexture(data.src, {src: data.src}, (texture) => {
-      this.pack.packInstancedMesh.material.map = texture
-      this.pack.packInstancedMesh.material.needsUpdate = true
+      this.pack.packMesh.material.map = texture
+      this.pack.packMesh.material.needsUpdate = true
     })
 
     if (oldData.hoverColor !== data.hoverColor) {
@@ -99,10 +101,13 @@ AFRAME.registerComponent("card-pack", {
     const data = this.data
     const pos = new THREE.Vector3()
 
-    this.pack = cardHelper.createPack(data.numCards, null, data.textureRows, data.textureCols, data.width, data.height )
+    const cardMesh = data.cornerRadius > 0 ? 
+      cardHelper.createRoundedCardMesh(data.width, data.height, data.cornerRadius, data.cornerSegments, null) :
+      cardHelper.createCardMesh(data.width, data.height, null)
+    this.pack = cardHelper.createPack(data.numCards, data.textureRows, data.textureCols, cardMesh)
 
-    const instancedMesh = this.pack.packInstancedMesh
-    this.el.object3D.add(instancedMesh)
+    const instancedMesh = this.pack.packMesh
+    this.el.setObject3D("mesh", instancedMesh)
 
     for (let i = 0; i < data.numCards; i++) {
       const index = cardHelper.createCard(this.pack, data.frontStart + i, data.back)
@@ -122,7 +127,7 @@ AFRAME.registerComponent("card-pack", {
       const [index, offsetMatrix] = item[1]
       const hand = item[0]
       const hand3D = hand.object3D
-      instanced.applyOffsetMatrix(hand3D, this.pack.packInstancedMesh, index, offsetMatrix)
+      instanced.applyOffsetMatrix(hand3D, this.pack.packMesh, index, offsetMatrix)
     }
   },
 
@@ -130,7 +135,7 @@ AFRAME.registerComponent("card-pack", {
     const grabSystem = this.el.sceneEl.systems["grab-system"]
     if (grabSystem && numCards !== oldNumCards) {
       const el = this.el
-      const obj3D = this.pack.packInstancedMesh
+      const obj3D = this.pack.packMesh
 
       for (let instanceIndex = numCards; instanceIndex < oldNumCards; instanceIndex++) {
         grabSystem.unregisterTarget(el, {obj3D, instanceIndex})
@@ -159,7 +164,7 @@ AFRAME.registerComponent("card-pack", {
       }
   
       if (typeof newIndex !== "undefined") {
-        const offsetMatrix = instanced.calcOffsetMatrix(hand.object3D, this.pack.packInstancedMesh, newIndex)
+        const offsetMatrix = instanced.calcOffsetMatrix(hand.object3D, this.pack.packMesh, newIndex)
         this.grabbedData.set(hand, [newIndex, offsetMatrix])
       } else {
         this.grabbedData.delete(hand)
@@ -173,7 +178,7 @@ AFRAME.registerComponent("card-pack", {
 
   onGrabStart(event) {
     const data = this.data
-    if (data.grabbable && this.pack && event.detail.obj3D === this.pack.packInstancedMesh) {
+    if (data.grabbable && this.pack && event.detail.obj3D === this.pack.packMesh) {
       const hand = event.detail.hand
       const instanceIndex = event.detail.instanceIndex
 
@@ -187,7 +192,7 @@ AFRAME.registerComponent("card-pack", {
 
   onGrabEnd(event) {
     const data = this.data
-    if (data.grabbable && this.pack && event.detail.obj3D === this.pack.packInstancedMesh) {
+    if (data.grabbable && this.pack && event.detail.obj3D === this.pack.packMesh) {
       const hand = event.detail.hand
 
       if (data.debug) {
@@ -199,7 +204,7 @@ AFRAME.registerComponent("card-pack", {
   },
 
   onHoverStart(event) {
-    if (this.pack && event.detail.obj3D === this.pack.packInstancedMesh) {
+    if (this.pack && event.detail.obj3D === this.pack.packMesh) {
       if (this.data.debug) {
         aframeHelper.log(this, "hoverstart", domHelper.getDebugName(event.detail.hand), event.detail.instanceIndex)
       }
@@ -207,13 +212,13 @@ AFRAME.registerComponent("card-pack", {
       this.hoverIndices = utils.exchangeArray(
         this.hoverIndices,
         this.hoverIndices.concat(event.detail.instanceIndex),
-        (index) => instanced.setColorAt(this.pack.packInstancedMesh, index, this.hoverColor)
+        (index) => instanced.setColorAt(this.pack.packMesh, index, this.hoverColor)
       )
     }
   },
 
   onHoverEnd(event) {
-    if (this.pack && event.detail.obj3D === this.pack.packInstancedMesh) {
+    if (this.pack && event.detail.obj3D === this.pack.packMesh) {
       if (this.data.debug) {
         aframeHelper.log(this, "hoverend", domHelper.getDebugName(event.detail.hand), event.detail.instanceIndex)
       }
@@ -225,7 +230,7 @@ AFRAME.registerComponent("card-pack", {
         this.hoverIndices,
         newHoverIndices,
         undefined,
-        (index) => instanced.setColorAt(this.pack.packInstancedMesh, index, 1, 1, 1)
+        (index) => instanced.setColorAt(this.pack.packMesh, index, 1, 1, 1)
       )
     }
   },
@@ -243,7 +248,7 @@ AFRAME.registerComponent("card-pack", {
   // can only be called from a networked client
   sendControlPacket(index, controllerId) {
     if (this.canControl(index)) {
-      const instancedMesh = this.pack.packInstancedMesh
+      const instancedMesh = this.pack.packMesh
       const position = {x:0,y:0,z:0}
       const quaternion = {x:0,y:0,z:0,w:0}
       const owner = NAF.utils.getNetworkOwner(this.el)
@@ -267,7 +272,7 @@ AFRAME.registerComponent("card-pack", {
   },
 
   applyControlPacket(packet) {
-    const instancedMesh = this.pack.packInstancedMesh
+    const instancedMesh = this.pack.packMesh
     const index = packet.index
 
     if (packet.controllerId) {
@@ -282,7 +287,7 @@ AFRAME.registerComponent("card-pack", {
 
   getSetupPacket() {
     if (this.pack) {
-      const instancedMesh = this.pack.packInstancedMesh
+      const instancedMesh = this.pack.packMesh
       return {
         command: "setup",
         positions: Array.from(instancedMesh.geometry.getAttribute("instancePosition").array),
@@ -303,7 +308,7 @@ AFRAME.registerComponent("card-pack", {
     switch (packet.command) {
       case "setup":
         if (fromOwner) {
-          const instancedMesh = this.pack.packInstancedMesh
+          const instancedMesh = this.pack.packMesh
           const instancePosition = instancedMesh.geometry.getAttribute("instancePosition")
           const instanceQuaterion = instancedMesh.geometry.getAttribute("instanceQuaternion")
           
