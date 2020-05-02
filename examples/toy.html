@@ -8,10 +8,6 @@
   </head>
   <body>
     <a-scene background="color: grey" grab-system="debug: false" stats>
-      <a-assets>
-        <img id="pic" src="assets/helloWorld.png" crossorigin="anonymous">
-        <img id="svgcards" src="assets/Svg-cards-2.0.svg" height=4096 width=4096>
-      </a-assets>
       <a-entity id="lefthand" vive-controls="hand: left"></a-entity>
       <a-entity id="righthand" vive-controls="hand: right"></a-entity>
       <a-logger position="0 0 -5"></a-logger>
@@ -38,14 +34,18 @@
       >
       </a-box>
       <a-box id="stick" tool="handPosition: -.5 0 0; handRotation: 0 90 45; maxHands: 2" position="1 1 -1" scale=".01 .01 2" rotation="90 0 0" color="yellow"></a-box>
-      <!--a-entity position="1 1 -1" picture="src: #pic"></a-entity-->
       <a-entity position="-1 1 -1" scale=".1 .1 .1" cube-puzzle="moves: U R' B' L2 B U2 R B' R2" bounding-box="targets: [vive-controls]; padding: .35"></a-entity>
       <a-entity scale=".01 .01 .01" position="-.5 1 .5" chess="mode: freestyle; highlightColor: #4f4;"></a-entity>
       <a-entity scale=".01 .01 .01" position="-.5 1 1.5" chess="mode:replay; blackColor: #00f; pgn: url(assets/fischer_spassky_1992.pgn);"></a-entity>
       <a-entity scale=".01 .01 .01" position=".5 1 1.5" chess="debug: false; mode:game; whitePlayer: ai; blackPlayer: ai; blackColor: #ff0; whiteColor: #ffe; fen: 8/6PK/8/8/8/8/8/k7 w - - 0 1"></a-entity>
       <a-entity scale=".01 .01 .01" position=".5 1 .5" chess="mode: game; whitePlayer: ai; blackPlayer: human; debug: false; blackColor: #e00"></a-entity>
       <a-entity position=".8 1 -.5" scale=".8 .8 .8" rotation="0 -80 0" sliding-puzzle="debug: false"></a-entity>
-      <a-entity id="pack52" position="-1 1 0" scale=".2 .2 .2" card-pack="debug: false; src: #svgcards; textureRows: 5; textureCols: 13; width: 0.67; height: 1; numCards: 54; back: 54; faceDown: true"></a-entity>
-</a-scene>
+      <a-entity id="pack52" position="-1 1 0" scale=".2 .2 .2" card-pack="faceDown: true"></a-entity>
+      <a-entity id="pack52a" position="-1.2 1 0" scale=".2 .2 .2" card-pack></a-entity>
+      <a-entity id="pack52b" position="-1 1 -.25" scale=".2 .2 .2" card-pack="cornerRadius: 0; faceDown: true"></a-entity>
+      <a-entity id="pack52c" position="-1.2 1 -.25" scale=".2 .2 .2" card-pack="cornerRadius: 0"></a-entity>
+      <a-entity id="pack52d" position="-1 1 -.5" scale=".2 .2 .2" card-pack="cornerRadius: .5; faceDown: true"></a-entity>
+      <a-entity id="pack52e" position="-1.2 1 -.5" scale=".2 .2 .2" card-pack="cornerRadius: .5"></a-entity>
+    </a-scene>
   </body>
 </html>

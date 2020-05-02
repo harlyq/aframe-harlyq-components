@@ -101,9 +101,7 @@ AFRAME.registerComponent("card-pack", {
     const data = this.data
     const pos = new THREE.Vector3()
 
-    const cardMesh = data.cornerRadius > 0 ? 
-      cardHelper.createRoundedCardMesh(data.width, data.height, data.cornerRadius, data.cornerSegments, null) :
-      cardHelper.createCardMesh(data.width, data.height, null)
+    const cardMesh = cardHelper.createCardMesh(data.width, data.height, data.cornerRadius, data.cornerSegments, null)
     this.pack = cardHelper.createPack(data.numCards, data.textureRows, data.textureCols, cardMesh)
 
     const instancedMesh = this.pack.packMesh
