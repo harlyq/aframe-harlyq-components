@@ -36,7 +36,7 @@
   "devDependencies": {
     "express": "^4.17.1",
     "rollup-plugin-node-resolve": "^4.2.4",
-    "socket.io": "^2.3.0"
+    "socket.io": "^2.4.0"
   },
   "dependencies": {
     "harlyq-helpers": "git+https://git@github.com/harlyq/harlyq-helpers.git"
